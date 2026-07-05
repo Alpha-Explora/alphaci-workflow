@@ -2,7 +2,7 @@
   {
     "key": "none",
     "label": "No deployment provider",
-    "supportedStacks": ["nextjs", "nestjs"],
+    "supportedStacks": ["nextjs", "react", "nestjs", "nodejs"],
     "plan": "free",
     "requiresSecrets": [],
     "requiresVariables": [],
@@ -11,7 +11,7 @@
   {
     "key": "vercel",
     "label": "Vercel",
-    "supportedStacks": ["nextjs"],
+    "supportedStacks": ["nextjs", "react"],
     "plan": "pro",
     "requiresSecrets": ["VERCEL_TOKEN", "VERCEL_ORG_ID", "VERCEL_PROJECT_ID"],
     "requiresVariables": [],
@@ -20,7 +20,7 @@
   {
     "key": "render",
     "label": "Render",
-    "supportedStacks": ["nestjs"],
+    "supportedStacks": ["nestjs", "nodejs"],
     "plan": "pro",
     "requiresSecrets": [
       "RENDER_DEPLOY_HOOK_URL_TEST",
