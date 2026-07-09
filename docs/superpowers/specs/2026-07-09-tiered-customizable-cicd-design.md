@@ -222,9 +222,9 @@ Upgrade to Plus or Pro to enable Code Quality.
 
 ## Data Flow
 
-1. User chooses a plan and creates or connects a project.
-2. AlphaCI reads project type, repo shape, selected recipe, branch flow, and allowed settings.
-3. Backend validates the active plan and builds a normalized workflow settings object.
+1. User creates or connects a project from the existing onboarding flow.
+2. AlphaCI reads the workspace plan, project type, repo shape, selected recipe, branch flow, and allowed settings.
+3. Backend validates the active workspace plan and builds a normalized workflow settings object.
 4. Workflow compiler generates thin caller workflows.
 5. AlphaCI opens a workflow update PR in the customer repository.
 6. After merge, GitHub runs the caller workflow on the configured event.
