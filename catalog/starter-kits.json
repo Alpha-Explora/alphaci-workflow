@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "starterKits": [
+    {
+      "id": "react-starter-kit",
+      "label": "React Starter Kit",
+      "description": "A Laravel + React single-app starter adapted for AlphaCI projects.",
+      "repo": "Alpha-Explora/alphaexplora-react-starter-kit",
+      "source": {
+        "type": "adapted",
+        "from": "laravel/react-starter-kit"
+      },
+      "projectType": "laravel-react-app",
+      "repoShape": "single-app",
+      "language": "php-typescript",
+      "framework": "laravel-react",
+      "defaultWorkingDirectory": ".",
+      "workflowTiming": "after-template",
+      "containsWorkflows": false,
+      "defaultRecipesByPlan": {
+        "solo": "laravel-react-checks",
+        "plus": "laravel-react-code-quality",
+        "pro": "laravel-react-release"
+      },
+      "phase": "phase-1-starter-kit"
+    }
+  ]
+}
