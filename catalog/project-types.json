@@ -40,6 +40,8 @@
                              "language":  "typescript",
                              "framework":  "nextjs",
                              "starterPath":  "starter-templates/nextjs-app",
+                             "starterKit":  "nextjs-starter-kit",
+                             "starterSource":  "external-repository",
                              "repoShapes":  [
                                                 "single-app"
                                             ],
@@ -72,6 +74,8 @@
                              "language":  "typescript",
                              "framework":  "react",
                              "starterPath":  "starter-templates/react-spa",
+                             "starterKit":  "react-starter-kit",
+                             "starterSource":  "external-repository",
                              "repoShapes":  [
                                                 "single-app"
                                             ],
@@ -104,6 +108,8 @@
                              "language":  "typescript",
                              "framework":  "nestjs",
                              "starterPath":  "starter-templates/nestjs-api",
+                             "starterKit":  "nestjs-starter-kit",
+                             "starterSource":  "external-repository",
                              "repoShapes":  [
                                                 "single-app"
                                             ],
@@ -136,6 +142,8 @@
                              "language":  "javascript",
                              "framework":  "nodejs",
                              "starterPath":  "starter-templates/nodejs-api",
+                             "starterKit":  "nodejs-starter-kit",
+                             "starterSource":  "external-repository",
                              "repoShapes":  [
                                                 "single-app"
                                             ],

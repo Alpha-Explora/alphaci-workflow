@@ -4,7 +4,7 @@
                     {
                         "id":  "frontend-standard-ci",
                         "label":  "Frontend Standard CI",
-                        "description":  "Validate access, run frontend tests, lint, security scan, build, and deploy to GCP Cloud Run.",
+                        "description":  "Validate access, run frontend tests, lint, security scan, build, and release through AlphaCI.",
                         "supportedProjectTypes":  [
                                                       "nextjs-app",
                                                       "react-spa"
@@ -54,7 +54,7 @@
                     {
                         "id":  "backend-api-ci",
                         "label":  "Backend API CI",
-                        "description":  "Validate access, run backend tests, lint, security scan, and deploy to GCP Cloud Run.",
+                        "description":  "Validate access, run backend tests, lint, security scan, build, and release through AlphaCI.",
                         "supportedProjectTypes":  [
                                                       "nestjs-api",
                                                       "nodejs-api"

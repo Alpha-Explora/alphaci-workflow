@@ -4,25 +4,74 @@
     {
       "id": "react-starter-kit",
       "label": "React Starter Kit",
-      "description": "A Laravel + React single-app starter adapted for AlphaCI projects.",
+      "description": "A clean React and TypeScript starter for AlphaCI projects.",
       "repo": "Alpha-Explora/alphaexplora-react-starter-kit",
-      "source": {
-        "type": "adapted",
-        "from": "laravel/react-starter-kit"
-      },
-      "projectType": "laravel-react-app",
+      "projectType": "react-spa",
       "repoShape": "single-app",
-      "language": "php-typescript",
-      "framework": "laravel-react",
+      "language": "typescript",
+      "framework": "react",
       "defaultWorkingDirectory": ".",
       "workflowTiming": "after-template",
       "containsWorkflows": false,
       "defaultRecipesByPlan": {
-        "solo": "laravel-react-checks",
-        "plus": "laravel-react-code-quality",
-        "pro": "laravel-react-release"
-      },
-      "phase": "phase-1-starter-kit"
+        "solo": "frontend-checks",
+        "plus": "frontend-code-quality",
+        "pro": "frontend-release"
+      }
+    },
+    {
+      "id": "nextjs-starter-kit",
+      "label": "Next.js Starter Kit",
+      "description": "A clean Next.js and TypeScript starter for AlphaCI projects.",
+      "repo": "Alpha-Explora/alphaexplora-nextjs-starter-kit",
+      "projectType": "nextjs-app",
+      "repoShape": "single-app",
+      "language": "typescript",
+      "framework": "nextjs",
+      "defaultWorkingDirectory": ".",
+      "workflowTiming": "after-template",
+      "containsWorkflows": false,
+      "defaultRecipesByPlan": {
+        "solo": "frontend-checks",
+        "plus": "frontend-code-quality",
+        "pro": "frontend-release"
+      }
+    },
+    {
+      "id": "nodejs-starter-kit",
+      "label": "Node.js Starter Kit",
+      "description": "A clean Node.js API starter for AlphaCI projects.",
+      "repo": "Alpha-Explora/alphaexplora-nodejs-starter-kit",
+      "projectType": "nodejs-api",
+      "repoShape": "single-app",
+      "language": "javascript",
+      "framework": "nodejs",
+      "defaultWorkingDirectory": ".",
+      "workflowTiming": "after-template",
+      "containsWorkflows": false,
+      "defaultRecipesByPlan": {
+        "solo": "backend-checks",
+        "plus": "backend-code-quality",
+        "pro": "backend-release"
+      }
+    },
+    {
+      "id": "nestjs-starter-kit",
+      "label": "NestJS Starter Kit",
+      "description": "A clean NestJS and TypeScript API starter for AlphaCI projects.",
+      "repo": "Alpha-Explora/alphaexplora-nestjs-starter-kit",
+      "projectType": "nestjs-api",
+      "repoShape": "single-app",
+      "language": "typescript",
+      "framework": "nestjs",
+      "defaultWorkingDirectory": ".",
+      "workflowTiming": "after-template",
+      "containsWorkflows": false,
+      "defaultRecipesByPlan": {
+        "solo": "backend-checks",
+        "plus": "backend-code-quality",
+        "pro": "backend-release"
+      }
     }
   ]
 }

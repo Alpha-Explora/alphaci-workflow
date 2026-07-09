@@ -73,7 +73,7 @@ Raw YAML editing is not part of the product surface. AlphaCI owns the workflow s
 
 ## Starter Kits
 
-Starter kits are separate Git repositories owned by Alpha-Explora. They contain app source, package scripts, tests, local tooling, README files, and an `.alphaci/project.json` contract. They do not contain generated AlphaCI workflow files.
+Starter kits are separate Git repositories owned by Alpha-Explora. They contain app source, package scripts, tests, local tooling, and README files. They do not contain generated AlphaCI workflow files or project metadata folders.
 
 For new projects, AlphaCI creates the repository from the selected starter kit first. After the starter files exist, AlphaCI generates plan-allowed caller workflows in the new repository.
 
