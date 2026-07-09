@@ -13,9 +13,9 @@ The workspace subscription is already known. Project creation must read that sub
 
 Project creation is not a billing flow.
 
-Users choose:
+Users choose inside the existing `Select a repository` onboarding step:
 
-- Source: start from starter kit or connect existing repository.
+- Tab: `Import a repository` or `Use a template`.
 - Starter kit or detected project type.
 - Repository name and visibility.
 - Supported project settings such as default branch flow and allowed check options.
@@ -85,33 +85,38 @@ AlphaCI creates the repository from the selected starter kit first. After the re
 ### New Project From Starter Kit
 
 1. User opens onboarding or create project.
-2. User selects `Start from starter kit`.
-3. User selects React, Next.js, Node.js, or NestJS.
-4. User enters repository name and basic repository settings.
-5. AlphaCI shows a setup summary based on the current workspace plan.
-6. User confirms project creation.
-7. AlphaCI creates the repository from the starter kit.
-8. AlphaCI configures the allowed checks and workflow setup.
-9. User lands on the project setup result with the first run ready or the next action clearly shown.
+2. User reaches Step 3, `Select a repository`.
+3. User selects the existing `Use a template` tab.
+4. User selects React, Next.js, Node.js, or NestJS.
+5. User enters repository name and basic repository settings.
+6. AlphaCI shows a setup summary based on the current workspace plan.
+7. User confirms project creation.
+8. AlphaCI creates the repository from the starter kit.
+9. AlphaCI configures the allowed checks and workflow setup.
+10. User lands on the project setup result with the first run ready or the next action clearly shown.
 
 ### Existing Repository
 
 1. User opens onboarding or create project.
-2. User selects `Connect existing repo`.
-3. AlphaCI detects or asks for the project type.
-4. AlphaCI shows a setup summary based on the current workspace plan.
-5. AlphaCI creates a setup pull request for workflow changes.
-6. User reviews and merges the setup pull request.
+2. User reaches Step 3, `Select a repository`.
+3. User stays on the existing `Import a repository` tab.
+4. User selects a repository from the connected source-control account.
+5. AlphaCI detects or asks for the project type.
+6. AlphaCI shows a setup summary based on the current workspace plan.
+7. AlphaCI creates a setup pull request for workflow changes.
+8. User reviews and merges the setup pull request.
 
 New starter-kit repositories can use direct setup because they do not contain user code yet. Existing repositories should use a setup pull request because they already contain user-owned code.
 
 ## Frontend Design
 
-The onboarding/create-project screen should become a source-aware flow:
+The onboarding/create-project screen should reuse the existing Step 3 structure shown in onboarding:
 
-- Source step: `Start from starter kit` or `Connect existing repo`.
-- Template step: visible only for starter-kit projects.
-- Repository step: repository name and visibility.
+- Step label remains `Select a repository`.
+- Existing `Import a repository` tab keeps the repository picker.
+- Existing `Use a template` tab becomes the starter-kit picker.
+- Template selection is visible only inside the `Use a template` tab.
+- Repository name and visibility are collected after template selection.
 - Setup summary step: read-only summary of what the current workspace includes.
 
 The setup summary should use customer-facing product language:
