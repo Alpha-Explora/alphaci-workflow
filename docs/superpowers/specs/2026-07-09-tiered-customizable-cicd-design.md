@@ -73,13 +73,16 @@ Raw YAML editing is not part of the product surface. AlphaCI owns the workflow s
 
 ## Starter Kits
 
-Starter kits are separate Git repositories owned by Alpha-Explora. They contain app source, package scripts, tests, local tooling, and README files. They do not contain generated AlphaCI workflow files or project metadata folders.
+Starter kits are separate Git repositories owned by Alpha-Explora. They contain production-shaped app source, package scripts, tests, local tooling, README files, and local environment examples. They do not contain generated AlphaCI workflow files or project metadata folders.
 
 For new projects, AlphaCI creates the repository from the selected starter kit first. After the starter files exist, AlphaCI generates plan-allowed caller workflows in the new repository.
 
 For existing projects, AlphaCI skips starter-kit creation and only detects project settings before adding caller workflows.
 
 Phase 1 supports single-app project structure only. Fullstack and monorepo starters remain out of scope until a later rollout.
+
+Phase 1 starter kits should feel like professional foundations, not empty demos. Frontend starters include reusable UI states, environment helpers, and an API boundary. Backend starters include health checks, environment validation, structured error or service boundaries, and request-level traceability.
+
 ## Workflow Families
 
 ### Check Recipes

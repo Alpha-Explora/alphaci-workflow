@@ -46,11 +46,18 @@ git diff --check -- catalog docs
 Each starter repository must:
 
 - Contain app source, package scripts, tests, local developer tooling, and a README.
+- Include `.env.example` with local-only defaults.
+- Include meaningful tests against real starter behavior.
+- Include lint, test, build, and start/dev scripts.
+- Include a typecheck script for TypeScript stacks.
+- Stay production-shaped without becoming a full product template.
 - Omit generated AlphaCI workflow files.
 - Omit project metadata folders.
 - Omit inherited files or copy from unrelated framework stacks.
 - Use a clean local Git history owned by AlphaCI.
 - Point `origin` at the matching `Alpha-Explora` repository.
+
+Frontend starters must include reusable UI states, environment helpers, and an API boundary. Backend starters must include a health endpoint, environment validation, structured errors or service boundaries, and request-level traceability.
 
 Validation for each starter:
 

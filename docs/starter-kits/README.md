@@ -1,6 +1,6 @@
 # Starter Kits
 
-Starter kits are app foundations. They are not workflow packs and they do not contain AlphaCI workflow files.
+Starter kits are production-shaped app foundations. They are not workflow packs and they do not contain AlphaCI workflow files.
 
 ## Phase 1 Kits
 
@@ -8,6 +8,21 @@ Starter kits are app foundations. They are not workflow packs and they do not co
 - Next.js Starter Kit: `Alpha-Explora/alphaexplora-nextjs-starter-kit`
 - Node.js Starter Kit: `Alpha-Explora/alphaexplora-nodejs-starter-kit`
 - NestJS Starter Kit: `Alpha-Explora/alphaexplora-nestjs-starter-kit`
+
+## Baseline Standard
+
+Every Phase 1 starter must include:
+
+- App or API source with a realistic first structure.
+- `.env.example` with local-only defaults.
+- Lint, test, build, and start/dev scripts.
+- Typecheck script when the stack uses TypeScript.
+- At least one meaningful test that exercises real starter behavior.
+- Local README instructions.
+- No generated AlphaCI workflow files.
+- No project metadata folders.
+
+Frontend starters must include reusable UI states, environment helpers, and an API boundary. Backend starters must include a health endpoint, environment validation, structured errors or service boundaries, and request-level traceability.
 
 ## New Project Flow
 
