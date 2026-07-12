@@ -195,7 +195,7 @@ Do not enable this product path until the dedicated-project gate in `10-shared-t
 
 | Scope | Principal | Role | Why |
 | --- | --- | --- | --- |
-| `20-customer-runtime/dedicated` folder | `ae-tf-foundation@...` | `roles/resourcemanager.projectCreator` | Create dedicated customer projects through the approved factory pattern. |
+| `20-customer-runtime/alphaci/dedicated` folder | `ae-tf-foundation@...` | `roles/resourcemanager.projectCreator` | Create dedicated AlphaCI customer projects through the approved product-first factory pattern. |
 | Dedicated customer projects | `ae-tf-foundation@...` | `roles/resourcemanager.projectIamAdmin` | Apply baseline IAM. |
 | Dedicated customer projects | `ae-tf-foundation@...` | `roles/serviceusage.serviceUsageAdmin` | Enable Cloud Run, Artifact Registry, Secret Manager, Logging, Monitoring, and IAM APIs. |
 | Billing account | `ae-tf-foundation@...` | `roles/billing.user` | Link dedicated projects to billing. |

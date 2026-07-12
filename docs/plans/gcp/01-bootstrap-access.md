@@ -24,7 +24,7 @@
 
 This plan starts after one of these is true:
 
-- Terraform foundation created the target shared runtime project under `20-customer-runtime/shared` and exposed project/folder outputs.
+- Terraform foundation created the target shared runtime project under `20-customer-runtime/alphaci/shared` and exposed project/folder outputs, or an approved transition note explains why the earlier imported `20-customer-runtime/shared/alphaci` folder is still being used temporarily.
 - An admin bootstrap exception explicitly records why `alphaci-20260629` is temporarily used before Terraform reconciliation.
 
 The backend must not create folders or baseline projects in this phase.

@@ -4,7 +4,7 @@
 
 **Goal:** Move paid/production customer workloads from the shared runtime project to dedicated customer GCP projects without changing customer/app identity or losing rollback.
 
-**Architecture:** The `alphaexplora-cloud` repo owns the Terraform-created `20-customer-runtime/dedicated` folder and project-factory skeleton early, but product use of dedicated customer projects remains disabled. Runtime migration is two-phase: first create and verify the dedicated target while shared continues serving traffic, then move routing only after health checks and domain checks pass. Shared runtime stays available as rollback until the retention window passes.
+**Architecture:** The `alphaexplora-cloud` repo owns the Terraform-created product-first customer runtime hierarchy, with AlphaCI dedicated projects placed under `20-customer-runtime/alphaci/dedicated`. Product use of dedicated customer projects remains disabled. Runtime migration is two-phase: first create and verify the dedicated target while shared continues serving traffic, then move routing only after health checks and domain checks pass. Shared runtime stays available as rollback until the retention window passes.
 
 **Tech Stack:** GCP Resource Manager, Cloud Billing, Service Usage, IAM, Artifact Registry, Secret Manager, Cloud Run, domain routing plan, backend control-plane jobs, lifecycle entitlements, admin approvals.
 
@@ -24,7 +24,7 @@ The live proof must cover managed-domain traffic, custom-domain traffic, rollbac
 ## Migration Sequence
 
 ```text
-1. Create dedicated GCP project under `20-customer-runtime/dedicated` using the project factory pattern owned by `alphaexplora-cloud`.
+1. Create dedicated GCP project under `20-customer-runtime/alphaci/dedicated/tenant-<slug>` using the project factory pattern owned by `alphaexplora-cloud`.
 2. Link billing.
 3. Enable required APIs.
 4. Create Artifact Registry repository.
@@ -62,7 +62,7 @@ appSlug
 dedicatedGcpProjectId
 dedicatedGcpProjectNumber
 billingAccountName
-folderId -- must resolve under 20-customer-runtime/dedicated
+folderId -- must resolve under 20-customer-runtime/alphaci/dedicated
 region
 artifactRegistryRepo
 runtimeServiceAccount
@@ -129,7 +129,7 @@ Cases:
 
 Rules:
 
-- Create project with approved folder under `20-customer-runtime/dedicated` and approved billing account only, using the foundation-repo-owned project factory contract.
+- Create project with approved folder under `20-customer-runtime/alphaci/dedicated/tenant-<slug>` and approved billing account only, using the foundation-repo-owned project factory contract.
 - Link billing before workload resources are created.
 - Enable required APIs idempotently.
 - Create Artifact Registry repo and service accounts.

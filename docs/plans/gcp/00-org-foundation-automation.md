@@ -124,12 +124,18 @@ alphaexplora.com Organization
 |   |   |-- ae-apicenter-dev
 |
 |-- 20-customer-runtime
-|   |-- shared
-|   |   |-- ac-shared-prod
-|   |   |-- ac-shared-dev
+|   |-- alphaci
+|   |   |-- shared
+|   |   |   |-- alphaci-shared-prod
+|   |   |   |-- alphaci-shared-dev
+|   |   |-- dedicated
+|   |       |-- tenant-<slug>
 |   |
-|   |-- dedicated
-|   |   |-- customer projects created later by project factory
+|   |-- apicenter
+|   |   |-- shared
+|   |   |-- dedicated
+|   |
+|   |-- future-products
 |
 |-- 30-shared-infra
 |   |-- ae-build
@@ -161,8 +167,8 @@ Project names:
 
 ```text
 AlphaExplora first-party products: ae-<product-slug>-<env>
-AlphaCI shared customer runtime: ac-shared-<env>
-AlphaCI dedicated customer runtime: ac-<customer-slug>-<env>
+AlphaCI shared customer runtime: alphaci-shared-<env>
+AlphaCI dedicated customer runtime: alphaci-<customer-slug>-<env>
 Infrastructure projects: ae-<infra-purpose>
 Sandbox projects: ae-sandbox[-<suffix>]
 ```
@@ -227,7 +233,7 @@ Avoid broad basic `Owner` at organization level after bootstrap. Use groups, ser
 - Update `docs/plans/alphaci-gcp-migration-index.md` so this plan is the first implementation slice.
 - Update `docs/plans/alphaci-gcp-provider-migration-plan.md` so org foundation automation is not deferred.
 - Update `docs/plans/gcp/01-bootstrap-access.md` so it consumes cloud repo outputs instead of owning folders/projects.
-- Update `docs/plans/gcp/10-shared-to-dedicated-migration.md` so dedicated project factory uses the `20-customer-runtime/dedicated` folder created by `alphaexplora-cloud`.
+- Update `docs/plans/gcp/10-shared-to-dedicated-migration.md` so dedicated project factory uses the product-first `20-customer-runtime/alphaci/dedicated` folder created by `alphaexplora-cloud`.
 
 ### `cicd-workflow` planning handoff
 
@@ -374,7 +380,7 @@ Steps:
 
 - [ ] Define baseline projects for AlphaCI product environments and shared customer runtime.
 - [ ] Put `ae-alphaci-*` projects under `10-products/alphaci`.
-- [ ] Put `ac-shared-*` projects under `20-customer-runtime/shared`.
+- [ ] Put `alphaci-shared-*` projects under `20-customer-runtime/alphaci/shared`.
 - [ ] Put shared infra projects under `30-shared-infra`.
 - [ ] Apply common labels to every project.
 - [ ] Link billing only where the operator has approved billing linkage.
@@ -466,6 +472,6 @@ Runbook must include:
 - Terraform plan can represent the target folder hierarchy without manual console-only state.
 - Foundation runbook names the required admin permissions and current access gaps.
 - `verify-org-foundation.ps1` can safely report missing org/folder permissions without printing secrets.
-- Shared runtime projects are placed under `20-customer-runtime/shared` or an explicitly documented temporary parent.
-- Project factory skeleton exists for `20-customer-runtime/dedicated`, but customer-dedicated project creation remains product-disabled until plan 10 gates pass.
+- Shared runtime projects are placed under `20-customer-runtime/alphaci/shared` or an explicitly documented temporary parent.
+- Project factory skeleton exists for `20-customer-runtime/alphaci/dedicated`, but customer-dedicated project creation remains product-disabled until plan 10 gates pass.
 - Master plan and index list this plan as the first implementation dependency.
