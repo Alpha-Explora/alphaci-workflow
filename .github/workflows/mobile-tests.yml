@@ -1,7 +1,8 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Mobile Unit Tests (Jest)                            ║
-# ║  Called by any tribe's mobile pipeline                         ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/mobile-tests.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Mobile Unit Tests (Jest)                            â•‘
+# â•‘  Called by any tribe's mobile pipeline                         â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Mobile Unit Tests"
 
 on:
@@ -49,7 +50,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── Unit Tests ───────────────────────────────────────────────────
+  # â”€â”€ Unit Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   mobile-unit-tests:
     name: "Jest Unit Tests (Mobile)"
     runs-on: ubuntu-latest
@@ -74,7 +75,7 @@ jobs:
           elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
             echo "pm=npm" >> "$GITHUB_OUTPUT"
           else
-            echo "❌ package.json is required for Expo tests."
+            echo "âŒ package.json is required for Expo tests."
             exit 1
           fi
 
@@ -135,18 +136,18 @@ jobs:
               console.log(data.total.lines.pct);
             ")
             echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-            echo "📊 Line Coverage: ${COVERAGE}%"
+            echo "ðŸ“Š Line Coverage: ${COVERAGE}%"
 
             THRESHOLD=${{ inputs.coverage-threshold }}
             if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
-              echo "❌ Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
+              echo "âŒ Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
               exit 1
             else
-              echo "✅ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
+              echo "âœ… Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
             fi
           else
             echo "coverage=unknown" >> $GITHUB_OUTPUT
-            echo "⚠️ Coverage summary not found"
+            echo "âš ï¸ Coverage summary not found"
           fi
 
       - name: Upload Coverage Artifact
@@ -156,4 +157,6 @@ jobs:
           name: ${{ inputs.system-name }}-coverage
           path: ${{ inputs.working-directory }}/coverage
           retention-days: 14
+
+
 

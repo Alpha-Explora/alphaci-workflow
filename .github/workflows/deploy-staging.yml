@@ -1,8 +1,9 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Deploy to Environment                               ║
-# ║  Supports web (Vercel), API (container), and mobile (APK)     ║
-# ║  Deploys to: test | uat | prod (staging/preprod)              ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/deploy-staging.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Deploy to Environment                               â•‘
+# â•‘  Supports web (Vercel), API (container), and mobile (APK)     â•‘
+# â•‘  Deploys to: test | uat | prod (staging/preprod)              â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Deploy to Environment"
 
 on:
@@ -79,16 +80,16 @@ jobs:
       - name: Deploy to ${{ inputs.deploy-environment }}
         id: deploy
         run: |
-          echo "╔══════════════════════════════════════════════╗"
-          echo "║   DEPLOYMENT — ${{ inputs.deploy-environment }}                       ║"
-          echo "╠══════════════════════════════════════════════╣"
-          echo "║ System:      ${{ inputs.system-name }}"
-          echo "║ Type:        ${{ inputs.app-type }}"
-          echo "║ Environment: ${{ inputs.deploy-environment }}"
-          echo "║ Branch:      ${{ github.ref_name }}"
-          echo "║ Commit:      ${{ github.sha }}"
-          echo "║ Timestamp:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "╚══════════════════════════════════════════════╝"
+          echo "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
+          echo "â•‘   DEPLOYMENT â€” ${{ inputs.deploy-environment }}                       â•‘"
+          echo "â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£"
+          echo "â•‘ System:      ${{ inputs.system-name }}"
+          echo "â•‘ Type:        ${{ inputs.app-type }}"
+          echo "â•‘ Environment: ${{ inputs.deploy-environment }}"
+          echo "â•‘ Branch:      ${{ github.ref_name }}"
+          echo "â•‘ Commit:      ${{ github.sha }}"
+          echo "â•‘ Timestamp:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
 
           ENV="${{ inputs.deploy-environment }}"
           APP_TYPE="${{ inputs.app-type }}"
@@ -97,21 +98,21 @@ jobs:
           case "${APP_TYPE}" in
             web|api|mobile) ;;
             *)
-              echo "❌ Unsupported app-type '${APP_TYPE}'. Expected: web | api | mobile"
+              echo "âŒ Unsupported app-type '${APP_TYPE}'. Expected: web | api | mobile"
               exit 1
               ;;
           esac
 
-          # ── Deployment routing ─────────────────────────────────────────────
+          # â”€â”€ Deployment routing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           # NOTE: This workflow is a deployment scaffold. Each project must wire
           # in its actual deployment commands via repository-level secrets and
           # vars. The steps below validate that the necessary configuration is
           # present before proceeding.
           #
           # Required secrets / vars per app-type:
-          #   web    → VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (use vercel-deploy.yml)
-          #   api    → configure via your container registry / cloud provider secrets
-          #   mobile → handled by mobile-release-publish.yml
+          #   web    â†’ VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (use vercel-deploy.yml)
+          #   api    â†’ configure via your container registry / cloud provider secrets
+          #   mobile â†’ handled by mobile-release-publish.yml
           #
           # If you are seeing this message in a pipeline run, it means this
           # reusable workflow was invoked without a project-specific deployment
@@ -119,19 +120,19 @@ jobs:
 
           case "${APP_TYPE}" in
             web)
-              echo "🌐 Web deployments should use the vercel-deploy.yml reusable workflow."
-              echo "❌ No web deployment command configured in deploy-staging.yml."
+              echo "ðŸŒ Web deployments should use the vercel-deploy.yml reusable workflow."
+              echo "âŒ No web deployment command configured in deploy-staging.yml."
               echo "   Invoke .github/workflows/vercel-deploy.yml directly from your pipeline instead."
               exit 1
               ;;
             api)
-              echo "⏭️  Backend API staging deployment skipped — not yet configured."
+              echo "â­ï¸  Backend API staging deployment skipped â€” not yet configured."
               echo "   Add real deployment commands (e.g. kubectl, docker push, cloud CLI) here when ready."
               exit 0
               ;;
             mobile)
-              echo "📱 Mobile deployment not yet configured."
-              echo "❌ Use mobile-release-publish.yml for APK/IPA distribution."
+              echo "ðŸ“± Mobile deployment not yet configured."
+              echo "âŒ Use mobile-release-publish.yml for APK/IPA distribution."
               exit 1
               ;;
           esac
@@ -139,17 +140,17 @@ jobs:
       - name: Post-Deploy Health Check
         if: ${{ inputs.enable-health-check && inputs.staging-url != '' }}
         run: |
-          echo "🏥 Running health check on ${{ inputs.staging-url }}..."
+          echo "ðŸ¥ Running health check on ${{ inputs.staging-url }}..."
           for i in 1 2 3 4 5; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ inputs.staging-url }}/health" || echo "000")
             if [ "$STATUS" = "200" ]; then
-              echo "✅ Health check passed (attempt $i)"
+              echo "âœ… Health check passed (attempt $i)"
               exit 0
             fi
-            echo "⏳ Attempt $i: Status $STATUS — retrying in 10s..."
+            echo "â³ Attempt $i: Status $STATUS â€” retrying in 10s..."
             sleep 10
           done
-          echo "❌ Health check failed after 5 attempts"
+          echo "âŒ Health check failed after 5 attempts"
           exit 1
 
       - name: Create Deployment Log
@@ -178,3 +179,5 @@ jobs:
           name: ${{ inputs.system-name }}-${{ inputs.deploy-environment }}-deployment-log
           path: deployment-log.json
           retention-days: 90
+
+

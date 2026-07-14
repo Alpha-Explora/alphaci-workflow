@@ -1,7 +1,8 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Docker Build & Push to GHCR                        ║
-# ║  For backend services — builds, tags, scans, and pushes       ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/docker-build.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Docker Build & Push to GHCR                        â•‘
+# â•‘  For backend services â€” builds, tags, scans, and pushes       â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Docker Build & Registry"
 
 on:
@@ -144,10 +145,10 @@ jobs:
 
       - name: Image Summary
         run: |
-          echo "🐳 Image Tags:"
+          echo "ðŸ³ Image Tags:"
           echo "${{ steps.meta.outputs.tags }}"
           echo ""
-          echo "🏷️ Git SHA: ${{ github.sha }}"
+          echo "ðŸ·ï¸ Git SHA: ${{ github.sha }}"
 
       # When not pushing, scan the locally-loaded image in this job
       # (the separate vulnerability-scan job can only pull from GHCR)
@@ -225,7 +226,7 @@ jobs:
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ trivy-results.sarif was not generated."
+            echo "âš ï¸ trivy-results.sarif was not generated."
           fi
 
       - name: Upload Trivy Scan Results
@@ -241,3 +242,5 @@ jobs:
           name: ${{ inputs.image-name }}-security-scan
           path: trivy-results.sarif
           retention-days: 30
+
+

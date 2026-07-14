@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/frontend-standards-check.md
 name: "Reusable: Frontend Standards Check"
 
 on:
@@ -37,25 +38,17 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
-          # Conditional cache: npm caching makes setup-node fail when the repo
-          # has no package-lock.json (e.g. a freshly generated project).
-          cache: ${{ hashFiles('**/package-lock.json') != '' && 'npm' || '' }}
+          cache: "npm"
           cache-dependency-path: |
             **/package-lock.json
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            echo "No package-lock.json — falling back to npm install"
-            npm install --ignore-scripts
-          fi
+        run: npm ci --ignore-scripts
 
       - name: Validate React + Strict TypeScript Standard (Next.js or Vite)
         run: |
           if [ ! -f "tsconfig.json" ]; then
-            echo "❌ tsconfig.json is required for frontend projects."
+            echo "âŒ tsconfig.json is required for frontend projects."
             exit 1
           fi
 
@@ -117,3 +110,5 @@ jobs:
               throw new Error('Strict TypeScript enforcement failed: found JS/JSX source files:\n' + jsLike.slice(0, 20).join('\n'));
             }
           "
+
+

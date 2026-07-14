@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/mobile-release-build.md
 name: "Reusable: Mobile Release Build"
 
 on:
@@ -42,21 +43,6 @@ on:
         type: boolean
         default: false
         description: "Reserved for signed iOS export (IPA) once provisioning is configured"
-      ios-runner:
-        required: false
-        type: string
-        default: "macos-15"
-        description: "GitHub macOS runner label for iOS jobs"
-      ios-xcode-version:
-        required: false
-        type: string
-        default: "16.4"
-        description: "Preferred Xcode version to select (e.g. 16.4)"
-      ios-xcode-fallbacks:
-        required: false
-        type: string
-        default: "16.3,16.2,26.2"
-        description: "Comma-separated fallback Xcode versions"
 
   workflow_call:
     inputs:
@@ -99,21 +85,6 @@ on:
         type: boolean
         default: false
         description: "Reserved for signed iOS export (IPA) once provisioning is configured"
-      ios-runner:
-        required: false
-        type: string
-        default: "macos-15"
-        description: "GitHub macOS runner label for iOS jobs"
-      ios-xcode-version:
-        required: false
-        type: string
-        default: "16.4"
-        description: "Preferred Xcode version to select (e.g. 16.4)"
-      ios-xcode-fallbacks:
-        required: false
-        type: string
-        default: "16.3,16.2,26.2"
-        description: "Comma-separated fallback Xcode versions"
 
 permissions:
   contents: read
@@ -128,10 +99,10 @@ jobs:
         run: |
           case "${GITHUB_REF_NAME}" in
             test|uat|main)
-              echo "✅ Release build branch allowed: ${GITHUB_REF_NAME}"
+              echo "âœ… Release build branch allowed: ${GITHUB_REF_NAME}"
               ;;
             *)
-              echo "❌ Release build workflow is only allowed on test, uat, or main. Current: ${GITHUB_REF_NAME}"
+              echo "âŒ Release build workflow is only allowed on test, uat, or main. Current: ${GITHUB_REF_NAME}"
               exit 1
               ;;
           esac
@@ -159,7 +130,7 @@ jobs:
           elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
             echo "pm=npm" >> "$GITHUB_OUTPUT"
           else
-            echo "❌ package.json is required."
+            echo "âŒ package.json is required."
             exit 1
           fi
 
@@ -215,10 +186,10 @@ jobs:
           if [ -f "android/gradle.properties" ]; then
             if grep -q '^kotlinVersion=' android/gradle.properties; then
               CURRENT_VERSION=$(grep '^kotlinVersion=' android/gradle.properties | head -n 1 | cut -d'=' -f2-)
-              echo "ℹ️ Preserving project kotlinVersion=${CURRENT_VERSION}"
+              echo "â„¹ï¸ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
               echo 'kotlinVersion=2.0.21' >> android/gradle.properties
-              echo "✅ Added fallback kotlinVersion=2.0.21"
+              echo "âœ… Added fallback kotlinVersion=2.0.21"
             fi
           fi
 
@@ -232,7 +203,7 @@ jobs:
           else
             WRAPPER_PATH=$(find . -maxdepth 4 -type f -name gradlew | head -n 1)
             if [ -z "${WRAPPER_PATH}" ]; then
-              echo "❌ Could not find gradlew in project."
+              echo "âŒ Could not find gradlew in project."
               exit 1
             fi
             GRADLE_DIR=$(dirname "${WRAPPER_PATH}")
@@ -240,7 +211,7 @@ jobs:
           fi
 
           echo "gradle_dir=${GRADLE_DIR}" >> "$GITHUB_OUTPUT"
-          echo "✅ Using gradle wrapper directory: ${GRADLE_DIR}"
+          echo "âœ… Using gradle wrapper directory: ${GRADLE_DIR}"
 
       - name: Setup JDK ${{ inputs.java-version }}
         uses: actions/setup-java@v5
@@ -268,18 +239,18 @@ jobs:
           AAB_PATH=$(find "${SEARCH_ROOT}" -type f -name "*.aab" -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n 1 | cut -f2-)
 
           if [ -z "${APK_PATH}" ] && [ -z "${AAB_PATH}" ]; then
-            echo "❌ No Android release APK/AAB outputs found under ${SEARCH_ROOT}."
+            echo "âŒ No Android release APK/AAB outputs found under ${SEARCH_ROOT}."
             exit 1
           fi
 
           if [ -n "${APK_PATH}" ]; then
             cp "${APK_PATH}" "${OUTPUT_DIR}/${{ inputs.system-name }}-android.apk"
-            echo "✅ Staged release APK: ${APK_PATH}"
+            echo "âœ… Staged release APK: ${APK_PATH}"
           fi
 
           if [ -n "${AAB_PATH}" ]; then
             cp "${AAB_PATH}" "${OUTPUT_DIR}/${{ inputs.system-name }}-android.aab"
-            echo "✅ Staged release AAB: ${AAB_PATH}"
+            echo "âœ… Staged release AAB: ${AAB_PATH}"
           fi
 
       - name: Upload Android release artifacts
@@ -296,7 +267,7 @@ jobs:
     name: "iOS App Build (.app)"
     needs: [branch-guard]
     if: ${{ inputs.enable-ios-release-build }}
-    runs-on: ${{ inputs.ios-runner }}
+    runs-on: macos-15
     timeout-minutes: 60
     defaults:
       run:
@@ -315,7 +286,7 @@ jobs:
           elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
             echo "pm=npm" >> "$GITHUB_OUTPUT"
           else
-            echo "❌ package.json is required."
+            echo "âŒ package.json is required."
             exit 1
           fi
 
@@ -360,46 +331,10 @@ jobs:
             npm ci --ignore-scripts
           fi
 
-      - name: Select Xcode toolchain
+      - name: Select Xcode 26.2
         run: |
           sw_vers
-
-          REQUESTED_XCODE="${{ inputs.ios-xcode-version }}"
-          FALLBACK_XCODE_CSV="${{ inputs.ios-xcode-fallbacks }}"
-
-          CANDIDATES=()
-          if [ -n "${REQUESTED_XCODE}" ]; then
-            CANDIDATES+=("/Applications/Xcode_${REQUESTED_XCODE}.app/Contents/Developer")
-          fi
-
-          IFS=',' read -ra FALLBACKS <<< "${FALLBACK_XCODE_CSV}"
-          for ITEM in "${FALLBACKS[@]}"; do
-            VERSION="$(echo "${ITEM}" | xargs)"
-            if [ -n "${VERSION}" ]; then
-              CANDIDATES+=("/Applications/Xcode_${VERSION}.app/Contents/Developer")
-            fi
-          done
-
-          CANDIDATES+=("/Applications/Xcode.app/Contents/Developer")
-
-          SELECTED=""
-          for CANDIDATE in "${CANDIDATES[@]}"; do
-            if [ -d "${CANDIDATE}" ]; then
-              SELECTED="${CANDIDATE}"
-              break
-            fi
-          done
-
-          if [ -z "${SELECTED}" ]; then
-            echo "❌ No supported Xcode installation found."
-            ls -1 /Applications | grep -i Xcode || true
-            exit 1
-          fi
-
-          echo "ℹ️ Requested Xcode: ${REQUESTED_XCODE}"
-          echo "ℹ️ Fallback Xcode list: ${FALLBACK_XCODE_CSV}"
-          echo "ℹ️ Selecting Xcode at ${SELECTED}"
-          sudo xcode-select -s "${SELECTED}"
+          sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
           xcodebuild -version
 
       - name: Ensure iOS Native Project
@@ -437,7 +372,7 @@ jobs:
             CONTAINER_FLAG="-project"
             CONTAINER_PATH="${PROJECT_PATH}"
           else
-            echo "❌ No Xcode workspace/project found under ios/."
+            echo "âŒ No Xcode workspace/project found under ios/."
             exit 1
           fi
 
@@ -446,14 +381,14 @@ jobs:
           SCHEME=$(CONTAINER_PATH="${CONTAINER_PATH}" AVAILABLE_SCHEMES="${AVAILABLE_SCHEMES}" python3 -c "import os, re; container_path = os.environ.get('CONTAINER_PATH', ''); schemes = [line.strip() for line in os.environ.get('AVAILABLE_SCHEMES', '').splitlines() if line.strip()]; container_name = os.path.splitext(os.path.basename(container_path))[0]; preferred_names = [container_name]; excluded = re.compile(r'^(Pods($|-)|.*Tests?$|.*UITests?$|.*UnitTests?$|.*IntegrationTests?$|.*SnapshotTests?$|.*tvOS.*|.*macOS.*)$', re.I); exact = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and scheme.lower() == preferred.lower()), None); contains = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and preferred and preferred.lower() in scheme.lower()), None); fallback = next((scheme for scheme in schemes if not excluded.match(scheme)), schemes[0] if schemes else ''); print(exact or contains or fallback)")
 
           if [ -z "${SCHEME}" ]; then
-            echo "❌ Could not resolve an iOS scheme for build."
+            echo "âŒ Could not resolve an iOS scheme for build."
             exit 1
           fi
 
           echo "container_flag=${CONTAINER_FLAG}" >> "$GITHUB_OUTPUT"
           echo "container_path=${CONTAINER_PATH}" >> "$GITHUB_OUTPUT"
           echo "scheme=${SCHEME}" >> "$GITHUB_OUTPUT"
-          echo "✅ Using iOS scheme: ${SCHEME}"
+          echo "âœ… Using iOS scheme: ${SCHEME}"
 
       - name: Build iOS app artifact (.app)
         id: build-ios-release-app
@@ -479,19 +414,19 @@ jobs:
 
           APP_PATH=$(find ios/build/Build/Products -type d -name "*.app" | head -n 1)
           if [ -z "${APP_PATH}" ]; then
-            echo "❌ iOS .app output not found after build."
+            echo "âŒ iOS .app output not found after build."
             exit 1
           fi
 
           ZIP_PATH="build/${{ inputs.system-name }}-ios-release-app.zip"
           ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
           echo "artifact_path=${PWD}/${ZIP_PATH}" >> "$GITHUB_OUTPUT"
-          echo "✅ iOS .app zipped for upload."
+          echo "âœ… iOS .app zipped for upload."
 
       - name: Reserve signed iOS export
         if: ${{ inputs.ios-release-export-enabled }}
         run: |
-          echo "ℹ️ Signed iOS export is reserved for future hardening (certificates/profiles)."
+          echo "â„¹ï¸ Signed iOS export is reserved for future hardening (certificates/profiles)."
 
       - name: Upload iOS app artifact
         uses: actions/upload-artifact@v6
@@ -499,3 +434,5 @@ jobs:
           name: ${{ inputs.system-name }}-ios-release-build
           path: ${{ steps.build-ios-release-app.outputs.artifact_path }}
           retention-days: 14
+
+

@@ -1,8 +1,9 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  ORCHESTRATOR: Frontend Web CI/CD Pipeline                     ║
-# ║  Composes reusable workflows: test → lint → security →         ║
-# ║  governance → sonar → build                                     ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/front-end-workflow.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  ORCHESTRATOR: Frontend Web CI/CD Pipeline                     â•‘
+# â•‘  Composes reusable workflows: test â†’ lint â†’ security â†’         â•‘
+# â•‘  governance â†’ sonar â†’ build                                     â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Frontend Web CI/CD Pipeline"
 
 on:
@@ -47,18 +48,18 @@ permissions:
   contents: read
 
 jobs:
-  # ── Stage 0: Frontend Standards ────────────────────────────────
+  # â”€â”€ Stage 0: Frontend Standards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   web-standards:
-    name: "Web — Standards Check"
+    name: "Web â€” Standards Check"
     uses: ./.github/workflows/frontend-standards-check.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
 
-  # ── Stage 1A: Unit Tests ─────────────────────────────────────────
+  # â”€â”€ Stage 1A: Unit Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   web-unit-tests:
-    name: "Web — Unit Tests"
+    name: "Web â€” Unit Tests"
     uses: ./.github/workflows/frontend-tests.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -68,9 +69,9 @@ jobs:
       test-command: npm run test -- --coverage --coverageReporters=json-summary --runInBand tests/unit
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
-  # ── Stage 1B: Lint (parallel with tests) ────────────────────────
+  # â”€â”€ Stage 1B: Lint (parallel with tests) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   web-lint:
-    name: "Web — Lint Check"
+    name: "Web â€” Lint Check"
     if: ${{ inputs.enable-lint }}
     uses: ./.github/workflows/lint-check.yml
     with:
@@ -78,9 +79,9 @@ jobs:
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
 
-  # ── Stage 1C: Security Scan (parallel with tests) ──────────────
+  # â”€â”€ Stage 1C: Security Scan (parallel with tests) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   web-security:
-    name: "Web — Security Scan"
+    name: "Web â€” Security Scan"
     if: ${{ inputs.enable-security-scan }}
     uses: ./.github/workflows/security-scan.yml
     with:
@@ -90,9 +91,9 @@ jobs:
       # Enforce HIGH/CRITICAL findings on all branches, including test.
       fail-on-high: true
 
-  # ── Stage 1D: Governance Checks (parallel with tests/lint/security) ──────────────
+  # â”€â”€ Stage 1D: Governance Checks (parallel with tests/lint/security) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   web-governance:
-    name: "Web — Governance Checks"
+    name: "Web â€” Governance Checks"
     if: ${{ inputs.enable-governance }}
     uses: ./.github/workflows/governance-check.yml
     with:
@@ -102,9 +103,9 @@ jobs:
       test-command: npm run test -- --coverage --testPathPatterns="tests/unit" --coverageReporters=json-summary
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
-  # ── Stage 2: Build Web Application ─────────────────────────────
+  # â”€â”€ Stage 2: Build Web Application â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   web-build:
-    name: "Web — Build"
+    name: "Web â€” Build"
     needs: [web-standards, web-unit-tests, web-lint, web-security, web-governance]
     if: |
       always() &&
@@ -122,18 +123,18 @@ jobs:
           CLEAN_DIR="${CLEAN_DIR%/}"
 
           if [ -z "${CLEAN_DIR}" ] || [ "${CLEAN_DIR}" = "." ]; then
-            echo "✅ Using repository root as build directory."
+            echo "âœ… Using repository root as build directory."
             exit 0
           fi
 
           if [ ! -d "${CLEAN_DIR}" ]; then
-            echo "❌ Build directory not found: ${TARGET_DIR}"
+            echo "âŒ Build directory not found: ${TARGET_DIR}"
             echo "Repository root contents:"
             ls -la
             exit 1
           fi
 
-          echo "✅ Build directory exists: ${TARGET_DIR}"
+          echo "âœ… Build directory exists: ${TARGET_DIR}"
 
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v5
@@ -157,3 +158,5 @@ jobs:
           name: ${{ inputs.system-name }}-web-build
           path: ${{ inputs.system-dir }}/.next
           retention-days: 14
+
+

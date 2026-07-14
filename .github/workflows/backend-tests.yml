@@ -1,7 +1,8 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Backend Unit & Integration Tests (NestJS/Jest)      ║
-# ║  Called by any tribe's backend pipeline                        ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/backend-tests.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Backend Unit & Integration Tests (NestJS/Jest)      â•‘
+# â•‘  Called by any tribe's backend pipeline                        â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Backend Unit Tests"
 
 on:
@@ -51,16 +52,6 @@ on:
         type: boolean
         default: true
         description: "Upload coverage artifact"
-      enforce-coverage:
-        required: false
-        type: boolean
-        default: false
-        description: "Fail when no coverage summary is produced"
-      checkout-ref:
-        required: false
-        type: string
-        default: ""
-        description: "Git ref to check out (workflow_run chains pass head_sha)"
     outputs:
       unit-test-result:
         description: "Unit test pass/fail"
@@ -76,7 +67,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── Unit Tests ───────────────────────────────────────────────────
+  # â”€â”€ Unit Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   backend-unit-tests:
     name: "Backend Unit Tests"
     runs-on: ubuntu-latest
@@ -90,26 +81,16 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.checkout-ref }}
 
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
-          # Cache only when a lockfile exists — fresh FlowCI scaffolds ship
-          # without package-lock.json and setup-node fails on a missing path.
-          cache: ${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) != '' && 'npm' || '' }}
+          cache: "npm"
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            echo "No package-lock.json — falling back to npm install"
-            npm install --ignore-scripts
-          fi
+        run: npm ci --ignore-scripts
 
       - name: Display Selected Backend Stack
         run: |
@@ -138,22 +119,18 @@ jobs:
               console.log(data.total.lines.pct);
             ")
             echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-            echo "📊 Line Coverage: ${COVERAGE}%"
+            echo "ðŸ“Š Line Coverage: ${COVERAGE}%"
 
             THRESHOLD=${{ inputs.coverage-threshold }}
             if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
-              echo "❌ Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
+              echo "âŒ Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
               exit 1
             else
-              echo "✅ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
+              echo "âœ… Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
             fi
           else
             echo "coverage=unknown" >> $GITHUB_OUTPUT
-            if [ "${{ inputs.enforce-coverage }}" = "true" ]; then
-              echo "❌ Coverage summary not found and enforce-coverage is enabled"
-              exit 1
-            fi
-            echo "⚠️ Coverage summary not found"
+            echo "âš ï¸ Coverage summary not found"
           fi
 
       - name: Upload Coverage Artifact
@@ -175,7 +152,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # ── Integration Tests ────────────────────────────────────────────
+  # â”€â”€ Integration Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   backend-integration-tests:
     name: "Integration Tests"
     if: ${{ inputs.integration-test-command != '' }}
@@ -213,26 +190,16 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.checkout-ref }}
 
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
-          # Cache only when a lockfile exists — fresh FlowCI scaffolds ship
-          # without package-lock.json and setup-node fails on a missing path.
-          cache: ${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) != '' && 'npm' || '' }}
+          cache: "npm"
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            echo "No package-lock.json — falling back to npm install"
-            npm install --ignore-scripts
-          fi
+        run: npm ci --ignore-scripts
 
       - name: Display Selected Backend Stack
         run: |
@@ -254,3 +221,5 @@ jobs:
           path: ${{ inputs.working-directory }}/test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+

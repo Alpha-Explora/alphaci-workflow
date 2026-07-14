@@ -1,15 +1,16 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Vercel Deployment                                   ║
-# ║  Handles UAT (preview) and Production deploys                 ║
-# ║  Monorepo: each sub-project has its own VERCEL_PROJECT_ID     ║
-# ║                                                                ║
-# ║  Required repo secrets (per sub-project):                     ║
-# ║    VERCEL_TOKEN              — shared Vercel API token         ║
-# ║    VERCEL_ORG_ID             — shared Vercel Org/Team ID      ║
-# ║    VERCEL_PROJECT_ID_BAYANIHUB_WEB                            ║
-# ║    VERCEL_PROJECT_ID_DAMAYAN_WEB                              ║
-# ║    VERCEL_PROJECT_ID_HOPECARD_WEB                             ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/vercel-deploy.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Vercel Deployment                                   â•‘
+# â•‘  Handles UAT (preview) and Production deploys                 â•‘
+# â•‘  Monorepo: each sub-project has its own VERCEL_PROJECT_ID     â•‘
+# â•‘                                                                â•‘
+# â•‘  Required repo secrets (per sub-project):                     â•‘
+# â•‘    VERCEL_TOKEN              â€” shared Vercel API token         â•‘
+# â•‘    VERCEL_ORG_ID             â€” shared Vercel Org/Team ID      â•‘
+# â•‘    VERCEL_PROJECT_ID_BAYANIHUB_WEB                            â•‘
+# â•‘    VERCEL_PROJECT_ID_DAMAYAN_WEB                              â•‘
+# â•‘    VERCEL_PROJECT_ID_HOPECARD_WEB                             â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Vercel Deploy"
 
 on:
@@ -29,11 +30,6 @@ on:
         type: string
         default: "preview"
         description: "Deployment environment (preview|production)"
-      checkout-ref:
-        required: false
-        type: string
-        default: ""
-        description: "Git ref to check out (workflow_run chains pass head_sha)"
     secrets:
       VERCEL_TOKEN:
         required: true
@@ -72,13 +68,11 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.checkout-ref }}
 
       - name: Validate Project Directory
         run: |
           if [ ! -f "package.json" ]; then
-            echo "❌ package.json not found in ./${{ inputs.working-directory }}"
+            echo "âŒ package.json not found in ./${{ inputs.working-directory }}"
             echo "This usually means Vercel Root Directory is misconfigured for this project."
             echo "Set Vercel Root Directory to '.' for this linked sub-project context."
             exit 1
@@ -95,14 +89,14 @@ jobs:
 
           run_pull_build() {
             local dir="$1"
-            echo "🔎 Trying Vercel pull/build in: $dir"
+            echo "ðŸ”Ž Trying Vercel pull/build in: $dir"
 
             pushd "$dir" > /dev/null
 
             vercel pull --yes --environment=${{ inputs.environment }} --token="${VERCEL_TOKEN}"
             local pull_status=$?
             if [ $pull_status -ne 0 ]; then
-              echo "❌ vercel pull failed in $dir"
+              echo "âŒ vercel pull failed in $dir"
               popd > /dev/null
               return 1
             fi
@@ -114,13 +108,13 @@ jobs:
             fi
             local build_status=$?
             if [ $build_status -ne 0 ]; then
-              echo "❌ vercel build failed in $dir"
+              echo "âŒ vercel build failed in $dir"
               popd > /dev/null
               return 1
             fi
 
             if [ ! -d ".vercel/output" ]; then
-              echo "❌ .vercel/output not found in $dir"
+              echo "âŒ .vercel/output not found in $dir"
               popd > /dev/null
               return 1
             fi
@@ -131,12 +125,12 @@ jobs:
 
           if run_pull_build "./${{ inputs.working-directory }}"; then
             echo "deploy_dir=./${{ inputs.working-directory }}" >> "$GITHUB_OUTPUT"
-            echo "✅ Using deploy directory: ./${{ inputs.working-directory }}"
+            echo "âœ… Using deploy directory: ./${{ inputs.working-directory }}"
           elif run_pull_build "."; then
             echo "deploy_dir=." >> "$GITHUB_OUTPUT"
-            echo "✅ Using deploy directory: ."
+            echo "âœ… Using deploy directory: ."
           else
-            echo "❌ Vercel pull/build failed in both contexts."
+            echo "âŒ Vercel pull/build failed in both contexts."
             echo "Check VERCEL_PROJECT_ID mapping and Root Directory in Vercel project settings."
             exit 1
           fi
@@ -165,13 +159,13 @@ jobs:
           URL=$(echo "${DEPLOY_OUTPUT}" | grep -Eo 'https://[^[:space:]]+' | tail -n 1 | tr -d '\r')
 
           if [ -z "${URL}" ]; then
-            echo "❌ Failed to extract deployment URL from Vercel output."
+            echo "âŒ Failed to extract deployment URL from Vercel output."
             echo "${DEPLOY_OUTPUT}"
             exit 1
           fi
 
           echo "url=$URL" >> $GITHUB_OUTPUT
-          echo "🚀 Deployed to: $URL"
+          echo "ðŸš€ Deployed to: $URL"
 
           # Fetch deployment ID from Vercel API using the deployment URL
           HOSTNAME="${URL#https://}"
@@ -182,9 +176,9 @@ jobs:
 
           if [ -n "${DEP_ID}" ]; then
             echo "id=${DEP_ID}" >> $GITHUB_OUTPUT
-            echo "🆔 Deployment ID: ${DEP_ID}"
+            echo "ðŸ†” Deployment ID: ${DEP_ID}"
           else
-            echo "⚠️ Could not resolve deployment ID from Vercel API — id output will be empty."
+            echo "âš ï¸ Could not resolve deployment ID from Vercel API â€” id output will be empty."
             echo "id=" >> $GITHUB_OUTPUT
           fi
         working-directory: ${{ steps.prepare.outputs.deploy_dir }}
@@ -202,7 +196,7 @@ jobs:
           CURRENT_URL="${{ steps.deploy.outputs.url }}"
 
           if [ -z "${CURRENT_URL}" ]; then
-            echo "⚠️ Current deployment URL is empty; skipping cleanup."
+            echo "âš ï¸ Current deployment URL is empty; skipping cleanup."
             exit 0
           fi
 
@@ -210,7 +204,7 @@ jobs:
           RESPONSE=$(curl -sS -H "Authorization: Bearer ${VERCEL_TOKEN}" "${API_URL}")
 
           if ! echo "${RESPONSE}" | jq -e . >/dev/null 2>&1; then
-            echo "⚠️ Invalid response from Vercel API; skipping cleanup."
+            echo "âš ï¸ Invalid response from Vercel API; skipping cleanup."
             exit 0
           fi
 
@@ -224,15 +218,15 @@ jobs:
           ')
 
           if [ -z "${OLD_URLS}" ]; then
-            echo "ℹ️ No previous preview deployments found for branch '${BRANCH_NAME}'."
+            echo "â„¹ï¸ No previous preview deployments found for branch '${BRANCH_NAME}'."
             exit 0
           fi
 
-          echo "🧹 Removing previous preview deployments for branch '${BRANCH_NAME}'..."
+          echo "ðŸ§¹ Removing previous preview deployments for branch '${BRANCH_NAME}'..."
           while IFS= read -r OLD_URL; do
             if [ -n "${OLD_URL}" ]; then
               echo "- Removing ${OLD_URL}"
-              vercel remove "${OLD_URL}" --yes --token="${VERCEL_TOKEN}" || echo "⚠️ Failed to remove ${OLD_URL}; continuing."
+              vercel remove "${OLD_URL}" --yes --token="${VERCEL_TOKEN}" || echo "âš ï¸ Failed to remove ${OLD_URL}; continuing."
             fi
           done <<< "${OLD_URLS}"
         env:
@@ -253,7 +247,7 @@ jobs:
             }
 
             const url = '${{ steps.deploy.outputs.url }}';
-            const body = `## 🚀 Vercel Preview Deployment\n\n` +
+            const body = `## ðŸš€ Vercel Preview Deployment\n\n` +
               `**Project:** \`${{ inputs.working-directory }}\`\n` +
               `**Environment:** \`${{ inputs.environment }}\`\n` +
               `**URL:** ${url}\n` +
@@ -264,3 +258,5 @@ jobs:
               issue_number: context.issue.number,
               body: body
             });
+
+

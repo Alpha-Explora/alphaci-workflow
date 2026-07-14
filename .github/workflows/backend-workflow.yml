@@ -1,8 +1,9 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  ORCHESTRATOR: Backend CI/CD Pipeline (NestJS + TypeScript)   ║
-# ║  Composes reusable workflows: test → lint → security → docker ║
-# ║  SonarCloud runs once at the monorepo level (master-pipeline) ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/backend-workflow.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  ORCHESTRATOR: Backend CI/CD Pipeline (NestJS + TypeScript)   â•‘
+# â•‘  Composes reusable workflows: test â†’ lint â†’ security â†’ docker â•‘
+# â•‘  SonarCloud can run as a separate caller-composed workflow       â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Backend CI/CD Pipeline"
 
 on:
@@ -57,9 +58,9 @@ permissions:
   contents: read
 
 jobs:
-  # ── Stage 1A: Unit Tests (NestJS/Jest) ─────────────────────────
+  # â”€â”€ Stage 1A: Unit Tests (NestJS/Jest) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   api-unit-tests:
-    name: "API — Unit Tests"
+    name: "API â€” Unit Tests"
     uses: ./.github/workflows/backend-tests.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -69,9 +70,9 @@ jobs:
       integration-test-command: ${{ inputs.integration-test-command }}
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
-  # ── Stage 1B: Lint (parallel with tests) ────────────────────────
+  # â”€â”€ Stage 1B: Lint (parallel with tests) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   api-lint:
-    name: "API — Lint Check"
+    name: "API â€” Lint Check"
     if: ${{ inputs.enable-lint }}
     uses: ./.github/workflows/lint-check.yml
     with:
@@ -79,9 +80,9 @@ jobs:
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
 
-  # ── Stage 1C: Security Scan (parallel with tests) ──────────────
+  # â”€â”€ Stage 1C: Security Scan (parallel with tests) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   api-security:
-    name: "API — Security Scan"
+    name: "API â€” Security Scan"
     if: ${{ inputs.enable-security-scan }}
     uses: ./.github/workflows/security-scan.yml
     with:
@@ -89,9 +90,9 @@ jobs:
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
 
-  # ── Stage 2: Docker Build & Push ────────────────────────────────
+  # â”€â”€ Stage 2: Docker Build & Push â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   api-docker:
-    name: "API — Docker Build"
+    name: "API â€” Docker Build"
     if: |
       always() &&
       inputs.enable-docker-build && inputs.docker-image-name != '' &&
@@ -103,3 +104,5 @@ jobs:
       image-name: ${{ inputs.docker-image-name }}
       push-image: true
       scan-vulnerabilities: true
+
+

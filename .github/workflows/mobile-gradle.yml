@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/mobile-gradle.md
 name: "Reusable: Mobile Gradle Build"
 
 on:
@@ -180,12 +181,12 @@ jobs:
           )
 
           if [ -z "${MISSING_PACKAGES}" ]; then
-            echo "✅ Required React Native CLI dependencies are present."
+            echo "âœ… Required React Native CLI dependencies are present."
             exit 0
           fi
 
-          echo "⚠️ Missing React Native CLI dependencies: ${MISSING_PACKAGES}"
-          echo "ℹ️ Installing missing dependencies to keep CI builds stable."
+          echo "âš ï¸ Missing React Native CLI dependencies: ${MISSING_PACKAGES}"
+          echo "â„¹ï¸ Installing missing dependencies to keep CI builds stable."
 
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable
@@ -213,16 +214,16 @@ jobs:
           done < <(find . -type f -path '*/android/app/src/main/java/*/MainApplication.java' -print0)
 
           if [ "${#MAIN_APP_FILES[@]}" -eq 0 ]; then
-            echo "ℹ️ No MainApplication.java files found to normalize."
+            echo "â„¹ï¸ No MainApplication.java files found to normalize."
             exit 0
           fi
 
           for MAIN_APP in "${MAIN_APP_FILES[@]}"; do
             if grep -q 'DefaultNewArchitectureEntryPoint\.releaseLevel' "${MAIN_APP}"; then
               perl -0pi -e 's/DefaultNewArchitectureEntryPoint\.releaseLevel\s*=\s*([^;]+);/DefaultNewArchitectureEntryPoint.setReleaseLevel($1);/g' "${MAIN_APP}"
-              echo "✅ Normalized releaseLevel API usage in ${MAIN_APP}"
+              echo "âœ… Normalized releaseLevel API usage in ${MAIN_APP}"
             else
-              echo "ℹ️ ${MAIN_APP} already uses compatible release level API."
+              echo "â„¹ï¸ ${MAIN_APP} already uses compatible release level API."
             fi
           done
 
@@ -232,12 +233,12 @@ jobs:
           BUILD_GRADLE="android/app/build.gradle"
 
           if [ ! -f "${BUILD_GRADLE}" ]; then
-            echo "ℹ️ No ${BUILD_GRADLE} file found to patch."
+            echo "â„¹ï¸ No ${BUILD_GRADLE} file found to patch."
             exit 0
           fi
 
           if grep -Fq 'debuggableVariants = []' "${BUILD_GRADLE}"; then
-            echo "ℹ️ Debug JS bundling is already forced in ${BUILD_GRADLE}."
+            echo "â„¹ï¸ Debug JS bundling is already forced in ${BUILD_GRADLE}."
             exit 0
           fi
 
@@ -254,10 +255,10 @@ jobs:
           )
 
           if needle not in content:
-              raise SystemExit(f"❌ Unable to find a react {{ block in {build_gradle_path}.")
+              raise SystemExit(f"âŒ Unable to find a react {{ block in {build_gradle_path}.")
 
           build_gradle_path.write_text(content.replace(needle, replacement, 1), encoding="utf-8")
-          print(f"✅ Forced debug JS bundling in {build_gradle_path}.")
+          print(f"âœ… Forced debug JS bundling in {build_gradle_path}.")
           PY
 
       - name: Resolve Gradle Wrapper Directory
@@ -270,7 +271,7 @@ jobs:
           else
             WRAPPER_PATH=$(find . -maxdepth 4 -type f -name gradlew | head -n 1)
             if [ -z "${WRAPPER_PATH}" ]; then
-              echo "❌ Could not find gradlew in project."
+              echo "âŒ Could not find gradlew in project."
               exit 1
             fi
             GRADLE_DIR=$(dirname "${WRAPPER_PATH}")
@@ -278,7 +279,7 @@ jobs:
           fi
 
           echo "gradle_dir=${GRADLE_DIR}" >> "$GITHUB_OUTPUT"
-          echo "✅ Using gradle wrapper directory: ${GRADLE_DIR}"
+          echo "âœ… Using gradle wrapper directory: ${GRADLE_DIR}"
 
       - name: Ensure Kotlin Version Fallback
         run: |
@@ -286,10 +287,10 @@ jobs:
             TARGET_PROPS="${{ steps.gradle.outputs.gradle_dir }}/gradle.properties"
             if grep -q '^kotlinVersion=' "${TARGET_PROPS}"; then
               CURRENT_VERSION=$(grep '^kotlinVersion=' "${TARGET_PROPS}" | head -n 1 | cut -d'=' -f2-)
-              echo "ℹ️ Preserving project kotlinVersion=${CURRENT_VERSION}"
+              echo "â„¹ï¸ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
               echo 'kotlinVersion=2.0.21' >> "${TARGET_PROPS}"
-              echo "✅ Added fallback kotlinVersion=2.0.21"
+              echo "âœ… Added fallback kotlinVersion=2.0.21"
             fi
           fi
 
@@ -310,21 +311,8 @@ jobs:
           chmod +x gradlew
 
           if [ -n "${CUSTOM_ANDROID_BUILD_COMMAND}" ]; then
-            echo "ℹ️ Running custom Android build command."
-
-            if [ -f "./gradlew" ]; then
-              chmod +x ./gradlew
-            fi
-            if [ -f "android/gradlew" ]; then
-              chmod +x android/gradlew
-            fi
-
-            GRADLE_WRAPPER_PATH="${{ steps.gradle.outputs.gradle_dir }}/gradlew"
-            if [ -f "${GRADLE_WRAPPER_PATH}" ]; then
-              chmod +x "${GRADLE_WRAPPER_PATH}"
-            fi
-
-            bash -lc "${CUSTOM_ANDROID_BUILD_COMMAND}"
+            echo "â„¹ï¸ Running custom Android build command."
+            bash -c "${CUSTOM_ANDROID_BUILD_COMMAND}"
             exit 0
           fi
 
@@ -342,18 +330,18 @@ jobs:
           AAB_PATH=$(find "${SEARCH_ROOT}" -type f -name "*.aab" -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n 1 | cut -f2-)
 
           if [ -z "${APK_PATH}" ] && [ -z "${AAB_PATH}" ]; then
-            echo "❌ No APK/AAB outputs found under ${SEARCH_ROOT}."
+            echo "âŒ No APK/AAB outputs found under ${SEARCH_ROOT}."
             exit 1
           fi
 
           if [ -n "${APK_PATH}" ]; then
             cp "${APK_PATH}" "${OUTPUT_DIR}/${{ inputs.system-name }}-android.apk"
-            echo "✅ Staged APK: ${APK_PATH}"
+            echo "âœ… Staged APK: ${APK_PATH}"
           fi
 
           if [ -n "${AAB_PATH}" ]; then
             cp "${AAB_PATH}" "${OUTPUT_DIR}/${{ inputs.system-name }}-android.aab"
-            echo "✅ Staged AAB: ${AAB_PATH}"
+            echo "âœ… Staged AAB: ${AAB_PATH}"
           fi
 
       - name: Upload Android Artifact
@@ -385,3 +373,5 @@ jobs:
       push-image: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
       scan-vulnerabilities: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
       fail-on-vulnerabilities: false
+
+

@@ -1,7 +1,8 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Render Deployment                                   ║
-# ║  Dual mode: deploy hook trigger or health verification         ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/render-deploy.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Render Deployment                                   â•‘
+# â•‘  Dual mode: deploy hook trigger or health verification         â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Render Deploy"
 
 on:
@@ -152,7 +153,7 @@ jobs:
           case "${mode_raw}" in
             auto|webhook|verify-only) ;;
             *)
-              echo "❌ Invalid deploy-mode '${DEPLOY_MODE}'. Allowed: auto, webhook, verify-only"
+              echo "âŒ Invalid deploy-mode '${DEPLOY_MODE}'. Allowed: auto, webhook, verify-only"
               exit 1
               ;;
           esac
@@ -187,7 +188,7 @@ jobs:
           fi
 
           if [ "${mode_used}" = "webhook" ] && [ -z "${deploy_hook_url}" ]; then
-            echo "❌ deploy-mode=webhook requires a Render deploy hook URL."
+            echo "âŒ deploy-mode=webhook requires a Render deploy hook URL."
             exit 1
           fi
 
@@ -267,13 +268,13 @@ jobs:
             fi
 
             if [ "${attempt}" -lt 3 ]; then
-              echo "⚠️ Deploy hook attempt ${attempt} failed with HTTP ${http_code}; retrying..."
+              echo "âš ï¸ Deploy hook attempt ${attempt} failed with HTTP ${http_code}; retrying..."
               sleep 5
             fi
           done
 
           if [ "${success}" != "true" ]; then
-            echo "❌ Render deploy hook failed after retries. HTTP ${http_code}"
+            echo "âŒ Render deploy hook failed after retries. HTTP ${http_code}"
             echo "Response body: ${body}"
             exit 1
           fi
@@ -297,7 +298,7 @@ jobs:
           fi
 
           if [ -z "${health_url}" ]; then
-            echo "❌ No Render health URL resolved. Set healthcheck-url input or RENDER_HEALTHCHECK_URL_<ENV> secrets."
+            echo "âŒ No Render health URL resolved. Set healthcheck-url input or RENDER_HEALTHCHECK_URL_<ENV> secrets."
             exit 1
           fi
 
@@ -360,7 +361,7 @@ jobs:
             if [ "${elapsed}" -ge "${TIMEOUT_SECONDS}" ]; then
               echo "health_status=failure" >> "$GITHUB_OUTPUT"
               echo "health_http_code=${last_http_code}" >> "$GITHUB_OUTPUT"
-              echo "❌ Render health verification timed out at ${HEALTHCHECK_URL}"
+              echo "âŒ Render health verification timed out at ${HEALTHCHECK_URL}"
               echo "Last HTTP status: ${last_http_code}"
               echo "Response sample:"
               head -c 500 "${attempt_file}" || true
@@ -432,3 +433,4 @@ jobs:
           echo "- Poll Timeout: ${TIMEOUT_SECONDS}s" >> "$GITHUB_STEP_SUMMARY"
           echo "- Poll Interval: ${INTERVAL_SECONDS}s" >> "$GITHUB_STEP_SUMMARY"
           echo "- Deployment URL: [${final_deployment_url}](${final_deployment_url})" >> "$GITHUB_STEP_SUMMARY"
+

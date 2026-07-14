@@ -1,7 +1,8 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Pipeline Notifications                              ║
-# ║  Sends failure/success alerts to configured channels          ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/notifications.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Pipeline Notifications                              â•‘
+# â•‘  Sends failure/success alerts to configured channels          â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Pipeline Notifications"
 
 on:
@@ -164,36 +165,36 @@ jobs:
           case "${BRANCH_NAME}" in
             main)
               ENV_LABEL="Production"
-              ENV_EMOJI="🏁"
+              ENV_EMOJI="ðŸ"
               ENV_COLOR="15548997"
               ;;
             uat)
               ENV_LABEL="UAT"
-              ENV_EMOJI="🧪"
+              ENV_EMOJI="ðŸ§ª"
               ENV_COLOR="15844367"
               ;;
             test)
               ENV_LABEL="Test"
-              ENV_EMOJI="🔬"
+              ENV_EMOJI="ðŸ”¬"
               ENV_COLOR="5793266"
               ;;
             *)
               ENV_LABEL="${BRANCH_NAME}"
-              ENV_EMOJI="🌿"
+              ENV_EMOJI="ðŸŒ¿"
               ENV_COLOR="10181046"
               ;;
           esac
 
           if [ "${STATUS}" = "success" ]; then
-            EMOJI="✅"
+            EMOJI="âœ…"
             COLOR="good"
             TITLE="Pipeline Succeeded"
           elif [ "${STATUS}" = "failure" ]; then
-            EMOJI="❌"
+            EMOJI="âŒ"
             COLOR="danger"
             TITLE="Pipeline Failed"
           else
-            EMOJI="⚠️"
+            EMOJI="âš ï¸"
             COLOR="warning"
             TITLE="Pipeline Cancelled"
           fi
@@ -297,7 +298,7 @@ jobs:
               (if $kind == "release" and ($releaseUrlsJson | length) > 0 then $releaseUrlsJson else $deploymentUrlsJson end) as $artifactJson |
               (if $kind == "release" and ($releaseUrl | length) > 0 then $releaseUrl else $deploymentUrl end) as $artifactUrl |
               ((try ($artifactJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $artifactEntries |
-              ($artifactEntries | map("• " + .key + ": " + (.value | tostring)) | join("\n")) as $artifactLines |
+              ($artifactEntries | map("â€¢ " + .key + ": " + (.value | tostring)) | join("\n")) as $artifactLines |
               ($artifactEntries | length) as $artifactCount |
               ($artifactEntries[0].value // "" | tostring) as $firstArtifactUrl |
               {
@@ -386,7 +387,7 @@ jobs:
               --argjson envColor ${{ steps.prepare.outputs.env_color }} \
               --arg imageUrl '${{ steps.prepare.outputs.image_url }}' \
               --arg timestamp "${TIMESTAMP}" \
-              'def icon: if . == "success" then "✅" elif . == "failure" then "❌" elif . == "cancelled" then "⚠️" elif . == "skipped" then "⏭️" else "⬜" end;
+              'def icon: if . == "success" then "âœ…" elif . == "failure" then "âŒ" elif . == "cancelled" then "âš ï¸" elif . == "skipped" then "â­ï¸" else "â¬œ" end;
 
               # Build pipeline result line
               (if ($pipelineResult | length) > 0 then
@@ -411,28 +412,28 @@ jobs:
               # Build quality gates section
               (if ($resolvedGateEntries | length) > 0 then
                 "**Quality Gates**\n" +
-                ($resolvedGateEntries | map((.value | icon) + " " + .key + " · `" + (.value | tostring) + "`") | join("\n"))
+                ($resolvedGateEntries | map((.value | icon) + " " + .key + " Â· `" + (.value | tostring) + "`") | join("\n"))
               else "" end) as $gatesBlock |
 
               # Assemble description
               ($resultLine + $gatesBlock +
-                (if ($details | length) > 0 then "\n\n⚠️ **Error:** " + $details else "" end)
+                (if ($details | length) > 0 then "\n\nâš ï¸ **Error:** " + $details else "" end)
               ) as $description |
 
               # Deployments / releases
               ($artifactKind | ascii_downcase) as $kind |
-              (if $kind == "release" then "📦 Release" else "🔗 Deployment" end) as $artifactField |
-              (if $kind == "release" then "📦 Releases" else "🔗 Deployments" end) as $artifactFieldPlural |
+              (if $kind == "release" then "ðŸ“¦ Release" else "ðŸ”— Deployment" end) as $artifactField |
+              (if $kind == "release" then "ðŸ“¦ Releases" else "ðŸ”— Deployments" end) as $artifactFieldPlural |
               (if $kind == "release" and ($releaseUrlsJson | length) > 0 then $releaseUrlsJson else $deploymentUrlsJson end) as $artifactJson |
               (if $kind == "release" and ($releaseUrl | length) > 0 then $releaseUrl else $deploymentUrl end) as $artifactUrl |
               ((try ($artifactJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $artifactEntries |
-              ($artifactEntries | map("• **" + .key + "**: " + (.value | tostring)) | join("\n")) as $artifactLines |
+              ($artifactEntries | map("â€¢ **" + .key + "**: " + (.value | tostring)) | join("\n")) as $artifactLines |
               ($artifactEntries | length) as $artifactCount |
               ($artifactEntries[0].value // "" | tostring) as $firstArtifactUrl |
 
               # Versions
               ((try ($versionsJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $versionEntries |
-              ($versionEntries | map("• **" + .key + "**: `" + (.value | tostring) + "`") | join("\n")) as $versionLines |
+              ($versionEntries | map("â€¢ **" + .key + "**: `" + (.value | tostring) + "`") | join("\n")) as $versionLines |
 
               {
                 content: $mention,
@@ -443,7 +444,7 @@ jobs:
                     description: $description,
                     fields: (
                       [
-                        {name: "📦 Systems", value: $systems, inline: false},
+                        {name: "ðŸ“¦ Systems", value: $systems, inline: false},
                         {name: "Pipeline", value: $pipeline, inline: true},
                         {name: "Environment", value: $envLabel, inline: true},
                         {name: "Branch", value: ("`" + $branch + "`"), inline: true},
@@ -451,16 +452,18 @@ jobs:
                         {name: "Actor", value: $actor, inline: true},
                         {name: "Run Attempt", value: $attempt, inline: true}
                       ]
-                      + (if ($versionLines | length) > 0 then [{name: "🏷️ Versions", value: $versionLines, inline: false}] else [] end)
+                      + (if ($versionLines | length) > 0 then [{name: "ðŸ·ï¸ Versions", value: $versionLines, inline: false}] else [] end)
                       + (if ($artifactUrl | length) > 0 then [{name: $artifactField, value: $artifactUrl, inline: false}] else [] end)
                       + (if ($artifactLines | length) > 0 and ($artifactCount > 1 or ($artifactUrl | length) == 0 or $firstArtifactUrl != $artifactUrl) then [{name: $artifactFieldPlural, value: $artifactLines, inline: false}] else [] end)
-                      + [{name: "🔗 Links", value: ("[View Run ↗](" + $runUrl + ") · [Compare ↗](" + $compareUrl + ")"), inline: false}]
+                      + [{name: "ðŸ”— Links", value: ("[View Run â†—](" + $runUrl + ") Â· [Compare â†—](" + $compareUrl + ")"), inline: false}]
                     ),
                     image: (if ($imageUrl | length) > 0 then {url: $imageUrl} else null end),
                     url: $runUrl,
-                    footer: {text: ($workflow + " · Run #" + $runNumber)},
+                    footer: {text: ($workflow + " Â· Run #" + $runNumber)},
                     timestamp: $timestamp
                   }
                 ]
               }')"
+
+
 

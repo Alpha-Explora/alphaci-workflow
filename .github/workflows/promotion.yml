@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/promotion.md
 name: "Reusable: Promotion"
 
 on:
@@ -132,7 +133,7 @@ jobs:
           PR_TOKEN: ${{ secrets.PR_TOKEN }}
         run: |
           if [ -z "${PR_TOKEN}" ]; then
-            echo "❌ Missing PAT secret for PR creation."
+            echo "âŒ Missing PAT secret for PR creation."
             echo "Provide PR_TOKEN when calling this workflow."
             exit 1
           fi
@@ -195,8 +196,8 @@ jobs:
           if [ "${DIRECTION}" = "test-to-uat" ]; then
             SOURCE_BRANCH="test"
             TARGET_BRANCH="uat"
-            TITLE="🚀 Release: Promote TEST → UAT (${SHORT_SHA})"
-            HEADER="## 🚀 Promote TEST → UAT"
+            TITLE="ðŸš€ Release: Promote TEST â†’ UAT (${SHORT_SHA})"
+            HEADER="## ðŸš€ Promote TEST â†’ UAT"
             CONTEXT_LABEL="TEST"
             FOOTER="*Merge this PR to continue promotion into UAT.*"
             INTRO="This PR was **automatically created** after the required CI quality gates and promotion checks passed on the ${BT}test${BT} branch."
@@ -205,13 +206,13 @@ jobs:
               VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
             fi
             if [ "${PIPELINE_KIND}" = "single" ] && [ -z "${VERSION_TAG}" ]; then
-              echo "⚠️ Unable to resolve TEST version tag for PR body; falling back to per-system versions or N/A."
+              echo "âš ï¸ Unable to resolve TEST version tag for PR body; falling back to per-system versions or N/A."
             fi
           elif [ "${DIRECTION}" = "uat-to-main" ]; then
             SOURCE_BRANCH="uat"
             TARGET_BRANCH="main"
-            TITLE="🚀 Release: Promote UAT → Production (${SHORT_SHA})"
-            HEADER="## 🚀 Promote UAT → Production"
+            TITLE="ðŸš€ Release: Promote UAT â†’ Production (${SHORT_SHA})"
+            HEADER="## ðŸš€ Promote UAT â†’ Production"
             CONTEXT_LABEL="UAT"
             FOOTER="*Merge this PR to continue promotion into production. A production readiness gate will run automatically.*"
             INTRO="This PR was **automatically created** after the required CI quality gates and promotion checks passed on the ${BT}uat${BT} branch."
@@ -223,7 +224,7 @@ jobs:
               VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
             fi
           else
-            echo "❌ Invalid direction: ${DIRECTION}. Expected test-to-uat or uat-to-main."
+            echo "âŒ Invalid direction: ${DIRECTION}. Expected test-to-uat or uat-to-main."
             exit 1
           fi
 
@@ -233,13 +234,13 @@ jobs:
           fi
 
           if [ "${ARTIFACT_KIND}" = "release" ]; then
-            LINKS_SECTION_TITLE="### 📦 GitHub ${CONTEXT_LABEL} Release Links"
+            LINKS_SECTION_TITLE="### ðŸ“¦ GitHub ${CONTEXT_LABEL} Release Links"
             LINKS_COLUMN_HEADER="${CONTEXT_LABEL} Release Link"
             LINKS_ACTION_TEXT="View release"
             REVIEW_LINK_STEP="2. Open each **Release Link** and verify the published artifacts"
             CHECKLIST_TEMPLATE="Verified **%s** release assets on ${CONTEXT_LABEL}"
           else
-            LINKS_SECTION_TITLE="### 🔗 ${CONTEXT_LABEL} Deployment Links"
+            LINKS_SECTION_TITLE="### ðŸ”— ${CONTEXT_LABEL} Deployment Links"
             LINKS_COLUMN_HEADER="${CONTEXT_LABEL} Deployment Link"
             LINKS_ACTION_TEXT="Open link"
             REVIEW_LINK_STEP="2. Open each **Deployment Link** and verify the relevant behavior for that system"
@@ -265,12 +266,12 @@ jobs:
           fi
 
           if ! echo "${SYSTEMS_JSON}" | jq -e . >/dev/null 2>&1; then
-            echo "❌ Invalid systems-json payload."
+            echo "âŒ Invalid systems-json payload."
             exit 1
           fi
 
           if [ "$(echo "${SYSTEMS_JSON}" | jq 'length')" -eq 0 ]; then
-            echo "❌ No systems provided for promotion PR body."
+            echo "âŒ No systems provided for promotion PR body."
             exit 1
           fi
 
@@ -327,7 +328,7 @@ jobs:
 
             if [ "${PIPELINE_KIND}" = "single" ]; then
               if [ -z "${SYSTEM1_NAME}" ]; then
-                echo "❌ system1-name is required for single pipeline-kind."
+                echo "âŒ system1-name is required for single pipeline-kind."
                 exit 1
               fi
               SYSTEMS_JSON=$(jq -nc --arg n1 "${SYSTEM1_NAME}" '[{name:$n1}]')
@@ -384,21 +385,21 @@ jobs:
               fi
             fi
 
-          # ── Backtick variable (avoids YAML/bash/jq escape issues) ──
+          # â”€â”€ Backtick variable (avoids YAML/bash/jq escape issues) â”€â”€
           BT='`'
 
-          # ── Status icon helper ──
+          # â”€â”€ Status icon helper â”€â”€
           status_icon() {
             case "$1" in
-              success) echo "✅";;
-              failure) echo "❌";;
-              cancelled) echo "⚠️";;
-              skipped) echo "⏭️";;
-              *) echo "⬜";;
+              success) echo "âœ…";;
+              failure) echo "âŒ";;
+              cancelled) echo "âš ï¸";;
+              skipped) echo "â­ï¸";;
+              *) echo "â¬œ";;
             esac
           }
 
-          # ── Compute readiness badge ──
+          # â”€â”€ Compute readiness badge â”€â”€
           ALL_GATES_PASSED="true"
           if [ "$(echo "${QUALITY_GATES_JSON}" | jq 'length')" -gt 0 ]; then
             while IFS= read -r _gate; do
@@ -419,9 +420,9 @@ jobs:
             done
           fi
           if [ "${ALL_GATES_PASSED}" = "true" ] && [ "${PIPELINE_RESULT}" = "success" ]; then
-            READINESS_BADGE="> 🟢 **READY FOR REVIEW** — All quality gates passed"
+            READINESS_BADGE="> ðŸŸ¢ **READY FOR REVIEW** â€” All quality gates passed"
           else
-            READINESS_BADGE="> 🔴 **NOT READY** — One or more quality gates failed"
+            READINESS_BADGE="> ðŸ”´ **NOT READY** â€” One or more quality gates failed"
           fi
 
             ARTIFACT_LINKS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --argjson urls "${ARTIFACT_LINKS_JSON}" --arg runUrl "${RUN_URL}" '
@@ -439,7 +440,7 @@ jobs:
                 .[$s.name] = ((($versions[$s.name] // "") | tostring) | if length > 0 then . else (if ($defaultVersion | length) > 0 then $defaultVersion else "N/A" end) end)
               )')
 
-          # ── Pre-merge checklist ──
+          # â”€â”€ Pre-merge checklist â”€â”€
           CHECKLIST="- [ ] Reviewed the [changes between branches](${COMPARE_URL})"
           while IFS= read -r SYSTEM_NAME; do
             if [ -z "${SYSTEM_NAME}" ]; then
@@ -454,45 +455,45 @@ jobs:
             CHECKLIST+=$'\n- [ ] Production readiness confirmed'
           fi
 
-          # ── Deployment links table rows ──
+          # â”€â”€ Deployment links table rows â”€â”€
           ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson urls "${ARTIFACT_LINKS_JSON}" --arg runUrl "${RUN_URL}" --arg linkText "${LINKS_ACTION_TEXT}" '
             .[]
             | (($urls[.name] // "") | tostring) as $raw
             | (if ($raw | length) > 0 then $raw else $runUrl end) as $url
-            | "| \(.name) | [🔗 " + $linkText + "](" + $url + ") |"
+            | "| \(.name) | [ðŸ”— " + $linkText + "](" + $url + ") |"
           ')
 
-          # ── Quality gates table with emoji ──
+          # â”€â”€ Quality gates table with emoji â”€â”€
           QUALITY_GATE_ROWS=$(echo "${QUALITY_GATES_JSON}" | jq -r --arg bt "${BT}" '
             to_entries
             | map(
                 "| " + .key + " | " +
-                (if .value == "success" then "✅" elif .value == "failure" then "❌" elif .value == "cancelled" then "⚠️" elif .value == "skipped" then "⏭️" else "⬜" end) +
+                (if .value == "success" then "âœ…" elif .value == "failure" then "âŒ" elif .value == "cancelled" then "âš ï¸" elif .value == "skipped" then "â­ï¸" else "â¬œ" end) +
                 " | " + $bt + (.value | tostring) + $bt + " |"
               )
             | join("\n")
           ')
           QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n%s" "${QUALITY_GATE_ROWS}")
 
-          # ── Version tags table ──
+          # â”€â”€ Version tags table â”€â”€
           VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" --arg bt "${BT}" '.[] | "| " + .name + " | " + $bt + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + $bt + " |"')
 
-          # ── CI results table ──
+          # â”€â”€ CI results table â”€â”€
           EVIDENCE_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson results "${RESULTS_JSON}" --arg defaultResult "${DEFAULT_RESULT}" --arg bt "${BT}" '.[] | "| \(.name) | " + $bt + ((($results[.name] // "") | tostring) | if length > 0 then . else $defaultResult end) + $bt + " |"')
 
-          # ── Release summary ──
+          # â”€â”€ Release summary â”€â”€
           RELEASE_VERSION_VALUE="${VERSION_TAG:-N/A}"
           if [ "${PIPELINE_KIND}" = "multi" ]; then
             RELEASE_VERSION_VALUE="Per-system (see Version Tags)"
           fi
           PIPELINE_ICON=$(status_icon "${PIPELINE_RESULT}")
-          RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Pipeline Result | %s ${BT}%s${BT} |\n| Version Tag | ${BT}%s${BT} |\n| Short SHA | [${BT}%s${BT}](https://github.com/${{ github.repository }}/commit/%s) |\n| Compare | [View changes ↗](%s) |" \
+          RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Pipeline Result | %s ${BT}%s${BT} |\n| Version Tag | ${BT}%s${BT} |\n| Short SHA | [${BT}%s${BT}](https://github.com/${{ github.repository }}/commit/%s) |\n| Compare | [View changes â†—](%s) |" \
             "${PIPELINE_ICON}" "${PIPELINE_RESULT}" \
             "${RELEASE_VERSION_VALUE}" \
             "${SHORT_SHA}" "${GITHUB_SHA}" \
             "${COMPARE_URL}")
 
-          # ── Details section ──
+          # â”€â”€ Details section â”€â”€
           DETAILS=$(printf -- "- **Source branch:** ${BT}%s${BT}\n- **Target branch:** ${BT}%s${BT}" "${SOURCE_BRANCH}" "${TARGET_BRANCH}")
           if [ "${PIPELINE_KIND}" = "multi" ]; then
             VERSION_DETAILS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" --arg bt "${BT}" '.[] | "  - **" + .name + "**: " + $bt + (((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end)) + $bt')
@@ -501,15 +502,15 @@ jobs:
             DETAILS=$(printf "%s\n- **Version tag:** ${BT}%s${BT}" "${DETAILS}" "${VERSION_TAG:-N/A}")
           fi
           TRIGGERED_BY="${GITHUB_TRIGGERING_ACTOR:-${GITHUB_ACTOR}}"
-          DETAILS=$(printf "%s\n- **Commit:** [\`%s\`](https://github.com/${{ github.repository }}/commit/%s)\n- **Compare:** [View changes ↗](%s)\n- **Triggered by:** @%s\n- **Triggered at:** %s\n- **Pipeline run:** [View workflow run ↗](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" "${DETAILS}" "${SHORT_SHA}" "${GITHUB_SHA}" "${COMPARE_URL}" "${TRIGGERED_BY}" "${TIMESTAMP}")
+          DETAILS=$(printf "%s\n- **Commit:** [\`%s\`](https://github.com/${{ github.repository }}/commit/%s)\n- **Compare:** [View changes â†—](%s)\n- **Triggered by:** @%s\n- **Triggered at:** %s\n- **Pipeline run:** [View workflow run â†—](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" "${DETAILS}" "${SHORT_SHA}" "${GITHUB_SHA}" "${COMPARE_URL}" "${TRIGGERED_BY}" "${TIMESTAMP}")
 
-          # ── How to review section ──
-          HOW_TO_REVIEW="1. Check the **Quality Gates** table — all gates should show ✅"
+          # â”€â”€ How to review section â”€â”€
+          HOW_TO_REVIEW="1. Check the **Quality Gates** table â€” all gates should show âœ…"
           HOW_TO_REVIEW+=$'\n'"${REVIEW_LINK_STEP}"
           HOW_TO_REVIEW+=$'\n'"3. Review the [code diff between branches](${COMPARE_URL})"
           HOW_TO_REVIEW+=$'\n'"4. Complete all items in the **Pre-merge Checklist** above"
 
-          # ── Assemble PR body ──
+          # â”€â”€ Assemble PR body â”€â”€
           PR_BODY=$(cat <<ENDOFBODY
           ${HEADER}
 
@@ -519,10 +520,10 @@ jobs:
 
           ---
 
-          ### 🛡️ Quality Gates
+          ### ðŸ›¡ï¸ Quality Gates
           ${QUALITY_GATES}
 
-          ### 📋 Pre-merge Checklist
+          ### ðŸ“‹ Pre-merge Checklist
           ${CHECKLIST}
 
           ${LINKS_SECTION_TITLE}
@@ -530,20 +531,20 @@ jobs:
           |--------|------------------|
           ${ROWS}
 
-          ### 🏷️ Version Tags
+          ### ðŸ·ï¸ Version Tags
           | System | Tag |
           |--------|-----|
           ${VERSION_ROWS}
 
-          ### 📊 CI Results
+          ### ðŸ“Š CI Results
           | System | Result |
           |--------|--------|
           ${EVIDENCE_ROWS}
 
-          ### 🧾 Release Summary
+          ### ðŸ§¾ Release Summary
           ${RELEASE_SUMMARY}
 
-          ### 🔍 Details
+          ### ðŸ” Details
           <details>
           <summary>Click to expand pipeline details</summary>
 
@@ -551,7 +552,7 @@ jobs:
 
           </details>
 
-          ### 📖 How to Review
+          ### ðŸ“– How to Review
           ${HOW_TO_REVIEW}
 
           ---
@@ -560,14 +561,14 @@ jobs:
           )
 
           if [ "${DRY_RUN}" = "true" ]; then
-            echo "🧪 Dry run enabled. PR body preview:"
+            echo "ðŸ§ª Dry run enabled. PR body preview:"
             echo "${PR_BODY}"
             exit 0
           fi
 
           if [ -n "${EXISTING_PR}" ]; then
             retry 3 3 gh pr edit "${EXISTING_PR}" --title "${TITLE}" --body "${PR_BODY}"
-            echo "✅ Updated PR #${EXISTING_PR}: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
+            echo "âœ… Updated PR #${EXISTING_PR}: ${SOURCE_BRANCH} â†’ ${TARGET_BRANCH}"
             exit 0
           fi
 
@@ -578,9 +579,11 @@ jobs:
 
           AHEAD_COUNT=$(git rev-list --count "origin/${TARGET_BRANCH}..origin/${SOURCE_BRANCH}" 2>/dev/null || git rev-list --count "${TARGET_BRANCH}..${SOURCE_BRANCH}" 2>/dev/null || echo "0")
           if [ "${AHEAD_COUNT}" = "0" ]; then
-            echo "ℹ️ No commits between ${TARGET_BRANCH} and ${SOURCE_BRANCH}; skipping PR creation."
+            echo "â„¹ï¸ No commits between ${TARGET_BRANCH} and ${SOURCE_BRANCH}; skipping PR creation."
             exit 0
           fi
 
           retry 3 3 gh pr create --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --title "${TITLE}" --body "${PR_BODY}"
-          echo "✅ Created PR: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
+          echo "âœ… Created PR: ${SOURCE_BRANCH} â†’ ${TARGET_BRANCH}"
+
+

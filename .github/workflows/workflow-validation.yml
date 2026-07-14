@@ -1,16 +1,15 @@
+﻿# Contract: docs/workflows/workflow-validation.md
 name: "Workflow Validation"
 
 on:
   pull_request:
     paths:
       - ".github/workflows/**"
-      - ".github/actions/**"
-      - "templates/**"
       - "workflow-templates/**"
       - "MOBILE_PIPELINE_PRESETS_AND_PROMPT.md"
       - "USER_STORIES_STATUS.md"
   workflow_dispatch:
-  # Added this block to allow the master pipeline to call this workflow
+  # Allows caller workflows to reuse workflow validation when needed.
   workflow_call:
     inputs:
       systems-json:
@@ -34,15 +33,15 @@ jobs:
         with:
           args: -color
 
-  validate-mobile-callers:
-    name: "Validate Mobile Caller Templates"
+  validate-mobile-templates:
+    name: "Validate Mobile Granular Templates"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
 
-      - name: Assert mobile caller template contract
+      - name: Assert mobile granular template contract
         shell: bash
         run: |
           set -euo pipefail
@@ -51,25 +50,24 @@ jobs:
             local file="$1"
             local expected="$2"
             if ! grep -Fq "$expected" "$file"; then
-              echo "❌ Expected '$expected' in $file"
+              echo "âŒ Expected '$expected' in $file"
               exit 1
             fi
           }
 
-          CALLER="templates/mobile-pipeline-caller.yml"
+          TEMPLATE="workflow-templates/mobile-expo.yml"
 
-          assert_contains "$CALLER" "uses: Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/master-pipeline-mobile.yml@v1"
-          assert_contains "$CALLER" "pipeline_mode"
-          assert_contains "$CALLER" "enable_lint"
-          assert_contains "$CALLER" "enable_security_scan"
-          assert_contains "$CALLER" "enable_sonar"
-          assert_contains "$CALLER" "enable_governance"
-          assert_contains "$CALLER" "enable_grafana_k6"
-          assert_contains "$CALLER" "k6_script_path"
-          assert_contains "$CALLER" "k6_base_url"
-          assert_contains "$CALLER" "k6_run_only_on_branch"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/mobile-tests.yml@v1"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/lint-check.yml@v1"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/security-scan.yml@v1"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/mobile-gradle.yml@v1"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/mobile-maestro.yml@v1"
+          assert_contains "$TEMPLATE" "needs: [unit-tests, lint, security]"
+          assert_contains "$TEMPLATE" "mobile_stack"
+          assert_contains "$TEMPLATE" "run_android_build"
+          assert_contains "$TEMPLATE" "run_maestro"
 
-          echo "✅ Mobile caller template validated."
+          echo "Mobile granular template validated."
 
   simulate-mobile-config-matrix:
     name: "Simulate Mobile Config Matrix"
@@ -92,7 +90,7 @@ jobs:
             elif [ "$type" = "array" ]; then
               normalized=$(echo "$input_json" | jq -c .)
             else
-              echo "❌ Config JSON must be object or array"
+              echo "âŒ Config JSON must be object or array"
               exit 1
             fi
 
@@ -136,22 +134,22 @@ jobs:
           INVALID_NORM=$(normalize_and_validate "$INVALID_SINGLE")
 
           if [ "$(echo "$EXPO_NORM" | jq 'length')" -ne 1 ]; then
-            echo "❌ Expo single normalization failed"
+            echo "âŒ Expo single normalization failed"
             exit 1
           fi
 
           if [ "$(echo "$KOTLIN_NORM" | jq 'length')" -ne 1 ]; then
-            echo "❌ Kotlin single normalization failed"
+            echo "âŒ Kotlin single normalization failed"
             exit 1
           fi
 
           if [ "$(echo "$RN_NORM" | jq 'length')" -ne 1 ]; then
-            echo "❌ React Native single normalization failed"
+            echo "âŒ React Native single normalization failed"
             exit 1
           fi
 
           if [ "$(echo "$MIXED_NORM" | jq 'length')" -lt 2 ]; then
-            echo "❌ Mixed multi normalization failed"
+            echo "âŒ Mixed multi normalization failed"
             exit 1
           fi
 
@@ -161,36 +159,36 @@ jobs:
           INVALID_CLASS=$(classify_target "$(echo "$INVALID_NORM" | jq -c '.[0]')")
 
           if [ "$EXPO_CLASS" != "expo" ]; then
-            echo "❌ Expo sample classification expected expo, got $EXPO_CLASS"
+            echo "âŒ Expo sample classification expected expo, got $EXPO_CLASS"
             exit 1
           fi
 
           if [ "$KOTLIN_CLASS" != "kotlin" ]; then
-            echo "❌ Kotlin sample classification expected kotlin, got $KOTLIN_CLASS"
+            echo "âŒ Kotlin sample classification expected kotlin, got $KOTLIN_CLASS"
             exit 1
           fi
 
           if [ "$RN_CLASS" != "react-native" ]; then
-            echo "❌ React Native sample classification expected react-native, got $RN_CLASS"
+            echo "âŒ React Native sample classification expected react-native, got $RN_CLASS"
             exit 1
           fi
 
           if [ "$INVALID_CLASS" != "invalid" ]; then
-            echo "❌ Invalid sample classification expected invalid, got $INVALID_CLASS"
+            echo "âŒ Invalid sample classification expected invalid, got $INVALID_CLASS"
             exit 1
           fi
 
-          echo "✅ Mobile config matrix simulation passed."
+          echo "âœ… Mobile config matrix simulation passed."
 
-  validate-backend-caller:
-    name: "Validate Backend Caller Template"
+  validate-backend-template:
+    name: "Validate Backend Granular Template"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
 
-      - name: Assert backend caller template contract
+      - name: Assert backend granular template contract
         shell: bash
         run: |
           set -euo pipefail
@@ -199,21 +197,22 @@ jobs:
             local file="$1"
             local expected="$2"
             if ! grep -Fq "$expected" "$file"; then
-              echo "❌ Expected '$expected' in $file"
+              echo "âŒ Expected '$expected' in $file"
               exit 1
             fi
           }
 
-          CALLER="templates/be-pipeline-caller.yml"
+          TEMPLATE="workflow-templates/be-nodejs.yml"
 
-          assert_contains "$CALLER" "uses: Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/master-pipeline-be.yml@v1"
-          assert_contains "$CALLER" "pipeline_mode"
-          assert_contains "$CALLER" "enable_security_scan"
-          assert_contains "$CALLER" "enable_sonar"
-          assert_contains "$CALLER" "enable_k6"
-          assert_contains "$CALLER" "k6_script_path"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/backend-tests.yml@v1"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/lint-check.yml@v1"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/security-scan.yml@v1"
+          assert_contains "$TEMPLATE" "uses: ImplementSprint/central-workflow/.github/workflows/docker-build.yml@v1"
+          assert_contains "$TEMPLATE" "needs: [unit-tests, lint, security]"
+          assert_contains "$TEMPLATE" "backend_stack"
+          assert_contains "$TEMPLATE" "docker_image"
 
-          echo "✅ Backend caller template validated."
+          echo "Backend granular template validated."
 
   simulate-backend-config-matrix:
     name: "Simulate Backend Config Matrix"
@@ -236,7 +235,7 @@ jobs:
             elif [ "$type" = "array" ]; then
               normalized=$(echo "$input_json" | jq -c .)
             else
-              echo "❌ Config JSON must be object or array"
+              echo "âŒ Config JSON must be object or array"
               exit 1
             fi
 
@@ -269,303 +268,30 @@ jobs:
           INVALID_STACK=$(normalize_stack "$(echo "$INVALID_NORM" | jq -c '.[0]')")
 
           if [ "$NEST_STACK" != "nestjs" ]; then
-            echo "❌ Nest sample classification expected nestjs, got $NEST_STACK"
+            echo "âŒ Nest sample classification expected nestjs, got $NEST_STACK"
             exit 1
           fi
 
           if [ "$NODE_STACK" != "nodejs" ]; then
-            echo "❌ Node sample classification expected nodejs, got $NODE_STACK"
+            echo "âŒ Node sample classification expected nodejs, got $NODE_STACK"
             exit 1
           fi
 
           if [ "$LEGACY_STACK" != "nestjs" ]; then
-            echo "❌ Legacy sample default expected nestjs, got $LEGACY_STACK"
+            echo "âŒ Legacy sample default expected nestjs, got $LEGACY_STACK"
             exit 1
           fi
 
           if [ "$ALIAS_STACK" != "nodejs" ]; then
-            echo "❌ Alias sample expected nodejs, got $ALIAS_STACK"
+            echo "âŒ Alias sample expected nodejs, got $ALIAS_STACK"
             exit 1
           fi
 
           if [ "$INVALID_STACK" = "nestjs" ] || [ "$INVALID_STACK" = "nodejs" ]; then
-            echo "❌ Invalid sample should not classify as a supported backend stack"
+            echo "âŒ Invalid sample should not classify as a supported backend stack"
             exit 1
           fi
 
-          echo "✅ Backend config matrix simulation passed."
+          echo "âœ… Backend config matrix simulation passed."
 
-  validate-stack-workflow-templates:
-    name: "Validate Stack Workflow Templates"
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v5
 
-      - name: Assert stack workflow template contract
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          assert_contains() {
-            local file="$1"
-            local expected="$2"
-            if ! grep -Fq "$expected" "$file"; then
-              echo "❌ Expected '$expected' in $file"
-              exit 1
-            fi
-          }
-
-          for file in \
-            workflow-templates/nodejs-service-pipeline.yml \
-            workflow-templates/nest-service-pipeline.yml \
-            workflow-templates/react-service-pipeline.yml \
-            workflow-templates/nextjs-service-pipeline.yml \
-            workflow-templates/react-native-service-pipeline.yml \
-            workflow-templates/expo-service-pipeline.yml
-          do
-            test -f "$file" || { echo "❌ Missing workflow template: $file"; exit 1; }
-            assert_contains "$file" "Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/actions/discover-service@v1"
-            assert_contains "$file" "fetch-depth: 0"
-          done
-
-          assert_contains workflow-templates/nodejs-service-pipeline.yml "Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/service-node.yml@v1"
-          assert_contains workflow-templates/nest-service-pipeline.yml "Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/service-nestjs.yml@v1"
-          assert_contains workflow-templates/react-service-pipeline.yml "Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/service-react.yml@v1"
-          assert_contains workflow-templates/nextjs-service-pipeline.yml "Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/service-nextjs.yml@v1"
-          assert_contains workflow-templates/react-native-service-pipeline.yml "Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/service-react-native.yml@v1"
-          assert_contains workflow-templates/expo-service-pipeline.yml "Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/service-expo.yml@v1"
-
-          test -f workflow-templates/README.md || { echo "❌ Missing workflow-templates/README.md"; exit 1; }
-          test -f .github/actions/discover-service/action.yml || { echo "❌ Missing discovery action metadata"; exit 1; }
-          test -f .github/actions/discover-service/discover-service.mjs || { echo "❌ Missing discovery action implementation"; exit 1; }
-
-          echo "✅ Stack workflow templates validated."
-
-  simulate-discovery-action:
-    name: "Simulate Discovery Action"
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v5
-
-      - name: Build synthetic repositories and validate detection
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ROOT="$(mktemp -d)"
-          SCRIPT="$GITHUB_WORKSPACE/.github/actions/discover-service/discover-service.mjs"
-
-          run_discovery() {
-            local repo="$1"
-            local stack="$2"
-            local changed="$3"
-            (
-              cd "$repo"
-              CHANGED_FILES="$changed" \
-              GITHUB_EVENT_NAME="push" \
-              node "$SCRIPT" --stack "$stack"
-            )
-          }
-
-          mkdir -p "$ROOT/node-service/src"
-          cat <<'EOF' > "$ROOT/node-service/package.json"
-          {
-            "name": "node-service",
-            "scripts": {
-              "lint": "eslint .",
-              "build": "tsc -p tsconfig.json",
-              "test:coverage": "jest --coverage",
-              "test:e2e": "jest --config test/jest-e2e.json"
-            },
-            "dependencies": {
-              "express": "^4.21.0"
-            }
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/node-service/tsconfig.json"
-          {
-            "compilerOptions": {
-              "strict": true
-            }
-          }
-          EOF
-
-          mkdir -p "$ROOT/nest-service/src"
-          cat <<'EOF' > "$ROOT/nest-service/package.json"
-          {
-            "name": "nest-service",
-            "scripts": {
-              "lint": "eslint .",
-              "build": "nest build",
-              "test:coverage": "jest --coverage",
-              "test:e2e": "jest --config test/jest-e2e.json"
-            },
-            "dependencies": {
-              "@nestjs/core": "^11.0.0",
-              "@nestjs/common": "^11.0.0"
-            }
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/nest-service/nest-cli.json"
-          {
-            "collection": "@nestjs/schematics"
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/nest-service/tsconfig.json"
-          {
-            "compilerOptions": {
-              "strict": true
-            }
-          }
-          EOF
-
-          mkdir -p "$ROOT/web-monorepo/apps/portal/src" "$ROOT/web-monorepo/apps/portal/tests/e2e" "$ROOT/web-monorepo/apps/portal/tests/performance"
-          mkdir -p "$ROOT/web-monorepo/apps/landing/src"
-          cat <<'EOF' > "$ROOT/web-monorepo/apps/portal/package.json"
-          {
-            "name": "portal",
-            "scripts": {
-              "lint": "eslint .",
-              "build": "vite build",
-              "test": "vitest run",
-              "test:coverage": "vitest run --coverage"
-            },
-            "dependencies": {
-              "react": "^19.0.0",
-              "vite": "^6.0.0"
-            },
-            "devDependencies": {
-              "@playwright/test": "^1.54.0"
-            }
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/web-monorepo/apps/portal/tsconfig.json"
-          {
-            "compilerOptions": {
-              "strict": true
-            }
-          }
-          EOF
-          touch "$ROOT/web-monorepo/apps/portal/tests/e2e/smoke.spec.ts"
-          touch "$ROOT/web-monorepo/apps/portal/tests/performance/smoke.js"
-          cat <<'EOF' > "$ROOT/web-monorepo/apps/landing/package.json"
-          {
-            "name": "landing",
-            "scripts": {
-              "lint": "eslint .",
-              "build": "vite build",
-              "test": "vitest run"
-            },
-            "dependencies": {
-              "react": "^19.0.0",
-              "vite": "^6.0.0"
-            }
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/web-monorepo/apps/landing/tsconfig.json"
-          {
-            "compilerOptions": {
-              "strict": true
-            }
-          }
-          EOF
-
-          mkdir -p "$ROOT/next-app/src" "$ROOT/next-app/tests/e2e"
-          cat <<'EOF' > "$ROOT/next-app/package.json"
-          {
-            "name": "next-app",
-            "scripts": {
-              "lint": "next lint",
-              "build": "next build",
-              "test": "vitest run"
-            },
-            "dependencies": {
-              "next": "^16.0.0",
-              "react": "^19.0.0"
-            },
-            "devDependencies": {
-              "@playwright/test": "^1.54.0"
-            }
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/next-app/next.config.js"
-          module.exports = {};
-          EOF
-          cat <<'EOF' > "$ROOT/next-app/tsconfig.json"
-          {
-            "compilerOptions": {
-              "strict": true
-            }
-          }
-          EOF
-          touch "$ROOT/next-app/tests/e2e/home.spec.ts"
-
-          mkdir -p "$ROOT/react-native-app/android" "$ROOT/react-native-app/ios"
-          cat <<'EOF' > "$ROOT/react-native-app/package.json"
-          {
-            "name": "react-native-app",
-            "dependencies": {
-              "react-native": "^0.82.0",
-              "react": "^19.0.0",
-              "typescript": "^5.8.0"
-            }
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/react-native-app/tsconfig.json"
-          {
-            "compilerOptions": {
-              "strict": true
-            }
-          }
-          EOF
-
-          mkdir -p "$ROOT/expo-app/app"
-          cat <<'EOF' > "$ROOT/expo-app/package.json"
-          {
-            "name": "expo-app",
-            "dependencies": {
-              "expo": "^54.0.0",
-              "react-native": "^0.82.0",
-              "react": "^19.0.0",
-              "typescript": "^5.8.0"
-            }
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/expo-app/app.json"
-          {
-            "expo": {
-              "name": "Expo App"
-            }
-          }
-          EOF
-          cat <<'EOF' > "$ROOT/expo-app/tsconfig.json"
-          {
-            "compilerOptions": {
-              "strict": true
-            }
-          }
-          EOF
-
-          NODE_JSON="$(run_discovery "$ROOT/node-service" "nodejs" "src/index.ts")"
-          echo "$NODE_JSON" | jq -e '."service-path" == "." and ."build-output-path" == "dist" and ."unit-test-command" == "npm run test:coverage"' >/dev/null
-
-          NEST_JSON="$(run_discovery "$ROOT/nest-service" "nestjs" "src/app.controller.ts")"
-          echo "$NEST_JSON" | jq -e '."service-path" == "." and ."e2e-test-command" == "npm run test:e2e"' >/dev/null
-
-          REACT_JSON="$(run_discovery "$ROOT/web-monorepo" "react" $'"'"'apps/portal/src/App.tsx\napps/portal/tests/e2e/smoke.spec.ts'"'"')"
-          echo "$REACT_JSON" | jq -e '."service-path" == "apps/portal" and ."run-playwright" == "true" and ."run-k6" == "true" and ."build-output-path" == "dist"' >/dev/null
-
-          NEXT_JSON="$(run_discovery "$ROOT/next-app" "nextjs" "src/page.tsx")"
-          echo "$NEXT_JSON" | jq -e '."service-path" == "." and ."run-playwright" == "true" and ."build-output-path" == ".next"' >/dev/null
-
-          RN_JSON="$(run_discovery "$ROOT/react-native-app" "react-native" "ios/AppDelegate.mm")"
-          echo "$RN_JSON" | jq -e '."service-path" == "." and ."service-name" == "react-native-app"' >/dev/null
-
-          EXPO_JSON="$(run_discovery "$ROOT/expo-app" "expo" "app/index.tsx")"
-          echo "$EXPO_JSON" | jq -e '."service-path" == "." and ."service-name" == "expo-app"' >/dev/null
-
-          echo "✅ Discovery action simulation passed."

@@ -1,7 +1,8 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Grafana k6 Load Tests                               ║
-# ║  Runs k6 tests and pushes metrics to Grafana Cloud             ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/grafana-k6.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Grafana k6 Load Tests                               â•‘
+# â•‘  Runs k6 tests and pushes metrics to Grafana Cloud             â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Grafana k6"
 
 on:
@@ -92,7 +93,7 @@ jobs:
           echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
 
   k6:
-    name: "Grafana k6 — ${{ inputs.system-name }}"
+    name: "Grafana k6 â€” ${{ inputs.system-name }}"
     needs: [prepare]
     if: ${{ needs.prepare.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
@@ -118,12 +119,12 @@ jobs:
           PERFORMANCE_TESTS_DIRECTORY: ${{ inputs.performance-tests-directory }}
         run: |
           if [ -z "${K6_CLOUD_TOKEN}" ] || [ -z "${K6_CLOUD_PROJECT_ID}" ]; then
-            echo "❌ Grafana Cloud is required: set K6_CLOUD_TOKEN and K6_CLOUD_PROJECT_ID secrets."
+            echo "âŒ Grafana Cloud is required: set K6_CLOUD_TOKEN and K6_CLOUD_PROJECT_ID secrets."
             exit 1
           fi
 
           if [ ! -d "${PERFORMANCE_TESTS_DIRECTORY}" ]; then
-            echo "❌ Performance tests folder not found: ${PERFORMANCE_TESTS_DIRECTORY}"
+            echo "âŒ Performance tests folder not found: ${PERFORMANCE_TESTS_DIRECTORY}"
             echo "Expected performance tests under ${PERFORMANCE_TESTS_DIRECTORY}."
             exit 1
           fi
@@ -142,7 +143,7 @@ jobs:
           )
 
           if [ "${#RESOLVED_SCRIPT_PATHS[@]}" -eq 0 ]; then
-            echo "❌ No k6 scripts (*.js or *.ts) found in folder checks."
+            echo "âŒ No k6 scripts (*.js or *.ts) found in folder checks."
             exit 1
           fi
 
@@ -153,9 +154,9 @@ jobs:
             echo "resolved_script_count=${#RESOLVED_SCRIPT_PATHS[@]}"
           } >> "$GITHUB_OUTPUT"
 
-          echo "ℹ️ Discovered ${#RESOLVED_SCRIPT_PATHS[@]} k6 script(s)."
+          echo "â„¹ï¸ Discovered ${#RESOLVED_SCRIPT_PATHS[@]} k6 script(s)."
 
-          echo "✅ Grafana Cloud prerequisites validated."
+          echo "âœ… Grafana Cloud prerequisites validated."
 
       - name: Run k6 cloud test
         id: run-k6
@@ -171,15 +172,15 @@ jobs:
           EXPECTED_STATUSES_VALUE="${EXPECTED_STATUSES:-}"
           if [ -n "${BASE_URL}" ] && echo "${BASE_URL}" | grep -Eiq '\\.vercel\\.app(/|$)'; then
             EXPECTED_STATUSES_VALUE="200,401,403"
-            echo "ℹ️ Vercel preview URL detected; using EXPECTED_STATUSES=${EXPECTED_STATUSES_VALUE}."
+            echo "â„¹ï¸ Vercel preview URL detected; using EXPECTED_STATUSES=${EXPECTED_STATUSES_VALUE}."
           fi
 
           : > k6-output.log
-          echo "ℹ️ Running ${SCRIPT_COUNT} k6 script(s)." | tee -a k6-output.log
+          echo "â„¹ï¸ Running ${SCRIPT_COUNT} k6 script(s)." | tee -a k6-output.log
 
           while IFS= read -r SCRIPT_PATH; do
             [ -z "${SCRIPT_PATH}" ] && continue
-            echo "▶ Running k6 script: ${SCRIPT_PATH}" | tee -a k6-output.log
+            echo "â–¶ Running k6 script: ${SCRIPT_PATH}" | tee -a k6-output.log
             if [ -n "${BASE_URL}" ]; then
               if [ -n "${EXPECTED_STATUSES_VALUE}" ]; then
                 k6 run --out cloud -e BASE_URL="${BASE_URL}" -e K6_BASE_URL="${BASE_URL}" -e EXPECTED_STATUSES="${EXPECTED_STATUSES_VALUE}" "${SCRIPT_PATH}" | tee -a k6-output.log
@@ -227,3 +228,5 @@ jobs:
             RESULT="failure"
           fi
           echo "result=${RESULT}" >> "$GITHUB_OUTPUT"
+
+

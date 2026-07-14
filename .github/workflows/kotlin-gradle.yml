@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/kotlin-gradle.md
 name: "Reusable: Kotlin Gradle Build"
 
 on:
@@ -53,7 +54,7 @@ jobs:
           else
             WRAPPER_PATH=$(find . -maxdepth 4 -type f -name gradlew | head -n 1)
             if [ -z "${WRAPPER_PATH}" ]; then
-              echo "❌ Could not find gradlew in project."
+              echo "âŒ Could not find gradlew in project."
               exit 1
             fi
             GRADLE_DIR=$(dirname "${WRAPPER_PATH}")
@@ -61,7 +62,7 @@ jobs:
           fi
 
           echo "gradle_dir=${GRADLE_DIR}" >> "$GITHUB_OUTPUT"
-          echo "✅ Using gradle wrapper directory: ${GRADLE_DIR}"
+          echo "âœ… Using gradle wrapper directory: ${GRADLE_DIR}"
 
       - name: Ensure Kotlin Version Fallback
         run: |
@@ -69,10 +70,10 @@ jobs:
             TARGET_PROPS="${{ steps.gradle.outputs.gradle_dir }}/gradle.properties"
             if grep -q '^kotlinVersion=' "${TARGET_PROPS}"; then
               CURRENT_VERSION=$(grep '^kotlinVersion=' "${TARGET_PROPS}" | head -n 1 | cut -d'=' -f2-)
-              echo "ℹ️ Preserving project kotlinVersion=${CURRENT_VERSION}"
+              echo "â„¹ï¸ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
               echo 'kotlinVersion=2.0.21' >> "${TARGET_PROPS}"
-              echo "✅ Added fallback kotlinVersion=2.0.21"
+              echo "âœ… Added fallback kotlinVersion=2.0.21"
             fi
           fi
 
@@ -100,3 +101,5 @@ jobs:
             ${{ inputs.working-directory }}/**/app/build/outputs/**/*.apk
             ${{ inputs.working-directory }}/**/app/build/outputs/**/*.aab
           retention-days: 14
+
+

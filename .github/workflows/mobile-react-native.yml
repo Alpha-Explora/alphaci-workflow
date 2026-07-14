@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/mobile-react-native.md
 name: "React Native Mobile CI/CD Pipeline"
 
 on:
@@ -25,7 +26,7 @@ on:
       android-build-command:
         required: false
         type: string
-        default: "./gradlew assembleDebug -PbundleInDebug=true --no-daemon --stacktrace --warning-mode all"
+        default: "./gradlew assembleDebug --no-daemon --stacktrace --warning-mode all"
         description: "Command used to produce the Android app binary"
       coverage-threshold:
         required: false
@@ -77,28 +78,13 @@ on:
         type: string
         default: "maestro test .maestro"
         description: "Maestro iOS test command"
-      ios-runner:
-        required: false
-        type: string
-        default: "macos-15"
-        description: "GitHub macOS runner label for iOS jobs"
-      ios-xcode-version:
-        required: false
-        type: string
-        default: "16.4"
-        description: "Preferred Xcode version to select (e.g. 16.4)"
-      ios-xcode-fallbacks:
-        required: false
-        type: string
-        default: "16.3,16.2,26.2"
-        description: "Comma-separated fallback Xcode versions"
 
 permissions:
   contents: read
 
 jobs:
   rn-typescript-standard:
-    name: "React Native — TypeScript Standard"
+    name: "React Native â€” TypeScript Standard"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -111,22 +97,22 @@ jobs:
       - name: Validate React Native + TypeScript standard
         run: |
           if [ ! -f "package.json" ]; then
-            echo "❌ package.json is required for React Native systems."
+            echo "âŒ package.json is required for React Native systems."
             exit 1
           fi
 
           if [ ! -f "tsconfig.json" ]; then
-            echo "❌ tsconfig.json is required for React Native systems."
+            echo "âŒ tsconfig.json is required for React Native systems."
             exit 1
           fi
 
           if [ ! -d "android" ]; then
-            echo "❌ android/ directory is required for React Native systems."
+            echo "âŒ android/ directory is required for React Native systems."
             exit 1
           fi
 
           if [ ! -d "ios" ]; then
-            echo "❌ ios/ directory is required for React Native systems."
+            echo "âŒ ios/ directory is required for React Native systems."
             exit 1
           fi
 
@@ -212,7 +198,7 @@ jobs:
           NODE
 
   mobile-unit-tests:
-    name: "Mobile — Jest Unit Tests"
+    name: "Mobile â€” Jest Unit Tests"
     uses: ./.github/workflows/mobile-tests.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -222,8 +208,8 @@ jobs:
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
   mobile-lint:
-    name: "Mobile — Lint Check"
-    if: ${{ inputs.enable-lint != false && inputs.enable-lint != 'false' }}
+    name: "Mobile â€” Lint Check"
+    if: ${{ inputs.enable-lint }}
     uses: ./.github/workflows/lint-check.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -231,8 +217,8 @@ jobs:
       node-version: ${{ inputs.node-version }}
 
   mobile-security:
-    name: "Mobile — Security Scan"
-    if: ${{ inputs.enable-security-scan != false && inputs.enable-security-scan != 'false' }}
+    name: "Mobile â€” Security Scan"
+    if: ${{ inputs.enable-security-scan }}
     uses: ./.github/workflows/security-scan.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -245,7 +231,7 @@ jobs:
     needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
-      (inputs.enable-android-build == true || inputs.enable-android-build == 'true') &&
+      inputs.enable-android-build &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     permissions:
       contents: read
@@ -267,16 +253,13 @@ jobs:
     needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
-      (inputs.enable-ios-build == true || inputs.enable-ios-build == 'true') &&
+      inputs.enable-ios-build &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     uses: ./.github/workflows/mobile-ios-build.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      ios-runner: ${{ inputs.ios-runner }}
-      ios-xcode-version: ${{ inputs.ios-xcode-version }}
-      ios-xcode-fallbacks: ${{ inputs.ios-xcode-fallbacks }}
       upload-artifact: true
 
   mobile-maestro:
@@ -284,7 +267,7 @@ jobs:
     needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build]
     if: |
       always() &&
-      (inputs.enable-maestro == true || inputs.enable-maestro == 'true') &&
+      inputs.enable-maestro &&
       needs.android-build.result == 'success' &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     uses: ./.github/workflows/mobile-maestro.yml
@@ -303,7 +286,7 @@ jobs:
     needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build]
     if: |
       always() &&
-      (inputs.enable-maestro-ios == true || inputs.enable-maestro-ios == 'true') &&
+      inputs.enable-maestro-ios &&
       needs.ios-build.result == 'success' &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     uses: ./.github/workflows/mobile-maestro-ios.yml
@@ -311,9 +294,8 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      ios-runner: ${{ inputs.ios-runner }}
-      ios-xcode-version: ${{ inputs.ios-xcode-version }}
-      ios-xcode-fallbacks: ${{ inputs.ios-xcode-fallbacks }}
       maestro-test-command: ${{ inputs.maestro-ios-test-command }}
       skip-build: true
       build-artifact-name: ${{ format('{0}-ios-simulator-build', inputs.system-name) }}
+
+

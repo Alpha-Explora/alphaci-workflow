@@ -1,7 +1,8 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: SonarCloud Quality Gate                             ║
-# ║  Works for frontend, backend, and mobile repos                ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/sonarcloud-scan.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: SonarCloud Quality Gate                             â•‘
+# â•‘  Works for frontend, backend, and mobile repos                â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: SonarCloud Scan"
 
 on:
@@ -46,11 +47,6 @@ on:
         type: boolean
         default: true
         description: "Wait for SonarCloud quality gate result"
-      checkout-ref:
-        required: false
-        type: string
-        default: ""
-        description: "Git ref to check out (workflow_run chains pass head_sha)"
     secrets:
       SONAR_TOKEN:
         required: true
@@ -78,7 +74,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: ${{ inputs.checkout-ref }}
 
       - name: Download Coverage Report
         if: ${{ inputs.coverage-artifact-name != '' }}
@@ -94,7 +89,7 @@ jobs:
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
           if [ -z "${SONAR_TOKEN}" ] || [ -z "${SONAR_ORGANIZATION}" ] || [ -z "${SONAR_PROJECT_KEY}" ]; then
-            echo "❌ SonarCloud preflight failed: one or more required secrets are empty."
+            echo "âŒ SonarCloud preflight failed: one or more required secrets are empty."
             exit 1
           fi
 
@@ -103,15 +98,15 @@ jobs:
           BODY=$(echo "${RESPONSE}" | sed '$d')
           TOTAL=$(echo "${BODY}" | jq -r '.paging.total // 0')
 
-          echo "🔎 Sonar preflight: org='${SONAR_ORGANIZATION}', project='${SONAR_PROJECT_KEY}', http=${HTTP_CODE}, total=${TOTAL}"
+          echo "ðŸ”Ž Sonar preflight: org='${SONAR_ORGANIZATION}', project='${SONAR_PROJECT_KEY}', http=${HTTP_CODE}, total=${TOTAL}"
 
           if [ "${HTTP_CODE}" -ne 200 ] || [ "${TOTAL}" -lt 1 ]; then
-            echo "❌ SonarCloud preflight failed: project not found or token has no access."
+            echo "âŒ SonarCloud preflight failed: project not found or token has no access."
             echo "Check SONAR_ORGANIZATION, SONAR_PROJECT_KEY, and SONAR_TOKEN permissions for this repository."
             exit 1
           fi
 
-          echo "✅ SonarCloud preflight passed."
+          echo "âœ… SonarCloud preflight passed."
 
       - name: Run SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v7
@@ -137,7 +132,9 @@ jobs:
         run: |
           echo "status=${{ job.status }}" >> $GITHUB_OUTPUT
           if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ SonarCloud Quality Gate passed"
+            echo "âœ… SonarCloud Quality Gate passed"
           else
-            echo "❌ SonarCloud Quality Gate failed"
+            echo "âŒ SonarCloud Quality Gate failed"
           fi
+
+

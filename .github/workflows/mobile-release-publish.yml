@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/mobile-release-publish.md
 name: "Reusable: Mobile Release Publish"
 
 on:
@@ -75,14 +76,14 @@ jobs:
               fi
               ;;
             *)
-              echo "❌ Unsupported release mode: ${RELEASE_MODE}"
+              echo "âŒ Unsupported release mode: ${RELEASE_MODE}"
               exit 1
               ;;
           esac
 
           TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
           if [ -z "${TAG}" ]; then
-            echo "❌ No release tag found for prefix ${PREFIX}"
+            echo "âŒ No release tag found for prefix ${PREFIX}"
             exit 1
           fi
 
@@ -110,7 +111,7 @@ jobs:
 
           SOURCE_COUNT=$(find "${SOURCE_DIR}" -type f | wc -l)
           if [ "${SOURCE_COUNT}" -eq 0 ]; then
-            echo "❌ No mobile artifacts found for ${SYSTEM_NAME} in this run."
+            echo "âŒ No mobile artifacts found for ${SYSTEM_NAME} in this run."
             exit 1
           fi
 
@@ -139,13 +140,13 @@ jobs:
             cp "${IOS_APP_ZIP_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-ios.app.zip"
           fi
 
-          # tar.gz fallback blocks removed — artifacts are now uploaded as
+          # tar.gz fallback blocks removed â€” artifacts are now uploaded as
           # direct .apk (Android) and .app.zip (iOS) files, which the primary
           # find loop above already handles via the *.apk and *ios*.zip cases.
 
           FILE_COUNT=$(find "${OUTPUT_DIR}" -maxdepth 1 -type f | wc -l)
           if [ "${FILE_COUNT}" -eq 0 ]; then
-            echo "❌ No publishable mobile release files were produced for ${SYSTEM_NAME}."
+            echo "âŒ No publishable mobile release files were produced for ${SYSTEM_NAME}."
             exit 1
           fi
 
@@ -166,3 +167,4 @@ jobs:
           prerelease: ${{ inputs.release-mode == 'test' || inputs.release-mode == 'uat' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

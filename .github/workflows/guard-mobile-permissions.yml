@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/guard-mobile-permissions.md
 name: "Guard: Mobile Reusable Permission Contracts"
 
 on:
@@ -65,6 +66,7 @@ jobs:
           }
 
           assert_block_has_permissions ".github/workflows/mobile-react-native.yml" "android-build"
-          assert_block_has_permissions ".github/workflows/master-pipeline-mobile.yml" "mobile-react-native"
+          assert_block_has_permissions ".github/workflows/mobile-gradle.yml" "docker-build"
 
           echo "Permission contract check passed."
+

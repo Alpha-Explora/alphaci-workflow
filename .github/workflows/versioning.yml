@@ -1,3 +1,4 @@
+﻿# Contract: docs/workflows/versioning.md
 name: "Reusable: Versioning"
 
 on:
@@ -69,7 +70,7 @@ jobs:
               if [ -n "${legacy_latest_test}" ]; then
                 latest_test="${legacy_latest_test}"
                 effective_prefix="${legacy_test_prefix}"
-                echo "ℹ️ No stream-specific test tag found for '${STREAM_KEY}'. Falling back to legacy '${legacy_test_prefix}*' tags."
+                echo "â„¹ï¸ No stream-specific test tag found for '${STREAM_KEY}'. Falling back to legacy '${legacy_test_prefix}*' tags."
               fi
             fi
 
@@ -111,7 +112,7 @@ jobs:
             resolve_latest_test_tag
 
             if [ -z "${RESOLVED_TAG}" ]; then
-              echo "❌ No test version tag found for stream '${STREAM_KEY}'. uat tag requires a prior test tag."
+              echo "âŒ No test version tag found for stream '${STREAM_KEY}'. uat tag requires a prior test tag."
               exit 1
             fi
 
@@ -127,7 +128,7 @@ jobs:
               if [ -n "${LEGACY_LATEST_UAT}" ]; then
                 LATEST_PROMOTED="${LEGACY_LATEST_UAT}"
                 EFFECTIVE_PROMOTED_PREFIX="${LEGACY_UAT_PREFIX}"
-                echo "ℹ️ No stream-specific uat tag found for '${STREAM_KEY}'. Falling back to legacy '${LEGACY_UAT_PREFIX}*' tags for this release."
+                echo "â„¹ï¸ No stream-specific uat tag found for '${STREAM_KEY}'. Falling back to legacy '${LEGACY_UAT_PREFIX}*' tags for this release."
               fi
             fi
 
@@ -136,19 +137,19 @@ jobs:
               LATEST_PROMOTED="${RESOLVED_TAG}"
               EFFECTIVE_PROMOTED_PREFIX="${RESOLVED_PREFIX}"
               if [ -n "${LATEST_PROMOTED}" ]; then
-                echo "ℹ️ No uat tag found for stream '${STREAM_KEY}'. Falling back to test tag history for this release."
+                echo "â„¹ï¸ No uat tag found for stream '${STREAM_KEY}'. Falling back to test tag history for this release."
               fi
             fi
 
             if [ -z "${LATEST_PROMOTED}" ]; then
-              echo "❌ No uat or test version tag found for stream '${STREAM_KEY}'. main release tag requires a prior promoted tag."
+              echo "âŒ No uat or test version tag found for stream '${STREAM_KEY}'. main release tag requires a prior promoted tag."
               exit 1
             fi
 
             VERSION_FROM_PROMOTION="${LATEST_PROMOTED#${EFFECTIVE_PROMOTED_PREFIX}}"
             TAG="${MAIN_PREFIX}${VERSION_FROM_PROMOTION}"
           else
-            echo "❌ Invalid mode: ${MODE}. Expected test, uat, or release (main alias is accepted)."
+            echo "âŒ Invalid mode: ${MODE}. Expected test, uat, or release (main alias is accepted)."
             exit 1
           fi
 
@@ -156,7 +157,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "ℹ️ Tag already exists on remote: ${TAG} — using existing tag."
+            echo "â„¹ï¸ Tag already exists on remote: ${TAG} â€” using existing tag."
           else
             # Guard against local tag collisions on reruns before creating.
             if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
@@ -172,11 +173,13 @@ jobs:
             fi
 
             if git push origin "${TAG}" 2>/dev/null; then
-              echo "✅ Created and pushed tag: ${TAG}"
+              echo "âœ… Created and pushed tag: ${TAG}"
             else
-              echo "❌ Failed to push tag: ${TAG}"
+              echo "âŒ Failed to push tag: ${TAG}"
               exit 1
             fi
           fi
 
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+

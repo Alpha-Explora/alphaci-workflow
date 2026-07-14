@@ -1,8 +1,9 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Governance Checks                                   ║
-# ║  Test execution + coverage gate + artifact upload              ║
-# ║  Works for any Node.js project (frontend/backend/mobile)      ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/governance-check.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Governance Checks                                   â•‘
+# â•‘  Test execution + coverage gate + artifact upload              â•‘
+# â•‘  Works for any Node.js project (frontend/backend/mobile)      â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Governance Checks"
 
 on:
@@ -85,19 +86,19 @@ jobs:
             ")
             read -r LINES_COVERAGE FUNCTIONS_COVERAGE BRANCHES_COVERAGE STATEMENTS_COVERAGE <<< "${METRICS}"
 
-            echo "📊 Coverage — lines: ${LINES_COVERAGE}%, functions: ${FUNCTIONS_COVERAGE}%, branches: ${BRANCHES_COVERAGE}%, statements: ${STATEMENTS_COVERAGE}%"
+            echo "ðŸ“Š Coverage â€” lines: ${LINES_COVERAGE}%, functions: ${FUNCTIONS_COVERAGE}%, branches: ${BRANCHES_COVERAGE}%, statements: ${STATEMENTS_COVERAGE}%"
             THRESHOLD=${{ inputs.coverage-threshold }}
             if (( $(echo "$LINES_COVERAGE < $THRESHOLD" | bc -l) )) || \
                (( $(echo "$FUNCTIONS_COVERAGE < $THRESHOLD" | bc -l) )) || \
                (( $(echo "$BRANCHES_COVERAGE < $THRESHOLD" | bc -l) )) || \
                (( $(echo "$STATEMENTS_COVERAGE < $THRESHOLD" | bc -l) )); then
-              echo "❌ Coverage is below threshold ${THRESHOLD}% (lines/functions/branches/statements must all pass)"
+              echo "âŒ Coverage is below threshold ${THRESHOLD}% (lines/functions/branches/statements must all pass)"
               exit 1
             else
-              echo "✅ Coverage meets threshold ${THRESHOLD}% for lines/functions/branches/statements"
+              echo "âœ… Coverage meets threshold ${THRESHOLD}% for lines/functions/branches/statements"
             fi
           else
-            echo "❌ coverage/coverage-summary.json not found — failing coverage gate"
+            echo "âŒ coverage/coverage-summary.json not found â€” failing coverage gate"
             exit 1
           fi
 
@@ -108,3 +109,5 @@ jobs:
           name: ${{ inputs.system-name }}-governance-coverage
           path: ${{ inputs.working-directory }}/coverage
           retention-days: 14
+
+

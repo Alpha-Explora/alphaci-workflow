@@ -1,7 +1,8 @@
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Frontend Unit Tests                                 ║
-# ║  Called by any tribe's frontend pipeline                       ║
-# ╚══════════════════════════════════════════════════════════════════╝
+﻿# Contract: docs/workflows/frontend-tests.md
+# â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+# â•‘  REUSABLE: Frontend Unit Tests                                 â•‘
+# â•‘  Called by any tribe's frontend pipeline                       â•‘
+# â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 name: "Reusable: Frontend Unit Tests"
 
 on:
@@ -41,16 +42,6 @@ on:
         type: boolean
         default: true
         description: "Upload coverage artifact"
-      enforce-coverage:
-        required: false
-        type: boolean
-        default: true
-        description: "Fail when no coverage summary is produced"
-      checkout-ref:
-        required: false
-        type: string
-        default: ""
-        description: "Git ref to check out (workflow_run chains pass head_sha)"
     outputs:
       test-result:
         description: "Test pass/fail result"
@@ -76,16 +67,12 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.checkout-ref }}
 
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
-          # Cache only when a lockfile exists — fresh FlowCI scaffolds ship
-          # without package-lock.json and setup-node fails on a missing path.
-          cache: ${{ hashFiles('**/package-lock.json') != '' && 'npm' || '' }}
+          cache: "npm"
           cache-dependency-path: |
             **/package-lock.json
 
@@ -94,20 +81,14 @@ jobs:
           UNIT_TESTS_DIRECTORY: ${{ inputs.unit-tests-directory }}
         run: |
           if [ ! -d "${UNIT_TESTS_DIRECTORY}" ]; then
-            echo "❌ Unit tests folder not found: ${UNIT_TESTS_DIRECTORY}"
+            echo "âŒ Unit tests folder not found: ${UNIT_TESTS_DIRECTORY}"
             echo "Expected unit tests under ${UNIT_TESTS_DIRECTORY}."
             exit 1
           fi
-          echo "✅ Unit tests folder found: ${UNIT_TESTS_DIRECTORY}"
+          echo "âœ… Unit tests folder found: ${UNIT_TESTS_DIRECTORY}"
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            echo "No package-lock.json — falling back to npm install"
-            npm install --ignore-scripts
-          fi
+        run: npm ci --ignore-scripts
 
       - name: Run Unit Tests with Coverage
         id: test-run
@@ -133,25 +114,21 @@ jobs:
             read -r LINES_COVERAGE FUNCTIONS_COVERAGE BRANCHES_COVERAGE STATEMENTS_COVERAGE <<< "${METRICS}"
 
             echo "coverage=$LINES_COVERAGE" >> "$GITHUB_OUTPUT"
-            echo "📊 Coverage — lines: ${LINES_COVERAGE}%, functions: ${FUNCTIONS_COVERAGE}%, branches: ${BRANCHES_COVERAGE}%, statements: ${STATEMENTS_COVERAGE}%"
+            echo "ðŸ“Š Coverage â€” lines: ${LINES_COVERAGE}%, functions: ${FUNCTIONS_COVERAGE}%, branches: ${BRANCHES_COVERAGE}%, statements: ${STATEMENTS_COVERAGE}%"
 
             THRESHOLD=${{ inputs.coverage-threshold }}
             if (( $(echo "$LINES_COVERAGE < $THRESHOLD" | bc -l) )) || \
                (( $(echo "$FUNCTIONS_COVERAGE < $THRESHOLD" | bc -l) )) || \
                (( $(echo "$BRANCHES_COVERAGE < $THRESHOLD" | bc -l) )) || \
                (( $(echo "$STATEMENTS_COVERAGE < $THRESHOLD" | bc -l) )); then
-              echo "❌ Coverage is below threshold ${THRESHOLD}% (lines/functions/branches/statements must all pass)"
+              echo "âŒ Coverage is below threshold ${THRESHOLD}% (lines/functions/branches/statements must all pass)"
               exit 1
             else
-              echo "✅ Coverage meets threshold ${THRESHOLD}% for lines/functions/branches/statements"
+              echo "âœ… Coverage meets threshold ${THRESHOLD}% for lines/functions/branches/statements"
             fi
           else
-            if [ "${{ inputs.enforce-coverage }}" = "true" ]; then
-              echo "❌ coverage/coverage-summary.json not found — failing coverage gate"
-              exit 1
-            fi
-            echo "coverage=unknown" >> "$GITHUB_OUTPUT"
-            echo "⚠️ coverage/coverage-summary.json not found — coverage gate skipped (enforce-coverage=false)"
+            echo "âŒ coverage/coverage-summary.json not found â€” failing coverage gate"
+            exit 1
           fi
 
       - name: Upload Coverage Artifact
@@ -172,3 +149,5 @@ jobs:
             ${{ inputs.working-directory }}/test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+
