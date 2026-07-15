@@ -4,7 +4,7 @@
 # Copy this file into the target backend repo at:
 #   .github/workflows/be-pipeline-caller.yml   (or any name you prefer)
 #
-# Calls the unified backend orchestrator in AlphaExplora/alphaci-workflow.
+# Calls the unified backend orchestrator in Alpha-Explora/alphaci-workflow.
 #
 # Triggers:
 #   push         → test, uat, main   (full pipeline: quality + security + deploy + promote)
@@ -98,9 +98,9 @@ permissions:
 
 jobs:
   call-backend-orchestrator:
-    # Pin to a release tag once AlphaExplora/alphaci-workflow publishes one.
+    # Pin to a release tag once Alpha-Explora/alphaci-workflow publishes one.
     # Use @main until then.
-    uses: AlphaExplora/alphaci-workflow/.github/workflows/master-pipeline-be.yml@v1
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/master-pipeline-be.yml@v1
     with:
       pipeline_mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pipeline_mode || 'auto' }}
       enable_security_scan: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_security_scan || 'true') || true }}

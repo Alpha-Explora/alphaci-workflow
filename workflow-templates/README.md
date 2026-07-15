@@ -4,7 +4,7 @@ These templates are the consumer-facing entrypoints for new repositories.
 
 - Copy the closest `*.yml` file into `.github/workflows/` in the consumer repo.
 - Keep ordering in the copied workflow with `needs`.
-- Call central reusable workflows directly from `AlphaExplora/alphaci-workflow/.github/workflows/*.yml@v1` during the GCP migration branch.
+- Call central reusable workflows directly from `Alpha-Explora/alphaci-workflow/.github/workflows/*.yml@v1` during the GCP migration branch.
 - Every template starts with `validate-access`, then deploys successful pushes from `test`, `uat`, and `main` through `gcp-cloud-run-deploy.yml` using repository variables and Workload Identity Federation.
 - Every `validate-access` job passes `validation-api-url` from `env.CI_VALIDATE_URL` so generated workflows can target the deployed backend or MVP tunnel.
 - Do not use old long-pipeline caller files for new granular workflows.

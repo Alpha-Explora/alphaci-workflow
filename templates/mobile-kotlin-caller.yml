@@ -90,7 +90,7 @@ permissions:
 
 jobs:
   call-orchestrator:
-    uses: AlphaExplora/alphaci-workflow/.github/workflows/master-pipeline-kotlin.yml@v1
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/master-pipeline-kotlin.yml@v1
     with:
       pipeline_mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pipeline_mode || 'auto' }}
       working-directory: .
