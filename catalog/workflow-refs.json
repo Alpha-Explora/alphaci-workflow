@@ -1,6 +1,6 @@
 {
   "currentStable": "v1",
-  "repository": "cicd-external-project/cicd-workflow",
+  "repository": "AlphaExplora/alphaci-workflow",
   "nodeVersions": [
     { "value": "20", "label": "Node 20 LTS (Iron)" },
     { "value": "22", "label": "Node 22 LTS (Jod)" },

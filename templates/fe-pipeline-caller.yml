@@ -4,7 +4,7 @@
 # Copy this file into the target frontend repo at:
 #   .github/workflows/fe-pipeline-caller.yml   (or any name you prefer)
 #
-# Calls the unified frontend orchestrator in cicd-external-project/cicd-workflow.
+# Calls the unified frontend orchestrator in AlphaExplora/alphaci-workflow.
 # The orchestrator deploys to Vercel (NOT Render) via vercel-deploy.yml.
 #
 # Triggers:
@@ -105,10 +105,10 @@ permissions:
 
 jobs:
   call-orchestrator:
-    # Pin to a release tag once cicd-external-project/cicd-workflow publishes one.
+    # Pin to a release tag once AlphaExplora/alphaci-workflow publishes one.
     # Use @main until then.
     # The orchestrator uses vercel-deploy.yml internally — NOT render-deploy.yml.
-    uses: cicd-external-project/cicd-workflow/.github/workflows/master-pipeline-fe.yml@main
+    uses: AlphaExplora/alphaci-workflow/.github/workflows/master-pipeline-fe.yml@v1
     with:
       pipeline_mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pipeline_mode || 'auto' }}
       enable_playwright: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_playwright || 'true') || true }}

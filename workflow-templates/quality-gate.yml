@@ -2,7 +2,7 @@
 # quality-gate.yml  —  Reusable workflow: lint + typecheck + test + build
 #
 # Placement (central-workflow repo):
-#   cicd-external-project/cicd-workflow/.github/workflows/quality-gate.yml
+#   AlphaExplora/alphaci-workflow/.github/workflows/quality-gate.yml
 #
 # This workflow runs on every push and PR. It is the single source of truth
 # for the mandatory quality checks required before any deployment or promotion.

@@ -52,7 +52,7 @@ env:
 
 jobs:
   validate-access:
-    uses: cicd-external-project/cicd-workflow/.github/workflows/validate-subscription.yml@feature/migrate-vercel-render-to-gcp
+    uses: AlphaExplora/alphaci-workflow/.github/workflows/validate-subscription.yml@v1
     with:
       validation-api-url: ${{ env.CI_VALIDATE_URL }}
     secrets:
@@ -60,7 +60,7 @@ jobs:
 
   unit-tests:
     needs: validate-access
-    uses: cicd-external-project/cicd-workflow/.github/workflows/backend-tests.yml@feature/migrate-vercel-render-to-gcp
+    uses: AlphaExplora/alphaci-workflow/.github/workflows/backend-tests.yml@v1
     with:
       working-directory: ${{ inputs.service_path || '.' }}
       system-name: ${{ inputs.service_name || 'backend' }}
@@ -71,7 +71,7 @@ jobs:
 
   lint:
     needs: validate-access
-    uses: cicd-external-project/cicd-workflow/.github/workflows/lint-check.yml@feature/migrate-vercel-render-to-gcp
+    uses: AlphaExplora/alphaci-workflow/.github/workflows/lint-check.yml@v1
     with:
       working-directory: ${{ inputs.service_path || '.' }}
       system-name: ${{ inputs.service_name || 'backend' }}
@@ -79,7 +79,7 @@ jobs:
 
   security:
     needs: validate-access
-    uses: cicd-external-project/cicd-workflow/.github/workflows/security-scan.yml@feature/migrate-vercel-render-to-gcp
+    uses: AlphaExplora/alphaci-workflow/.github/workflows/security-scan.yml@v1
     with:
       working-directory: ${{ inputs.service_path || '.' }}
       system-name: ${{ inputs.service_name || 'backend' }}
@@ -89,7 +89,7 @@ jobs:
   docker:
     needs: [validate-access, unit-tests, lint, security]
     if: ${{ inputs.docker_image != '' }}
-    uses: cicd-external-project/cicd-workflow/.github/workflows/docker-build.yml@feature/migrate-vercel-render-to-gcp
+    uses: AlphaExplora/alphaci-workflow/.github/workflows/docker-build.yml@v1
     with:
       working-directory: ${{ inputs.service_path || '.' }}
       image-name: ${{ inputs.docker_image }}
@@ -98,7 +98,7 @@ jobs:
   deploy-gcp:
     needs: [validate-access, unit-tests, lint, security]
     if: ${{ github.event_name == 'push' && (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main') }}
-    uses: cicd-external-project/cicd-workflow/.github/workflows/gcp-cloud-run-deploy.yml@feature/migrate-vercel-render-to-gcp
+    uses: AlphaExplora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
     with:
       system-name: ${{ inputs.service_name || 'backend' }}
       working-directory: ${{ inputs.service_path || '.' }}
