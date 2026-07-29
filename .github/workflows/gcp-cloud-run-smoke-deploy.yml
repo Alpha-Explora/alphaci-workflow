@@ -43,7 +43,7 @@ on:
       health-path:
         required: false
         type: string
-        default: "/healthz"
+        default: "/health"
     outputs:
       image-digest:
         value: ${{ jobs.deploy.outputs.image-digest }}

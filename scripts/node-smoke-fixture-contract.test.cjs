@@ -9,7 +9,7 @@ test('Node starter is a Cloud Run smoke fixture with a health endpoint', () => {
   const source = fs.readFileSync(path.join(starterDirectory, 'src', 'index.ts'), 'utf8');
   const dockerfile = path.join(starterDirectory, 'Dockerfile');
 
-  assert.match(source, /app\.get\('\/healthz'/);
+  assert.match(source, /app\.get\('\/health'/);
   assert.match(source, /res\.json\(\{ status: 'ok' \}\)/);
   assert.equal(fs.existsSync(dockerfile), true, 'Node starter must provide a Dockerfile');
   assert.match(fs.readFileSync(dockerfile, 'utf8'), /npm run build/);

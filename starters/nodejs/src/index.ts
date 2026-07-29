@@ -9,7 +9,7 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'FlowCI Studio Node.js Scaffold' });
 });
 
-app.get('/healthz', (_req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 

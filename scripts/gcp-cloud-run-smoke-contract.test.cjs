@@ -16,6 +16,7 @@ test('production smoke deployment stages traffic until the health probe passes',
   const workflow = fs.readFileSync(workflowPath, 'utf8');
 
   assert.match(workflow, /--no-traffic/);
+  assert.match(workflow, /default: "\/health"/);
   assert.match(workflow, /gcloud run services update-traffic/);
   assert.match(workflow, /--to-revisions[\s\\]+"?\$\{\{ steps\.service\.outputs\.revision-name \}\}=100/);
   assert.match(workflow, /SOURCE_BRANCH.*main/);
