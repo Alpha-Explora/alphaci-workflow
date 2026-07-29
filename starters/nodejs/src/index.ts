@@ -9,8 +9,8 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'FlowCI Studio Node.js Scaffold' });
 });
 
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/healthz', (_req: Request, res: Response) => {
+  res.json({ status: 'ok' });
 });
 
 app.listen(Number(port), '0.0.0.0', () => {
