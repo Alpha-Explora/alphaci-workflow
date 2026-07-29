@@ -79,6 +79,7 @@ jobs:
       IMAGE_NAME: ${{ inputs.image-name }}
       CLOUD_RUN_SERVICE_NAME: ${{ inputs.cloud-run-service-name }}
       RUNTIME_SERVICE_ACCOUNT: ${{ inputs.runtime-service-account }}
+      DEPLOYER_SERVICE_ACCOUNT: ${{ inputs.deployer-service-account }}
       HEALTH_PATH: ${{ inputs.health-path }}
       CANDIDATE_TAG: smoke-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -187,7 +188,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          IDENTITY_TOKEN="$(gcloud auth print-identity-token --audiences="${{ steps.service.outputs.url }}")"
+          IDENTITY_TOKEN="$(gcloud auth print-identity-token --impersonate-service-account="${DEPLOYER_SERVICE_ACCOUNT}" --audiences="${{ steps.service.outputs.url }}")"
           curl --fail --silent --show-error \
             --header "Authorization: Bearer ${IDENTITY_TOKEN}" \
             "${{ steps.service.outputs.candidate-url }}${HEALTH_PATH}" >/dev/null
