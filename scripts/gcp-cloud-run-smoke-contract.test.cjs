@@ -34,6 +34,7 @@ test('production smoke deployment probes its tagged candidate revision', () => {
   assert.match(workflow, /token_format: id_token/);
   assert.match(workflow, /id_token_audience: \$\{\{ steps\.service\.outputs\.url \}\}/);
   assert.match(workflow, /Authorization: Bearer \$\{\{ steps\.probe-auth\.outputs\.id_token \}\}/);
+  assert.match(workflow, /--retry 12/);
   assert.match(workflow, /status\.traffic/);
   assert.match(workflow, /candidate-url=/);
   assert.match(workflow, /steps\.service\.outputs\.candidate-url/);
