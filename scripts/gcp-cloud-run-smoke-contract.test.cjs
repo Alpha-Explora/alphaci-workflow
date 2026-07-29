@@ -31,10 +31,11 @@ test('production smoke deployment probes its tagged candidate revision', () => {
   const workflow = fs.readFileSync(workflowPath, 'utf8');
 
   assert.match(workflow, /--tag/);
-  assert.match(workflow, /--impersonate-service-account="\$\{DEPLOYER_SERVICE_ACCOUNT\}"/);
+  assert.match(workflow, /token_format: id_token/);
+  assert.match(workflow, /id_token_audience: \$\{\{ steps\.service\.outputs\.url \}\}/);
+  assert.match(workflow, /Authorization: Bearer \$\{\{ steps\.probe-auth\.outputs\.id_token \}\}/);
   assert.match(workflow, /status\.traffic/);
   assert.match(workflow, /candidate-url=/);
   assert.match(workflow, /steps\.service\.outputs\.candidate-url/);
-  assert.match(workflow, /--audiences="\$\{\{ steps\.service\.outputs\.url \}\}"/);
   assert.match(workflow, /"\$\{\{ steps\.service\.outputs\.candidate-url \}\}\$\{HEALTH_PATH\}"/);
 });
