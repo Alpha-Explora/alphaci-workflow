@@ -307,7 +307,6 @@ jobs:
           set +x
 
           gcloud config set project "${GCP_PROJECT_ID}" --quiet
-          gcloud projects describe "${GCP_PROJECT_ID}" --format="value(projectId)" >/dev/null
 
           for api in run.googleapis.com artifactregistry.googleapis.com iamcredentials.googleapis.com; do
             if ! gcloud services list \
@@ -379,11 +378,30 @@ jobs:
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
           echo "digest-uri=${IMAGE_WITHOUT_TAG}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy Cloud Run service
+      - name: Detect existing Cloud Run service
+        id: service_target
         shell: bash
         run: |
           set -euo pipefail
           set +x
+          if gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format="value(metadata.name)" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy Cloud Run service (stage when service exists)
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          TRAFFIC_ARGS=()
+          if [ "${{ steps.service_target.outputs.exists }}" = "true" ]; then
+            TRAFFIC_ARGS+=(--no-traffic)
+          fi
+
           gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
@@ -391,7 +409,7 @@ jobs:
             --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
             --platform managed \
             --no-allow-unauthenticated \
-            --no-traffic \
+            "${TRAFFIC_ARGS[@]}" \
             --tag "${CANDIDATE_TAG}" \
             --labels "alphaci_managed=true,alphaci_system=${{ steps.metadata.outputs.safe-system }},alphaci_environment=${{ steps.metadata.outputs.safe-environment }},alphaci_correlation=${{ steps.metadata.outputs.correlation-id }},alphaci_commit=${GITHUB_SHA}" \
             --quiet

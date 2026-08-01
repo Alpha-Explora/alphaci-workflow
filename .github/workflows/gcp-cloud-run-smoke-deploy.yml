@@ -111,7 +111,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gcloud projects describe "${GCP_PROJECT_ID}" --format="value(projectId)" >/dev/null
           gcloud artifacts repositories describe "${ARTIFACT_REGISTRY_REPOSITORY}" \
             --project "${GCP_PROJECT_ID}" \
             --location "${GCP_REGION}" \
@@ -149,10 +148,29 @@ jobs:
           fi
           echo "value=${IMAGE_BASE}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy revision without traffic
+      - name: Detect existing Cloud Run service
+        id: service_target
         shell: bash
         run: |
           set -euo pipefail
+          set +x
+          if gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format="value(metadata.name)" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy revision (stage when service exists)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRAFFIC_ARGS=()
+          if [ "${{ steps.service_target.outputs.exists }}" = "true" ]; then
+            TRAFFIC_ARGS+=(--no-traffic)
+          fi
+
           gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
@@ -162,7 +180,7 @@ jobs:
             --max-instances 1 \
             --timeout 60s \
             --no-allow-unauthenticated \
-            --no-traffic \
+            "${TRAFFIC_ARGS[@]}" \
             --tag "${CANDIDATE_TAG}" \
             --quiet
 

@@ -49,7 +49,7 @@ const requiredPatterns = [
   ['gcloud setup action', /google-github-actions\/setup-gcloud@/],
   ['input validation step', /Validate inputs and branch mapping/],
   ['OIDC permission validation', /ACTIONS_ID_TOKEN_REQUEST_URL/],
-  ['target project verification', /gcloud projects describe/],
+  ['target project context verification', /gcloud config set project|gcloud projects describe/],
   ['required API verification', /gcloud services list/],
   ['Artifact Registry verification', /gcloud artifacts repositories describe/],
   ['runtime service account verification', /gcloud iam service-accounts describe/],
