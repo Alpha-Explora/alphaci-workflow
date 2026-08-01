@@ -3,6 +3,13 @@ name: "Reusable: GCP Cloud Run Deploy"
 
 on:
   workflow_call:
+    secrets:
+      CI_TOKEN:
+        required: false
+      CI_REPORT_URL:
+        required: false
+      ALPHACI_DEPLOYMENT_TARGET_ID:
+        required: false
     inputs:
       system-name:
         required: true
@@ -80,6 +87,16 @@ on:
         type: string
         default: ""
         description: "Caller-provided correlation ID for deployment history"
+      workflow-release:
+        required: false
+        type: string
+        default: "v0.1.4-smoke"
+        description: "Central workflow release accepted by the AlphaCI control plane"
+      estimated-runtime-credits:
+        required: false
+        type: number
+        default: 1
+        description: "Reserved runtime credit units for this deployment"
       allow-preview:
         required: false
         type: boolean
@@ -139,6 +156,12 @@ jobs:
       SOURCE_BRANCH: ${{ inputs.source-branch }}
       ALLOW_PREVIEW: ${{ inputs.allow-preview }}
       CORRELATION_ID: ${{ inputs.correlation-id }}
+      CI_TOKEN: ${{ secrets.CI_TOKEN }}
+      CI_REPORT_URL: ${{ secrets.CI_REPORT_URL }}
+      DEPLOYMENT_TARGET_ID: ${{ secrets.ALPHACI_DEPLOYMENT_TARGET_ID }}
+      WORKFLOW_RELEASE: ${{ inputs.workflow-release }}
+      ESTIMATED_RUNTIME_CREDITS: ${{ inputs.estimated-runtime-credits }}
+      CANDIDATE_TAG: alphaci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -207,6 +230,57 @@ jobs:
           echo "safe-environment=${SAFE_ENVIRONMENT}" >> "$GITHUB_OUTPUT"
           echo "correlation-id=${SAFE_CORRELATION}" >> "$GITHUB_OUTPUT"
 
+      - name: Request runtime deployment approval
+        id: runtime_approval
+        if: ${{ env.ENVIRONMENT == 'prod' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${CI_TOKEN:-}" ] || [ -z "${CI_REPORT_URL:-}" ] || [ -z "${DEPLOYMENT_TARGET_ID:-}" ]; then
+            echo "::error::CI_TOKEN, CI_REPORT_URL, and ALPHACI_DEPLOYMENT_TARGET_ID are required for production runtime approval."
+            exit 1
+          fi
+
+          CONTROL_PLANE_BASE="${CI_REPORT_URL%/api/v1/ci/report}"
+          APPROVAL_URL="${CONTROL_PLANE_BASE}/api/v1/runtime-deployments/workflow/approve"
+          REF="refs/heads/${{ steps.metadata.outputs.safe-ref }}"
+          REQUEST_BODY="$(jq -n \
+            --arg target "${DEPLOYMENT_TARGET_ID}" \
+            --arg repo "${GITHUB_REPOSITORY}" \
+            --arg ref "${REF}" \
+            --arg sha "${GITHUB_SHA}" \
+            --arg release "${WORKFLOW_RELEASE}" \
+            --arg key "${GITHUB_REPOSITORY}:${GITHUB_SHA}:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}" \
+            --argjson credits "${ESTIMATED_RUNTIME_CREDITS}" \
+            '{deploymentTargetId:$target,repositoryFullName:$repo,ref:$ref,commitSha:$sha,workflowRelease:$release,estimatedRuntimeCredits:$credits,idempotencyKey:$key}')"
+          RESPONSE="$(curl -fsS \
+            -H "Authorization: Bearer ${CI_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${REQUEST_BODY}" \
+            "${APPROVAL_URL}")"
+
+          DEPLOYMENT_ID="$(jq -er '.deploymentId' <<<"${RESPONSE}")"
+          APPROVED_PROJECT_ID="$(jq -er '.gcpProjectId' <<<"${RESPONSE}")"
+          APPROVED_WIF_PROVIDER="$(jq -er '.wif.workloadIdentityProvider' <<<"${RESPONSE}")"
+          APPROVED_DEPLOYER_SERVICE_ACCOUNT="$(jq -er '.wif.deployerServiceAccount' <<<"${RESPONSE}")"
+          APPROVED_REGION="$(jq -er '.target.region' <<<"${RESPONSE}")"
+          APPROVED_ARTIFACT_REGISTRY_REPOSITORY="$(jq -er '.target.artifactRegistryRepository' <<<"${RESPONSE}")"
+          APPROVED_IMAGE_NAME="$(jq -er '.target.imageName' <<<"${RESPONSE}")"
+          APPROVED_CLOUD_RUN_SERVICE_NAME="$(jq -er '.target.cloudRunServiceName' <<<"${RESPONSE}")"
+          APPROVED_RUNTIME_SERVICE_ACCOUNT="$(jq -er '.target.runtimeServiceAccount' <<<"${RESPONSE}")"
+
+          echo "deployment_id=${DEPLOYMENT_ID}" >> "$GITHUB_OUTPUT"
+          echo "gcp_project_id=${APPROVED_PROJECT_ID}" >> "$GITHUB_OUTPUT"
+          echo "wif_provider=${APPROVED_WIF_PROVIDER}" >> "$GITHUB_OUTPUT"
+          echo "deployer_service_account=${APPROVED_DEPLOYER_SERVICE_ACCOUNT}" >> "$GITHUB_OUTPUT"
+          echo "GCP_PROJECT_ID=${APPROVED_PROJECT_ID}" >> "$GITHUB_ENV"
+          echo "GCP_REGION=${APPROVED_REGION}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_REGISTRY_REPOSITORY=${APPROVED_ARTIFACT_REGISTRY_REPOSITORY}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=${APPROVED_IMAGE_NAME}" >> "$GITHUB_ENV"
+          echo "CLOUD_RUN_SERVICE_NAME=${APPROVED_CLOUD_RUN_SERVICE_NAME}" >> "$GITHUB_ENV"
+          echo "RUNTIME_SERVICE_ACCOUNT=${APPROVED_RUNTIME_SERVICE_ACCOUNT}" >> "$GITHUB_ENV"
+          echo "WORKFLOW_APPROVAL_URL=${APPROVAL_URL}" >> "$GITHUB_ENV"
       - name: Validate OIDC permission
         shell: bash
         run: |
@@ -220,8 +294,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
-          workload_identity_provider: ${{ inputs.workload-identity-provider }}
-          service_account: ${{ inputs.deployer-service-account }}
+          workload_identity_provider: ${{ steps.runtime_approval.outputs.wif_provider || inputs.workload-identity-provider }}
+          service_account: ${{ steps.runtime_approval.outputs.deployer_service_account || inputs.deployer-service-account }}
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v3
@@ -233,7 +307,6 @@ jobs:
           set +x
 
           gcloud config set project "${GCP_PROJECT_ID}" --quiet
-          gcloud projects describe "${GCP_PROJECT_ID}" --format="value(projectId)" >/dev/null
 
           for api in run.googleapis.com artifactregistry.googleapis.com iamcredentials.googleapis.com; do
             if ! gcloud services list \
@@ -305,11 +378,30 @@ jobs:
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
           echo "digest-uri=${IMAGE_WITHOUT_TAG}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy Cloud Run service
+      - name: Detect existing Cloud Run service
+        id: service_target
         shell: bash
         run: |
           set -euo pipefail
           set +x
+          if gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format="value(metadata.name)" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy Cloud Run service (stage when service exists)
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          TRAFFIC_ARGS=()
+          if [ "${{ steps.service_target.outputs.exists }}" = "true" ]; then
+            TRAFFIC_ARGS+=(--no-traffic)
+          fi
+
           gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
@@ -317,6 +409,8 @@ jobs:
             --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
             --platform managed \
             --no-allow-unauthenticated \
+            "${TRAFFIC_ARGS[@]}" \
+            --tag "${CANDIDATE_TAG}" \
             --labels "alphaci_managed=true,alphaci_system=${{ steps.metadata.outputs.safe-system }},alphaci_environment=${{ steps.metadata.outputs.safe-environment }},alphaci_correlation=${{ steps.metadata.outputs.correlation-id }},alphaci_commit=${GITHUB_SHA}" \
             --quiet
 
@@ -326,21 +420,23 @@ jobs:
         run: |
           set -euo pipefail
           set +x
-          URL="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
+          SERVICE_JSON="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
-            --format="value(status.url)")"
-          REVISION_NAME="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
-            --project "${GCP_PROJECT_ID}" \
-            --region "${GCP_REGION}" \
-            --format="value(status.latestReadyRevisionName)")"
+            --format=json)"
+          URL="$(jq -r '.status.url // empty' <<<"${SERVICE_JSON}")"
+          REVISION_NAME="$(jq -r '.status.latestReadyRevisionName // empty' <<<"${SERVICE_JSON}")"
+          CANDIDATE_URL="$(jq -r --arg tag "${CANDIDATE_TAG}" \
+            '.status.traffic[]? | select(.tag == $tag) | .url // empty' \
+            <<<"${SERVICE_JSON}")"
 
-          if [ -z "${URL}" ] || [ -z "${REVISION_NAME}" ]; then
-            echo "::error::Cloud Run service URL or latest ready revision is missing after deploy."
+          if [ -z "${URL}" ] || [ -z "${REVISION_NAME}" ] || [ -z "${CANDIDATE_URL}" ]; then
+            echo "::error::Cloud Run did not report a ready tagged candidate revision."
             exit 1
           fi
 
           echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "candidate-url=${CANDIDATE_URL}" >> "$GITHUB_OUTPUT"
           echo "revision-name=${REVISION_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Probe service health
@@ -349,7 +445,60 @@ jobs:
         run: |
           set -euo pipefail
           set +x
-          HEALTH_URL="${{ steps.service.outputs.url }}${HEALTH_PATH}"
+          HEALTH_URL="${{ steps.service.outputs.candidate-url }}${HEALTH_PATH}"
           IDENTITY_TOKEN="$(gcloud auth print-identity-token --audiences="${{ steps.service.outputs.url }}")"
           curl -fsS -H "Authorization: Bearer ${IDENTITY_TOKEN}" "${HEALTH_URL}" >/dev/null
           echo "deployment-status=healthy" >> "$GITHUB_OUTPUT"
+
+      - name: Promote healthy revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --to-revisions "${{ steps.service.outputs.revision-name }}=100" \
+            --quiet
+
+      - name: Report runtime deployment result
+        if: ${{ always() && env.ENVIRONMENT == 'prod' && steps.runtime_approval.outputs.deployment_id != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          STATUS="succeeded"
+          if [ "${{ job.status }}" = "cancelled" ]; then
+            STATUS="canceled"
+          elif [ "${{ job.status }}" != "success" ]; then
+            STATUS="failed"
+          fi
+
+          SAFE_ERROR_CODE=""
+          SAFE_ERROR_MESSAGE=""
+          if [ "${STATUS}" != "succeeded" ]; then
+            SAFE_ERROR_CODE="GCP_WORKFLOW_FAILED"
+            SAFE_ERROR_MESSAGE="Cloud Run deployment workflow did not complete successfully"
+          fi
+
+          REPORT_BODY="$(jq -n \
+            --arg deploymentId "${{ steps.runtime_approval.outputs.deployment_id }}" \
+            --arg repo "${GITHUB_REPOSITORY}" \
+            --arg callbackKey "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}" \
+            --arg status "${STATUS}" \
+            --arg digest "${{ steps.digest.outputs.digest }}" \
+            --arg revision "${{ steps.service.outputs.revision-name }}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            --arg errorCode "${SAFE_ERROR_CODE}" \
+            --arg errorMessage "${SAFE_ERROR_MESSAGE}" \
+            '{deploymentId:$deploymentId,repositoryFullName:$repo,callbackKey:$callbackKey,status:$status,imageDigest:($digest // null),cloudRunRevision:($revision // null),workflowRunId:$runId,safeErrorCode:($errorCode // null),safeErrorMessage:($errorMessage // null)}')"
+
+          CONTROL_PLANE_BASE="${CI_REPORT_URL%/api/v1/ci/report}"
+          REPORT_URL="${CONTROL_PLANE_BASE}/api/v1/runtime-deployments/workflow/report"
+          if ! curl -fsS \
+            -H "Authorization: Bearer ${CI_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${REPORT_BODY}" \
+            "${REPORT_URL}" >/dev/null; then
+            echo "::warning::AlphaCI runtime deployment result could not be reported."
+          fi

@@ -1,0 +1,231 @@
+name: "Reusable: AlphaCI Cloud Run Smoke Deploy"
+
+on:
+  workflow_call:
+    inputs:
+      system-name:
+        required: true
+        type: string
+      working-directory:
+        required: false
+        type: string
+        default: "."
+      checkout-ref:
+        required: true
+        type: string
+      source-branch:
+        required: true
+        type: string
+      gcp-project-id:
+        required: true
+        type: string
+      gcp-region:
+        required: true
+        type: string
+      workload-identity-provider:
+        required: true
+        type: string
+      deployer-service-account:
+        required: true
+        type: string
+      artifact-registry-repository:
+        required: true
+        type: string
+      image-name:
+        required: true
+        type: string
+      cloud-run-service-name:
+        required: true
+        type: string
+      runtime-service-account:
+        required: true
+        type: string
+      health-path:
+        required: false
+        type: string
+        default: "/health"
+    outputs:
+      image-digest:
+        value: ${{ jobs.deploy.outputs.image-digest }}
+      revision-name:
+        value: ${{ jobs.deploy.outputs.revision-name }}
+      service-url:
+        value: ${{ jobs.deploy.outputs.service-url }}
+      health-result:
+        value: ${{ jobs.deploy.outputs.health-result }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: alphaci-smoke-${{ inputs.gcp-project-id }}-${{ inputs.cloud-run-service-name }}
+      cancel-in-progress: true
+    outputs:
+      image-digest: ${{ steps.digest.outputs.value }}
+      revision-name: ${{ steps.service.outputs.revision-name }}
+      service-url: ${{ steps.service.outputs.url }}
+      health-result: ${{ steps.probe.outputs.result }}
+    env:
+      SYSTEM_NAME: ${{ inputs.system-name }}
+      SOURCE_BRANCH: ${{ inputs.source-branch }}
+      GCP_PROJECT_ID: ${{ inputs.gcp-project-id }}
+      GCP_REGION: ${{ inputs.gcp-region }}
+      ARTIFACT_REGISTRY_REPOSITORY: ${{ inputs.artifact-registry-repository }}
+      IMAGE_NAME: ${{ inputs.image-name }}
+      CLOUD_RUN_SERVICE_NAME: ${{ inputs.cloud-run-service-name }}
+      RUNTIME_SERVICE_ACCOUNT: ${{ inputs.runtime-service-account }}
+      DEPLOYER_SERVICE_ACCOUNT: ${{ inputs.deployer-service-account }}
+      HEALTH_PATH: ${{ inputs.health-path }}
+      CANDIDATE_TAG: smoke-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref }}
+
+      - name: Require main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${SOURCE_BRANCH}" != "main" ] || [ "${GITHUB_REF_NAME}" != "main" ]; then
+            echo "::error::The AlphaCI smoke deployment accepts main only."
+            exit 1
+          fi
+          if [[ "${HEALTH_PATH}" != /* ]]; then
+            echo "::error::health-path must start with '/'."
+            exit 1
+          fi
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ inputs.workload-identity-provider }}
+          service_account: ${{ inputs.deployer-service-account }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Verify target
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud artifacts repositories describe "${ARTIFACT_REGISTRY_REPOSITORY}" \
+            --project "${GCP_PROJECT_ID}" \
+            --location "${GCP_REGION}" \
+            --format="value(name)" >/dev/null
+          gcloud iam service-accounts describe "${RUNTIME_SERVICE_ACCOUNT}" \
+            --project "${GCP_PROJECT_ID}" \
+            --format="value(email)" >/dev/null
+
+      - name: Configure Artifact Registry
+        shell: bash
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        id: image
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/${IMAGE_NAME}:${GITHUB_SHA}"
+          docker build --tag "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+          echo "uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve image digest
+        id: digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIGEST="$(gcloud artifacts docker images describe "${{ steps.image.outputs.uri }}" --format="value(image_summary.digest)")"
+          IMAGE_BASE="${{ steps.image.outputs.uri }}"
+          IMAGE_BASE="${IMAGE_BASE%:*}"
+          if [ -z "${DIGEST}" ]; then
+            echo "::error::Unable to resolve the pushed image digest."
+            exit 1
+          fi
+          echo "value=${IMAGE_BASE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Detect existing Cloud Run service
+        id: service_target
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          if gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format="value(metadata.name)" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy revision (stage when service exists)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRAFFIC_ARGS=()
+          if [ "${{ steps.service_target.outputs.exists }}" = "true" ]; then
+            TRAFFIC_ARGS+=(--no-traffic)
+          fi
+
+          gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --image "${{ steps.digest.outputs.value }}" \
+            --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --min-instances 0 \
+            --max-instances 1 \
+            --timeout 60s \
+            --no-allow-unauthenticated \
+            "${TRAFFIC_ARGS[@]}" \
+            --tag "${CANDIDATE_TAG}" \
+            --quiet
+
+      - name: Read staged revision
+        id: service
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERVICE_JSON="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+          URL="$(jq -r '.status.url // empty' <<<"${SERVICE_JSON}")"
+          REVISION_NAME="$(jq -r '.status.latestReadyRevisionName // empty' <<<"${SERVICE_JSON}")"
+          CANDIDATE_URL="$(jq -r --arg tag "${CANDIDATE_TAG}" '.status.traffic[]? | select(.tag == $tag) | .url // empty' <<<"${SERVICE_JSON}")"
+          if [ -z "${URL}" ] || [ -z "${REVISION_NAME}" ] || [ -z "${CANDIDATE_URL}" ]; then
+            echo "::error::Cloud Run did not report a ready tagged candidate revision."
+            exit 1
+          fi
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "candidate-url=${CANDIDATE_URL}" >> "$GITHUB_OUTPUT"
+          echo "revision-name=${REVISION_NAME}" >> "$GITHUB_OUTPUT"
+      - name: Authenticate probe
+        id: probe-auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ inputs.workload-identity-provider }}
+          service_account: ${{ inputs.deployer-service-account }}
+          token_format: id_token
+          id_token_audience: ${{ steps.service.outputs.url }}
+
+      - name: Probe staged revision
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --retry 12 --retry-delay 5 --retry-max-time 60 --retry-all-errors \
+            --header "Authorization: Bearer ${{ steps.probe-auth.outputs.id_token }}" \
+            "${{ steps.service.outputs.candidate-url }}${HEALTH_PATH}" >/dev/null
+          echo "result=passed" >> "$GITHUB_OUTPUT"
+
+      - name: Promote healthy revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --to-revisions "${{ steps.service.outputs.revision-name }}=100" \
+            --quiet
