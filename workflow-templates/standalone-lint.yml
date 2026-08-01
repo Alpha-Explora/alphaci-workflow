@@ -34,7 +34,7 @@ env:
 
 jobs:
   validate-access:
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v0.1.4-smoke
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v0.1.7-smoke
     with:
       validation-api-url: ${{ env.CI_VALIDATE_URL }}
     secrets:
@@ -42,7 +42,7 @@ jobs:
 
   lint:
     needs: validate-access
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/lint-check.yml@v0.1.4-smoke
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/lint-check.yml@v0.1.7-smoke
     with:
       working-directory: ${{ inputs.service_path || '.' }}
       system-name: ${{ inputs.service_name || 'app' }}
