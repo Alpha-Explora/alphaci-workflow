@@ -1,6 +1,6 @@
 # GCP Cloud Run Deploy Reusable Workflow
 
-Builds a Docker image from the caller repository, pushes it to Google Artifact Registry, deploys the pushed digest to Cloud Run, and probes the resulting service URL.
+Builds a Docker image from the caller repository, pushes it to Google Artifact Registry, deploys the pushed digest to Cloud Run without traffic, probes the tagged candidate revision, and promotes it only after the health check passes.
 
 This workflow is the GCP replacement path for new AlphaCI-managed deployments. It uses GitHub OIDC Workload Identity Federation only. Static GCP service account JSON keys are not accepted.
 
@@ -38,7 +38,7 @@ This workflow is the GCP replacement path for new AlphaCI-managed deployments. I
 | `service-url` | Cloud Run service URL. |
 | `image-uri` | Artifact Registry image URI with branch/SHA tag. |
 | `image-digest` | Resolved Artifact Registry image digest. |
-| `revision-name` | Latest ready Cloud Run revision after deploy. |
+| `revision-name` | Candidate revision promoted after the health probe. |
 | `deployment-status` | `healthy` only after deploy and health probe both pass. |
 | `correlation-id` | Correlation ID used by this run. |
 
@@ -142,13 +142,13 @@ This workflow does not accept raw secret values. Secret Manager references shoul
 
 ## Health Probe
 
-The deploy command uses `--no-allow-unauthenticated`. The health probe obtains an identity token with:
+The deploy command uses `--no-allow-unauthenticated` and `--no-traffic`, assigning a run-specific candidate tag. The health probe obtains an identity token with:
 
 ```bash
 gcloud auth print-identity-token --audiences="<service-url>"
 ```
 
-Then it calls `service-url + health-path` with an `Authorization: Bearer` header. A failed probe leaves `deployment-status` unset and fails the workflow.
+Then it calls the tagged candidate URL plus `health-path` with an `Authorization: Bearer` header. A failed probe leaves the previous traffic assignment unchanged and fails the workflow. A successful probe runs `gcloud run services update-traffic --to-revisions REVISION=100`.
 
 ## Known Failures
 

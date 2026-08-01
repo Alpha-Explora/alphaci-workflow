@@ -161,6 +161,7 @@ jobs:
       DEPLOYMENT_TARGET_ID: ${{ secrets.ALPHACI_DEPLOYMENT_TARGET_ID }}
       WORKFLOW_RELEASE: ${{ inputs.workflow-release }}
       ESTIMATED_RUNTIME_CREDITS: ${{ inputs.estimated-runtime-credits }}
+      CANDIDATE_TAG: alphaci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -390,6 +391,8 @@ jobs:
             --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
             --platform managed \
             --no-allow-unauthenticated \
+            --no-traffic \
+            --tag "${CANDIDATE_TAG}" \
             --labels "alphaci_managed=true,alphaci_system=${{ steps.metadata.outputs.safe-system }},alphaci_environment=${{ steps.metadata.outputs.safe-environment }},alphaci_correlation=${{ steps.metadata.outputs.correlation-id }},alphaci_commit=${GITHUB_SHA}" \
             --quiet
 
@@ -399,21 +402,23 @@ jobs:
         run: |
           set -euo pipefail
           set +x
-          URL="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
+          SERVICE_JSON="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
-            --format="value(status.url)")"
-          REVISION_NAME="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
-            --project "${GCP_PROJECT_ID}" \
-            --region "${GCP_REGION}" \
-            --format="value(status.latestReadyRevisionName)")"
+            --format=json)"
+          URL="$(jq -r '.status.url // empty' <<<"${SERVICE_JSON}")"
+          REVISION_NAME="$(jq -r '.status.latestReadyRevisionName // empty' <<<"${SERVICE_JSON}")"
+          CANDIDATE_URL="$(jq -r --arg tag "${CANDIDATE_TAG}" \
+            '.status.traffic[]? | select(.tag == $tag) | .url // empty' \
+            <<<"${SERVICE_JSON}")"
 
-          if [ -z "${URL}" ] || [ -z "${REVISION_NAME}" ]; then
-            echo "::error::Cloud Run service URL or latest ready revision is missing after deploy."
+          if [ -z "${URL}" ] || [ -z "${REVISION_NAME}" ] || [ -z "${CANDIDATE_URL}" ]; then
+            echo "::error::Cloud Run did not report a ready tagged candidate revision."
             exit 1
           fi
 
           echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "candidate-url=${CANDIDATE_URL}" >> "$GITHUB_OUTPUT"
           echo "revision-name=${REVISION_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Probe service health
@@ -422,10 +427,21 @@ jobs:
         run: |
           set -euo pipefail
           set +x
-          HEALTH_URL="${{ steps.service.outputs.url }}${HEALTH_PATH}"
+          HEALTH_URL="${{ steps.service.outputs.candidate-url }}${HEALTH_PATH}"
           IDENTITY_TOKEN="$(gcloud auth print-identity-token --audiences="${{ steps.service.outputs.url }}")"
           curl -fsS -H "Authorization: Bearer ${IDENTITY_TOKEN}" "${HEALTH_URL}" >/dev/null
           echo "deployment-status=healthy" >> "$GITHUB_OUTPUT"
+
+      - name: Promote healthy revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --to-revisions "${{ steps.service.outputs.revision-name }}=100" \
+            --quiet
 
       - name: Report runtime deployment result
         if: ${{ always() && env.ENVIRONMENT == 'prod' && steps.runtime_approval.outputs.deployment_id != '' }}
