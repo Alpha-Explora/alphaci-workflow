@@ -90,7 +90,7 @@ on:
       workflow-release:
         required: false
         type: string
-        default: "v0.1.4-smoke"
+        default: "v0.1.7-smoke"
         description: "Central workflow release accepted by the AlphaCI control plane"
       estimated-runtime-credits:
         required: false
