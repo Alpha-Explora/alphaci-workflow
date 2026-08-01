@@ -182,8 +182,40 @@ jobs:
             --no-allow-unauthenticated \
             "${TRAFFIC_ARGS[@]}" \
             --tag "${CANDIDATE_TAG}" \
+            --async \
             --quiet
 
+      - name: Wait for ready Cloud Run revision
+        id: ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          for attempt in $(seq 1 60); do
+            SERVICE_JSON="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
+              --project "${GCP_PROJECT_ID}" \
+              --region "${GCP_REGION}" \
+              --format=json 2>/dev/null || true)"
+            REVISION_NAME="$(jq -r '.status.latestCreatedRevisionName // .status.latestReadyRevisionName // empty' <<<"${SERVICE_JSON}")"
+            if [ -n "${REVISION_NAME}" ]; then
+              REVISION_JSON="$(gcloud run revisions describe "${REVISION_NAME}" \
+                --project "${GCP_PROJECT_ID}" \
+                --region "${GCP_REGION}" \
+                --format=json 2>/dev/null || true)"
+              READY_STATUS="$(jq -r '.status.conditions[]? | select(.type == "Ready") | .status // empty' <<<"${REVISION_JSON}")"
+              if [ "${READY_STATUS}" = "True" ]; then
+                echo "revision-name=${REVISION_NAME}" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [ "${READY_STATUS}" = "False" ]; then
+                echo "::error::Cloud Run revision ${REVISION_NAME} failed readiness."
+                exit 1
+              fi
+            fi
+            sleep 5
+          done
+          echo "::error::Timed out waiting for a ready Cloud Run revision."
+          exit 1
       - name: Read staged revision
         id: service
         shell: bash
@@ -191,8 +223,14 @@ jobs:
           set -euo pipefail
           SERVICE_JSON="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
           URL="$(jq -r '.status.url // empty' <<<"${SERVICE_JSON}")"
-          REVISION_NAME="$(jq -r '.status.latestReadyRevisionName // empty' <<<"${SERVICE_JSON}")"
+          if [ -z "${URL}" ]; then
+            URL="$(jq -r '.metadata.annotations["run.googleapis.com/urls"] // "[]" | fromjson | .[0] // empty' <<<"${SERVICE_JSON}")"
+          fi
+          REVISION_NAME="${{ steps.ready.outputs.revision-name }}"
           CANDIDATE_URL="$(jq -r --arg tag "${CANDIDATE_TAG}" '.status.traffic[]? | select(.tag == $tag) | .url // empty' <<<"${SERVICE_JSON}")"
+          if [ -z "${CANDIDATE_URL}" ] && [ -n "${URL}" ]; then
+            CANDIDATE_URL="$(printf '%s' "${URL}" | sed "s#^https://#https://${CANDIDATE_TAG}---#")"
+          fi
           if [ -z "${URL}" ] || [ -z "${REVISION_NAME}" ] || [ -z "${CANDIDATE_URL}" ]; then
             echo "::error::Cloud Run did not report a ready tagged candidate revision."
             exit 1
