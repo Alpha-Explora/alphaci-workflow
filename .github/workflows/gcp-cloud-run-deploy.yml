@@ -149,7 +149,7 @@ jobs:
       IMAGE_NAME: ${{ inputs.image-name }}
       CLOUD_RUN_SERVICE_NAME: ${{ inputs.cloud-run-service-name }}
       RUNTIME_SERVICE_ACCOUNT: ${{ inputs.runtime-service-account }}
-      DOCKER_CONTEXT: ${{ inputs.docker-context }}
+      DOCKER_BUILD_CONTEXT: ${{ inputs.docker-context }}
       DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
       HEALTH_PATH: ${{ inputs.health-path }}
       ENVIRONMENT: ${{ inputs.environment }}
@@ -352,7 +352,7 @@ jobs:
           docker build \
             --file "${DOCKERFILE_PATH}" \
             --tag "${{ steps.image.outputs.uri }}" \
-            "${DOCKER_CONTEXT}"
+            "${DOCKER_BUILD_CONTEXT}"
 
       - name: Push image
         shell: bash
