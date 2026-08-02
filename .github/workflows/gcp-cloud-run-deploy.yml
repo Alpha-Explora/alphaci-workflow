@@ -481,7 +481,7 @@ jobs:
           set -euo pipefail
           set +x
           HEALTH_URL="${{ steps.service.outputs.candidate-url }}${HEALTH_PATH}"
-          IDENTITY_TOKEN="$(gcloud auth print-identity-token --audiences="${{ steps.service.outputs.url }}")"
+          IDENTITY_TOKEN="$(gcloud auth print-identity-token --impersonate-service-account="${{ steps.runtime_approval.outputs.deployer_service_account || inputs.deployer-service-account }}" --audiences="${{ steps.service.outputs.url }}")"
           curl -fsS -H "Authorization: Bearer ${IDENTITY_TOKEN}" "${HEALTH_URL}" >/dev/null
           echo "deployment-status=healthy" >> "$GITHUB_OUTPUT"
 
