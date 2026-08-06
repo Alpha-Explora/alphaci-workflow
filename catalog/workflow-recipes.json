@@ -102,68 +102,268 @@
                                               ]
                     },
                     {
-                        "id": "frontend-checks",
-                        "label": "Frontend Checks",
-                        "description": "Solo Basic frontend checks without SonarCloud or hosted deployment.",
-                        "supportedProjectTypes": [
-                            "nextjs-app",
-                            "react-spa"
-                        ],
-                        "templateByProjectType": {
-                            "nextjs-app": "fe-nextjs",
-                            "react-spa": "fe-react"
-                        },
-                        "mandatoryJobs": [
-                            "validate-access"
-                        ],
-                        "supportedOptions": {
-                            "lint": true,
-                            "unit": true,
-                            "build": true,
-                            "coverage": true,
-                            "security": true,
-                            "docker": false,
-                            "e2e": false
-                        },
-                        "optionJobs": {
-                            "lint": "lint",
-                            "unit": "unit-tests",
-                            "build": "build",
-                            "coverage": "unit-tests",
-                            "security": "security"
-                        }
+                        "id":  "frontend-checks",
+                        "label":  "Frontend Checks",
+                        "description":  "Solo Basic frontend checks without SonarCloud or hosted deployment.",
+                        "supportedProjectTypes":  [
+                                                      "nextjs-app",
+                                                      "react-spa"
+                                                  ],
+                        "templateByProjectType":  {
+                                                      "nextjs-app":  "fe-nextjs",
+                                                      "react-spa":  "fe-react"
+                                                  },
+                        "mandatoryJobs":  [
+                                              "validate-access"
+                                          ],
+                        "supportedOptions":  {
+                                                 "lint":  true,
+                                                 "unit":  true,
+                                                 "build":  true,
+                                                 "coverage":  true,
+                                                 "security":  true,
+                                                 "docker":  false,
+                                                 "e2e":  false
+                                             },
+                        "optionJobs":  {
+                                           "lint":  "lint",
+                                           "unit":  "unit-tests",
+                                           "build":  "build",
+                                           "coverage":  "unit-tests",
+                                           "security":  "security"
+                                       }
                     },
                     {
-                        "id": "backend-checks",
-                        "label": "Backend Checks",
-                        "description": "Solo Basic backend checks without SonarCloud or hosted deployment.",
-                        "supportedProjectTypes": [
-                            "nestjs-api",
-                            "nodejs-api"
-                        ],
-                        "templateByProjectType": {
-                            "nestjs-api": "be-nestjs",
-                            "nodejs-api": "be-nodejs"
-                        },
-                        "mandatoryJobs": [
-                            "validate-access"
-                        ],
-                        "supportedOptions": {
-                            "lint": true,
-                            "unit": true,
-                            "build": false,
-                            "coverage": true,
-                            "security": true,
-                            "docker": true,
-                            "e2e": false
-                        },
-                        "optionJobs": {
-                            "lint": "lint",
-                            "unit": "unit-tests",
-                            "coverage": "unit-tests",
-                            "security": "security",
-                            "docker": "docker"
-                        }
+                        "id":  "backend-checks",
+                        "label":  "Backend Checks",
+                        "description":  "Solo Basic backend checks without SonarCloud or hosted deployment.",
+                        "supportedProjectTypes":  [
+                                                      "nestjs-api",
+                                                      "nodejs-api"
+                                                  ],
+                        "templateByProjectType":  {
+                                                      "nestjs-api":  "be-nestjs",
+                                                      "nodejs-api":  "be-nodejs"
+                                                  },
+                        "mandatoryJobs":  [
+                                              "validate-access"
+                                          ],
+                        "supportedOptions":  {
+                                                 "lint":  true,
+                                                 "unit":  true,
+                                                 "build":  false,
+                                                 "coverage":  true,
+                                                 "security":  true,
+                                                 "docker":  true,
+                                                 "e2e":  false
+                                             },
+                        "optionJobs":  {
+                                           "lint":  "lint",
+                                           "unit":  "unit-tests",
+                                           "coverage":  "unit-tests",
+                                           "security":  "security",
+                                           "docker":  "docker"
+                                       }
+                    },
+                    {
+                        "id":  "frontend-code-quality",
+                        "label":  "Frontend Code Quality",
+                        "description":  "Solo Plus frontend pipeline: checks plus SonarCloud quality gate and shared-runtime deployment.",
+                        "supportedProjectTypes":  [
+                                                      "nextjs-app",
+                                                      "react-spa"
+                                                  ],
+                        "templateByProjectType":  {
+                                                      "nextjs-app":  "fe-nextjs",
+                                                      "react-spa":  "fe-react"
+                                                  },
+                        "mandatoryJobs":  [
+                                              "validate-access"
+                                          ],
+                        "supportedOptions":  {
+                                                 "lint":  true,
+                                                 "unit":  true,
+                                                 "build":  true,
+                                                 "coverage":  true,
+                                                 "security":  true,
+                                                 "docker":  true,
+                                                 "e2e":  false
+                                             },
+                        "optionJobs":  {
+                                           "lint":  "lint",
+                                           "unit":  "unit-tests",
+                                           "build":  "build",
+                                           "coverage":  "unit-tests",
+                                           "security":  "security",
+                                           "deploy":  "deploy-gcp"
+                                       },
+                        "deploymentProvider":  "gcp-cloud-run",
+                        "legacyProviders":  [
+
+                                            ],
+                        "requiresSecrets":  [
+
+                                            ],
+                        "requiresVariables":  [
+                                                  "ALPHACI_GCP_PROJECT_ID",
+                                                  "ALPHACI_GCP_REGION",
+                                                  "ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER",
+                                                  "ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT",
+                                                  "ALPHACI_ARTIFACT_REGISTRY_REPOSITORY",
+                                                  "ALPHACI_CLOUD_RUN_SERVICE",
+                                                  "ALPHACI_RUNTIME_SERVICE_ACCOUNT",
+                                                  "ALPHACI_IMAGE_NAME"
+                                              ]
+                    },
+                    {
+                        "id":  "frontend-release",
+                        "label":  "Frontend Release",
+                        "description":  "Solo Pro frontend pipeline: full quality gate, dedicated-runtime deployment, previews, and promotion.",
+                        "supportedProjectTypes":  [
+                                                      "nextjs-app",
+                                                      "react-spa"
+                                                  ],
+                        "templateByProjectType":  {
+                                                      "nextjs-app":  "fe-nextjs",
+                                                      "react-spa":  "fe-react"
+                                                  },
+                        "mandatoryJobs":  [
+                                              "validate-access"
+                                          ],
+                        "supportedOptions":  {
+                                                 "lint":  true,
+                                                 "unit":  true,
+                                                 "build":  true,
+                                                 "coverage":  true,
+                                                 "security":  true,
+                                                 "docker":  true,
+                                                 "e2e":  false
+                                             },
+                        "optionJobs":  {
+                                           "lint":  "lint",
+                                           "unit":  "unit-tests",
+                                           "build":  "build",
+                                           "coverage":  "unit-tests",
+                                           "security":  "security",
+                                           "deploy":  "deploy-gcp"
+                                       },
+                        "deploymentProvider":  "gcp-cloud-run",
+                        "legacyProviders":  [
+
+                                            ],
+                        "requiresSecrets":  [
+
+                                            ],
+                        "requiresVariables":  [
+                                                  "ALPHACI_GCP_PROJECT_ID",
+                                                  "ALPHACI_GCP_REGION",
+                                                  "ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER",
+                                                  "ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT",
+                                                  "ALPHACI_ARTIFACT_REGISTRY_REPOSITORY",
+                                                  "ALPHACI_CLOUD_RUN_SERVICE",
+                                                  "ALPHACI_RUNTIME_SERVICE_ACCOUNT",
+                                                  "ALPHACI_IMAGE_NAME"
+                                              ]
+                    },
+                    {
+                        "id":  "backend-code-quality",
+                        "label":  "Backend Code Quality",
+                        "description":  "Solo Plus backend pipeline: checks plus SonarCloud quality gate and shared-runtime deployment.",
+                        "supportedProjectTypes":  [
+                                                      "nestjs-api",
+                                                      "nodejs-api"
+                                                  ],
+                        "templateByProjectType":  {
+                                                      "nestjs-api":  "be-nestjs",
+                                                      "nodejs-api":  "be-nodejs"
+                                                  },
+                        "mandatoryJobs":  [
+                                              "validate-access"
+                                          ],
+                        "supportedOptions":  {
+                                                 "lint":  true,
+                                                 "unit":  true,
+                                                 "build":  false,
+                                                 "coverage":  true,
+                                                 "security":  true,
+                                                 "docker":  true,
+                                                 "e2e":  false
+                                             },
+                        "optionJobs":  {
+                                           "lint":  "lint",
+                                           "unit":  "unit-tests",
+                                           "coverage":  "unit-tests",
+                                           "security":  "security",
+                                           "docker":  "docker",
+                                           "deploy":  "deploy-gcp"
+                                       },
+                        "deploymentProvider":  "gcp-cloud-run",
+                        "legacyProviders":  [
+
+                                            ],
+                        "requiresSecrets":  [
+
+                                            ],
+                        "requiresVariables":  [
+                                                  "ALPHACI_GCP_PROJECT_ID",
+                                                  "ALPHACI_GCP_REGION",
+                                                  "ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER",
+                                                  "ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT",
+                                                  "ALPHACI_ARTIFACT_REGISTRY_REPOSITORY",
+                                                  "ALPHACI_CLOUD_RUN_SERVICE",
+                                                  "ALPHACI_RUNTIME_SERVICE_ACCOUNT",
+                                                  "ALPHACI_IMAGE_NAME"
+                                              ]
+                    },
+                    {
+                        "id":  "backend-release",
+                        "label":  "Backend Release",
+                        "description":  "Solo Pro backend pipeline: full quality gate, dedicated-runtime deployment, previews, and promotion.",
+                        "supportedProjectTypes":  [
+                                                      "nestjs-api",
+                                                      "nodejs-api"
+                                                  ],
+                        "templateByProjectType":  {
+                                                      "nestjs-api":  "be-nestjs",
+                                                      "nodejs-api":  "be-nodejs"
+                                                  },
+                        "mandatoryJobs":  [
+                                              "validate-access"
+                                          ],
+                        "supportedOptions":  {
+                                                 "lint":  true,
+                                                 "unit":  true,
+                                                 "build":  false,
+                                                 "coverage":  true,
+                                                 "security":  true,
+                                                 "docker":  true,
+                                                 "e2e":  false
+                                             },
+                        "optionJobs":  {
+                                           "lint":  "lint",
+                                           "unit":  "unit-tests",
+                                           "coverage":  "unit-tests",
+                                           "security":  "security",
+                                           "docker":  "docker",
+                                           "deploy":  "deploy-gcp"
+                                       },
+                        "deploymentProvider":  "gcp-cloud-run",
+                        "legacyProviders":  [
+
+                                            ],
+                        "requiresSecrets":  [
+
+                                            ],
+                        "requiresVariables":  [
+                                                  "ALPHACI_GCP_PROJECT_ID",
+                                                  "ALPHACI_GCP_REGION",
+                                                  "ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER",
+                                                  "ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT",
+                                                  "ALPHACI_ARTIFACT_REGISTRY_REPOSITORY",
+                                                  "ALPHACI_CLOUD_RUN_SERVICE",
+                                                  "ALPHACI_RUNTIME_SERVICE_ACCOUNT",
+                                                  "ALPHACI_IMAGE_NAME"
+                                              ]
                     }
                 ]
 }

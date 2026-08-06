@@ -51,7 +51,10 @@
                                                     ],
                              "defaultRecipe":  "frontend-standard-ci",
                              "allowedRecipes":  [
-                                                    "frontend-standard-ci"
+                                                    "frontend-standard-ci",
+                                                    "frontend-checks",
+                                                    "frontend-code-quality",
+                                                    "frontend-release"
                                                 ],
                              "defaultOptions":  {
                                                     "lint":  true,
@@ -85,7 +88,10 @@
                                                     ],
                              "defaultRecipe":  "frontend-standard-ci",
                              "allowedRecipes":  [
-                                                    "frontend-standard-ci"
+                                                    "frontend-standard-ci",
+                                                    "frontend-checks",
+                                                    "frontend-code-quality",
+                                                    "frontend-release"
                                                 ],
                              "defaultOptions":  {
                                                     "lint":  true,
@@ -119,7 +125,10 @@
                                                     ],
                              "defaultRecipe":  "backend-api-ci",
                              "allowedRecipes":  [
-                                                    "backend-api-ci"
+                                                    "backend-api-ci",
+                                                    "backend-checks",
+                                                    "backend-code-quality",
+                                                    "backend-release"
                                                 ],
                              "defaultOptions":  {
                                                     "lint":  true,
@@ -153,7 +162,10 @@
                                                     ],
                              "defaultRecipe":  "backend-api-ci",
                              "allowedRecipes":  [
-                                                    "backend-api-ci"
+                                                    "backend-api-ci",
+                                                    "backend-checks",
+                                                    "backend-code-quality",
+                                                    "backend-release"
                                                 ],
                              "defaultOptions":  {
                                                     "lint":  true,

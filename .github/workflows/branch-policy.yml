@@ -1,0 +1,71 @@
+# Contract: resolves per-branch governance for AlphaCI generated pipelines.
+#
+# Centralised deliberately: coverage thresholds, lint strictness, and the
+# SonarCloud gate policy are AlphaCI governance rules, so they must not be
+# readable or editable inside customer repositories.
+name: "Reusable: Branch Policy"
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+        description: "Originating branch to evaluate"
+      base-coverage-threshold:
+        required: false
+        type: number
+        default: 80
+        description: "Coverage floor on non-promoted branches"
+    outputs:
+      branch:
+        value: ${{ jobs.resolve.outputs.branch }}
+      coverage-threshold:
+        value: ${{ jobs.resolve.outputs.coverage-threshold }}
+      fail-on-warning:
+        value: ${{ jobs.resolve.outputs.fail-on-warning }}
+      sonar-enabled:
+        value: ${{ jobs.resolve.outputs.sonar-enabled }}
+      sonar-gate-wait:
+        value: ${{ jobs.resolve.outputs.sonar-gate-wait }}
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.policy.outputs.branch }}
+      coverage-threshold: ${{ steps.policy.outputs.coverage-threshold }}
+      fail-on-warning: ${{ steps.policy.outputs.fail-on-warning }}
+      sonar-enabled: ${{ steps.policy.outputs.sonar-enabled }}
+      sonar-gate-wait: ${{ steps.policy.outputs.sonar-gate-wait }}
+    steps:
+      - name: Resolve branch policy
+        id: policy
+        env:
+          BRANCH: ${{ inputs.branch }}
+          BASE_COVERAGE: ${{ inputs.base-coverage-threshold }}
+          SONAR_CONFIGURED: ${{ secrets.SONAR_TOKEN != '' && secrets.SONAR_ORGANIZATION != '' && secrets.SONAR_PROJECT_KEY != '' }}
+        run: |
+          # Promoted branches (uat, main) raise the bar: +10 coverage capped at
+          # 95, lint warnings become fatal, and the Sonar gate blocks.
+          if [ "$BRANCH" = "uat" ] || [ "$BRANCH" = "main" ]; then
+            COVERAGE_THRESHOLD=$((BASE_COVERAGE + 10))
+            if [ "$COVERAGE_THRESHOLD" -gt 95 ]; then COVERAGE_THRESHOLD=95; fi
+            FAIL_ON_WARNING=true
+            SONAR_GATE_WAIT=true
+          else
+            COVERAGE_THRESHOLD="$BASE_COVERAGE"
+            FAIL_ON_WARNING=false
+            SONAR_GATE_WAIT=false
+          fi
+          {
+            echo "branch=$BRANCH"
+            echo "coverage-threshold=$COVERAGE_THRESHOLD"
+            echo "fail-on-warning=$FAIL_ON_WARNING"
+            echo "sonar-enabled=$SONAR_CONFIGURED"
+            echo "sonar-gate-wait=$SONAR_GATE_WAIT"
+          } >> "$GITHUB_OUTPUT"
+          echo "Branch policy resolved for $BRANCH (coverage >= $COVERAGE_THRESHOLD)"
