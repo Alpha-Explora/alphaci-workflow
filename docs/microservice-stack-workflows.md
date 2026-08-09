@@ -17,8 +17,8 @@ active deployment workflows live in `Alpha-Explora/alphaci-be`:
 
 Each workflow builds `Dockerfile.service`, pushes an immutable image to the
 `alphaci-20260629` Artifact Registry repository, deploys a Cloud Run candidate
-on port `8080` without traffic, probes readiness, and promotes only the
-verified revision. `edge-gateway` is the public load-balancer entry; the other
+on port `8080` without traffic, and verifies readiness without changing stable
+traffic. `edge-gateway` is the public load-balancer entry; the other
 six services are private and are invoked by its service account. The retired
 root `alphaci-be` Cloud Run image/workflow is rollback-only and is not a normal
 deployment target.
@@ -26,7 +26,9 @@ deployment target.
 For this product, `main` is the pre-merge validation line. Production callers
 run from `prod`; the live GitHub OIDC provider rejects `main` for production
 authentication. The current GitHub plan cannot enforce branch protection, so
-use manual review and merge only after the main checks and smoke gates pass.
+automatic production push triggers are disabled. Use manual review, merge only
+after the main checks and smoke gates pass, then manually dispatch each
+production workflow with its confirmation value.
 
 ## User-facing onboarding layer
 

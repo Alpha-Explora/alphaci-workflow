@@ -7,10 +7,10 @@ GitHub OIDC Workload Identity Federation only. Static GCP service account JSON
 keys are not accepted.
 
 AlphaCI's live product callers use `prod` for production. Validate the merged
-architecture on `main`, manually review the promotion, then merge to `prod` to
-authorize the production workflows; the current GitHub plan cannot enforce
-branch protection, and `main` must not deploy directly to the production
-project.
+architecture on `main`, manually review the promotion, then merge to `prod`.
+Production callers must use explicit manual dispatch with a confirmation value;
+the current GitHub plan cannot enforce branch protection, and `main` must not
+deploy directly to the production project.
 
 ## Source Workflow
 
@@ -23,7 +23,7 @@ project.
 | `system-name` | yes | | Display name for logs and labels. |
 | `working-directory` | no | `.` | Project directory. |
 | `checkout-ref` | no | | Commit SHA or ref to checkout. |
-| `source-branch` | no | | Source branch used for branch gating and image tags. |
+| `source-branch` | no | | Source branch used for branch gating and image tags. Production accepts `prod` only. |
 | `environment` | no | `dev` | AlphaCI environment: `dev`, `uat`, `prod`, or `preview`. |
 | `gcp-project-id` | yes | | Target GCP project ID. |
 | `gcp-region` | yes | | Target Cloud Run region. |

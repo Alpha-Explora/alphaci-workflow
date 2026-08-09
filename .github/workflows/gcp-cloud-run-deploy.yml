@@ -187,10 +187,12 @@ jobs:
             :
           elif [ "${BRANCH}" == "main" ] && [ "${ENVIRONMENT}" == "prod" ]; then
             :
+          elif [ "${BRANCH}" == "prod" ] && [ "${ENVIRONMENT}" == "prod" ]; then
+            :
           elif [ "${ENVIRONMENT}" == "preview" ] && [ "${ALLOW_PREVIEW}" == "true" ]; then
             :
           else
-            echo "::error::Unsupported branch/environment mapping. Allowed: test->dev, uat->uat, main->prod, or explicit preview with allow-preview=true."
+            echo "::error::Unsupported branch/environment mapping. Allowed: test->dev, uat->uat, main->prod, prod->prod, or explicit preview with allow-preview=true."
             exit 1
           fi
 
