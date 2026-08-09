@@ -2,7 +2,15 @@
 
 Builds a Docker image from the caller repository, pushes it to Google Artifact Registry, deploys the pushed digest to Cloud Run without traffic, probes the tagged candidate revision, and promotes it only after the health check passes.
 
-This workflow is the GCP replacement path for new AlphaCI-managed deployments. It uses GitHub OIDC Workload Identity Federation only. Static GCP service account JSON keys are not accepted.
+This workflow is the GCP deployment path for AlphaCI-managed services. It uses
+GitHub OIDC Workload Identity Federation only. Static GCP service account JSON
+keys are not accepted.
+
+AlphaCI's live product callers use `prod` for production. Validate the merged
+architecture on `main`, manually review the promotion, then merge to `prod` to
+authorize the production workflows; the current GitHub plan cannot enforce
+branch protection, and `main` must not deploy directly to the production
+project.
 
 ## Source Workflow
 
@@ -72,7 +80,7 @@ The workflow validates branch and environment together before building:
 | --- | --- | --- |
 | `test` | `dev` | Deploy allowed. |
 | `uat` | `uat` | Deploy allowed. |
-| `main` | `prod` | Deploy allowed. |
+| `main` | `prod` | Generic reusable-workflow mapping; AlphaCI production callers use manually reviewed `prod`. |
 | any branch | `preview` with `allow-preview=true` | Preview deploy allowed. |
 | anything else | anything else | Fails before build. |
 
@@ -84,7 +92,7 @@ Feature branches do not create long-lived Cloud Run services by default.
 jobs:
   deploy-gcp-backend:
     needs: [build, production-gate]
-    uses: cicd-external-project/cicd-workflow/.github/workflows/gcp-cloud-run-deploy.yml@feature/migrate-vercel-render-to-gcp
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@main
     permissions:
       contents: read
       id-token: write
@@ -94,14 +102,14 @@ jobs:
       checkout-ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       source-branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
       environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'dev' }}
-      gcp-project-id: alphaci-runtime
+      gcp-project-id: alphaci-20260629
       gcp-region: asia-southeast1
       workload-identity-provider: projects/123/locations/global/workloadIdentityPools/github/providers/github
       deployer-service-account: alphaci-deployer@alphaci-runtime.iam.gserviceaccount.com
       runtime-service-account: orders-api-runtime@alphaci-runtime.iam.gserviceaccount.com
-      artifact-registry-repository: alphaci-services
-      image-name: orders-api
-      cloud-run-service-name: orders-api-dev
+      artifact-registry-repository: alphaci
+      image-name: edge-gateway
+      cloud-run-service-name: edge-gateway
       docker-context: .
       dockerfile-path: Dockerfile
       health-path: /health
@@ -113,7 +121,7 @@ jobs:
 jobs:
   deploy-gcp-frontend:
     needs: [build, production-gate]
-    uses: cicd-external-project/cicd-workflow/.github/workflows/gcp-cloud-run-deploy.yml@feature/migrate-vercel-render-to-gcp
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@main
     permissions:
       contents: read
       id-token: write
@@ -123,14 +131,14 @@ jobs:
       checkout-ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       source-branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
       environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'dev' }}
-      gcp-project-id: alphaci-runtime
+      gcp-project-id: alphaci-20260629
       gcp-region: asia-southeast1
       workload-identity-provider: projects/123/locations/global/workloadIdentityPools/github/providers/github
       deployer-service-account: alphaci-deployer@alphaci-runtime.iam.gserviceaccount.com
       runtime-service-account: orders-web-runtime@alphaci-runtime.iam.gserviceaccount.com
-      artifact-registry-repository: alphaci-services
-      image-name: orders-web
-      cloud-run-service-name: orders-web-dev
+      artifact-registry-repository: alphaci
+      image-name: alphaci-fe
+      cloud-run-service-name: alphaci-fe
       docker-context: .
       dockerfile-path: Dockerfile
       health-path: /
@@ -138,7 +146,11 @@ jobs:
 
 ## Runtime Secrets
 
-This workflow does not accept raw secret values. Secret Manager references should be resolved by the backend/control plane before deploy and attached to the Cloud Run service in a later hardening slice. Until that slice lands, callers must not pass secret values through inputs, environment dumps, or logs.
+This workflow does not accept raw secret values. AlphaCI resolves the shared
+`INTERNAL_JWT_SECRET` environment variable to the Secret Manager secret
+`alphaci-internal-jwt` before deployment and grants accessor access to the
+service runtime identities. Callers must never pass secret values through
+inputs, environment dumps, or logs.
 
 ## Health Probe
 

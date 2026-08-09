@@ -432,11 +432,11 @@ git push origin test
 
 ### Environment ↔ Branch ↔ Deployment Mapping
 
-| Environment | Branch | Vercel Target | Docker Registry | Access |
+| Environment | Branch | Cloud Run target | Docker Registry | Access |
 |-------------|--------|---------------|-----------------|--------|
-| **Test** | `test` | `preview` | — | Internal / Dev team |
-| **UAT** | `uat` | `preview` | — | QA + Stakeholders |
-| **Production** | `main` | `production` | GHCR (`ghcr.io`) | Public / End users |
+| **Test** | `test` | service-specific preview | — | Internal / Dev team |
+| **UAT** | `uat` | service-specific UAT | Artifact Registry | QA + Stakeholders |
+| **Production** | `prod` | Cloud Run service/revision | Artifact Registry | Public / End users |
 
 ### Secrets and Variables per Environment
 
@@ -444,15 +444,14 @@ Each environment requires its own set of secrets configured in GitHub:
 
 ```
 Per-environment secrets:
-├── VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID
+├── GCP Workload Identity Federation provider and deployer service account (`prod` is manually reviewed; WIF-restricted)
 ├── SONAR_TOKEN / SONAR_PROJECT_KEY / SONAR_ORG
 ├── E2E_BASE_URL (optional, when Playwright targets non-local URL)
 ├── K6_CLOUD_TOKEN / K6_CLOUD_PROJECT_ID (when Grafana k6 is enabled)
 ├── DESCOPE_PROJECT_ID / DESCOPE_BASE_URL / DESCOPE_ISSUER
 ├── DESCOPE_M2M_CLIENT_ID / DESCOPE_M2M_CLIENT_SECRET
 ├── SLACK_WEBHOOK_URL / DISCORD_WEBHOOK_URL
-├── GH_PR_TOKEN (for auto-promotion PRs and Vercel deployment PR comments)
-└── GHCR credentials (main branch only)
+└── Artifact Registry access through WIF (no static JSON key)
 ```
 
 ### Environment-Specific Behavior

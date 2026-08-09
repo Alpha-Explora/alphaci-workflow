@@ -7,6 +7,14 @@ Scope covered:
 - Central workflow caller templates
 - Legacy remote-sourced templates from the original ImplementSprint org are historical references; generated customer workflows should use `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow@v1`.
 
+AlphaCI's current production backend is the seven-service Cloud Run stack in
+`Alpha-Explora/alphaci-be`. Use the GCP Cloud Run workflow and per-service
+callers for that product; the old monolith `alphaci-be` deployment path is
+rollback-only. Validate on `main`, then promote production only through the
+manually reviewed `prod` branch; the current GitHub plan cannot enforce branch
+protection, so WIF rejects every other branch. Do not deploy `main` directly
+to production.
+
 ## Canonical Repository Variable Names
 
 Use these canonical names when configuring repositories:
@@ -43,7 +51,7 @@ Advanced setup:
 Migration and adoption:
 - [migration-existing-repository.md](migration-existing-repository.md)
 
-## Provider Source Paths
+## Provider Source Paths for Generic Templates
 
 Use these source paths to obtain credentials:
 
