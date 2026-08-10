@@ -130,7 +130,7 @@ jobs:
               const data = require('./coverage/coverage-summary.json');
               console.log(data.total.lines.pct);
             ")
-            echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            echo "coverage=$COVERAGE" >> "$GITHUB_OUTPUT"
             echo "Line Coverage: ${COVERAGE}%"
 
             if [ "${ENFORCE_COVERAGE}" != "true" ]; then

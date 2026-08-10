@@ -224,11 +224,13 @@ jobs:
           SAFE_ENVIRONMENT="$(sanitize_label "${ENVIRONMENT}")"
           SAFE_CORRELATION="$(sanitize_label "${CORRELATION_ID:-gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}}")"
 
-          echo "source-branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "safe-ref=${SAFE_REF}" >> "$GITHUB_OUTPUT"
-          echo "safe-system=${SAFE_SYSTEM}" >> "$GITHUB_OUTPUT"
-          echo "safe-environment=${SAFE_ENVIRONMENT}" >> "$GITHUB_OUTPUT"
-          echo "correlation-id=${SAFE_CORRELATION}" >> "$GITHUB_OUTPUT"
+          {
+            echo "source-branch=${BRANCH}"
+            echo "safe-ref=${SAFE_REF}"
+            echo "safe-system=${SAFE_SYSTEM}"
+            echo "safe-environment=${SAFE_ENVIRONMENT}"
+            echo "correlation-id=${SAFE_CORRELATION}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Request runtime deployment approval
         id: runtime_approval
@@ -422,6 +424,7 @@ jobs:
           set -euo pipefail
           set +x
           for attempt in $(seq 1 60); do
+            echo "Waiting for ready Cloud Run revision (attempt ${attempt}/60)..."
             SERVICE_JSON="$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
               --project "${GCP_PROJECT_ID}" \
               --region "${GCP_REGION}" \
@@ -471,8 +474,10 @@ jobs:
             echo "::error::Cloud Run did not report a ready tagged candidate revision."
             exit 1
           fi
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
-          echo "candidate-url=${CANDIDATE_URL}" >> "$GITHUB_OUTPUT"
+          {
+            echo "url=${URL}"
+            echo "candidate-url=${CANDIDATE_URL}"
+          } >> "$GITHUB_OUTPUT"
           echo "revision-name=${REVISION_NAME}" >> "$GITHUB_OUTPUT"
       - name: Probe service health
         id: health

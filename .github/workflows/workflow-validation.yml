@@ -123,6 +123,8 @@ jobs:
           fi
 
           failed=0
+          expression_open="$(printf '$')"
+          expression_open="${expression_open}{"
           while IFS= read -r template; do
             name="$(basename "$template" .yml)"
             metadata="$(dirname "$template")/${name}.properties.json"
@@ -468,19 +470,19 @@ jobs:
           set -euo pipefail
 
           failed=0
-          scan_paths=".github/workflows workflow-templates docs/workflows"
+          scan_paths=(.github/workflows workflow-templates docs/workflows)
 
-          if grep -R -n -E "node-version:[[:space:]]*['\"]?20['\"]?|default:[[:space:]]*['\"]20['\"]" ${scan_paths}; then
+          if grep -R -n -E "node-version:[[:space:]]*['\"]?20['\"]?|default:[[:space:]]*['\"]20['\"]" "${scan_paths[@]}"; then
             echo "::error::Node 20 defaults are not allowed unless a template is explicitly marked legacy."
             failed=1
           fi
 
-          if grep -R -n -E 'actions/(checkout|setup-node|upload-artifact)@v[1-5]([^0-9]|$)' ${scan_paths}; then
+          if grep -R -n -E 'actions/(checkout|setup-node|upload-artifact)@v[1-5]([^0-9]|$)' "${scan_paths[@]}"; then
             echo "::error::Found stale core action major pins. Keep generated and reusable workflows current."
             failed=1
           fi
 
-          if grep -R -n -E 'pipeline[-]caller\.yml|master[-]pipeline|call[-]orchestrator' ${scan_paths}; then
+          if grep -R -n -E 'pipeline[-]caller\.yml|master[-]pipeline|call[-]orchestrator' "${scan_paths[@]}"; then
             echo "::error::Found legacy workflow utility or caller references."
             failed=1
           fi
@@ -517,13 +519,12 @@ jobs:
             fi
 
             grep -Fq "validate-subscription.yml@v1" "$template"
-            grep -Fq "CI_TOKEN: \${{ secrets.CI_TOKEN }}" "$template"
+            expected_ci_token="CI_TOKEN: ${expression_open}{ secrets.CI_TOKEN }}"
+            grep -Fq "${expected_ci_token}" "$template"
             grep -Fq "validation-api-url:" "$template"
           done < <(find workflow-templates/customer -type f -name '*.yml' | sort)
 
           grep -Fq "validation-api-url:" .github/workflows/validate-subscription.yml
-          expression_open='${'
-          expression_open="${expression_open}{"
           expected_validation_env="VALIDATION_API_URL=\"${expression_open} inputs.validation-api-url }}\""
           grep -Fq "${expected_validation_env}" .github/workflows/validate-subscription.yml
           if grep -Fq "https://api.implementsprint.com/v1/ci/validate) || true" .github/workflows/validate-subscription.yml; then
