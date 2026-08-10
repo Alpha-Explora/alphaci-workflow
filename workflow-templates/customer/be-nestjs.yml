@@ -1,0 +1,124 @@
+# Granular backend NestJS workflow.
+# Copy to .github/workflows/backend-ci.yml in a consumer repository.
+
+name: "Backend CI"
+
+on:
+  push:
+    branches: [test, uat, main]
+  pull_request:
+    branches: [test, uat, main]
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: "Service name for display and artifacts"
+        required: true
+        type: string
+        default: "backend"
+      service_path:
+        description: "Relative path to the backend service"
+        required: false
+        type: string
+        default: "."
+      node_version:
+        description: "Node.js version"
+        required: false
+        type: number
+        default: 24
+      coverage_threshold:
+        description: "Minimum coverage percentage"
+        required: false
+        type: number
+        default: 80
+      enforce_coverage:
+        description: "Fail when coverage is below threshold or missing"
+        required: false
+        type: boolean
+        default: true
+      docker_image:
+        description: "Optional image name. Leave empty to skip Docker build."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  security-events: write
+
+env:
+  CI_VALIDATE_URL: https://api.implementsprint.com/v1/ci/validate
+
+jobs:
+  validate-access:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v1
+    with:
+      validation-api-url: ${{ env.CI_VALIDATE_URL }}
+    secrets:
+      CI_TOKEN: ${{ secrets.CI_TOKEN }}
+
+  unit-tests:
+    needs: validate-access
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/backend-tests.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      system-name: ${{ inputs.service_name || 'backend' }}
+      backend-stack: nestjs
+      node-version: ${{ inputs.node_version || 24 }}
+      coverage-threshold: ${{ inputs.coverage_threshold || 80 }}
+      enforce-coverage: ${{ inputs.enforce_coverage != false }}
+      test-command: npm test
+      run-parallel: false
+
+  lint:
+    needs: validate-access
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/lint-check.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      system-name: ${{ inputs.service_name || 'backend' }}
+      node-version: ${{ inputs.node_version || 24 }}
+      lint-command: npm run lint
+
+  security:
+    needs: validate-access
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/security-scan.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      system-name: ${{ inputs.service_name || 'backend' }}
+      node-version: ${{ inputs.node_version || 24 }}
+      fail-on-high: true
+
+  docker:
+    needs: [validate-access, unit-tests, lint, security]
+    if: ${{ inputs.docker_image != '' }}
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/docker-build.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      image-name: ${{ inputs.docker_image }}
+      push-image: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+      scan-vulnerabilities: true
+  deploy-gcp:
+    needs: [validate-access, unit-tests, lint, security]
+    if: ${{ github.event_name == 'push' && (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main') }}
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
+    with:
+      system-name: ${{ inputs.service_name || 'backend' }}
+      working-directory: ${{ inputs.service_path || '.' }}
+      checkout-ref: ${{ github.sha }}
+      source-branch: ${{ github.ref_name }}
+      environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'uat' && 'uat' || 'dev' }}
+      gcp-project-id: ${{ vars.ALPHACI_GCP_PROJECT_ID }}
+      gcp-region: ${{ vars.ALPHACI_GCP_REGION || 'asia-southeast1' }}
+      workload-identity-provider: ${{ vars.ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      deployer-service-account: ${{ vars.ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      artifact-registry-repository: ${{ vars.ALPHACI_ARTIFACT_REGISTRY_REPOSITORY }}
+      image-name: ${{ vars.ALPHACI_IMAGE_NAME || inputs.service_name || 'backend' }}
+      cloud-run-service-name: ${{ vars.ALPHACI_CLOUD_RUN_SERVICE }}
+      runtime-service-account: ${{ vars.ALPHACI_RUNTIME_SERVICE_ACCOUNT }}
+      docker-context: ${{ inputs.service_path || '.' }}
+      dockerfile-path: ${{ vars.ALPHACI_DOCKERFILE_PATH || 'Dockerfile' }}
+      allow-preview: false
+      health-path: ${{ vars.ALPHACI_HEALTH_PATH || '/health' }}
+      correlation-id: ${{ github.run_id }}-${{ github.run_attempt }}
+    secrets: inherit

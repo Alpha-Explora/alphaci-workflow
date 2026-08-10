@@ -1,3 +1,4 @@
+# Contract: docs/workflows/reusable-javascript-quality.md
 name: "Reusable: JavaScript Quality Core"
 
 on:
@@ -146,7 +147,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Review Dependency Changes
         uses: actions/dependency-review-action@v4
@@ -165,7 +166,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager
@@ -250,7 +251,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager
@@ -348,7 +349,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager
@@ -414,7 +415,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager
@@ -480,7 +481,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager
@@ -546,7 +547,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager
@@ -612,7 +613,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager
@@ -721,7 +722,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager
@@ -817,7 +818,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager

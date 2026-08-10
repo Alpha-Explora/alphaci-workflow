@@ -105,10 +105,12 @@ jobs:
           IMAGE_REPO="ghcr.io/${OWNER_LC}/${IMAGE_LC}"
           CACHE_SCOPE=$(echo "${REPOSITORY}-${IMAGE_LC}" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9._-]#-#g')
 
-          echo "owner_lc=${OWNER_LC}" >> "$GITHUB_OUTPUT"
-          echo "image_lc=${IMAGE_LC}" >> "$GITHUB_OUTPUT"
-          echo "image_repo=${IMAGE_REPO}" >> "$GITHUB_OUTPUT"
-          echo "cache_scope=${CACHE_SCOPE}" >> "$GITHUB_OUTPUT"
+          {
+            echo "owner_lc=${OWNER_LC}"
+            echo "image_lc=${IMAGE_LC}"
+            echo "image_repo=${IMAGE_REPO}"
+            echo "cache_scope=${CACHE_SCOPE}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3

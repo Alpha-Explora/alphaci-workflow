@@ -33,8 +33,12 @@ production workflow with its confirmation value.
 
 ## User-facing onboarding layer
 
-- `workflow-templates/`
-  - Stack-specific GitHub workflow templates that generate caller workflows in consuming repositories.
+- `workflow-templates/customer/`
+  - Stack-specific GitHub workflow templates and metadata that generate caller workflows in consuming repositories.
+- `workflow-templates/product/`
+  - Reserved for AlphaCI product-specific callers.
+- `workflow-templates/legacy/`
+  - Retired provider examples kept for historical reference only.
 - `.github/actions/discover-service`
   - Discovery action used by the templates to identify the service folder and infer safe command defaults.
 

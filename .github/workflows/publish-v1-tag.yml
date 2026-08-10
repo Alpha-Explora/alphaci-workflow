@@ -7,6 +7,7 @@
 # ║  kept running stale workflows. This job force-moves v1 to the      ║
 # ║  latest main on every merge, so @v1 can never drift behind again.  ║
 # ╚══════════════════════════════════════════════════════════════════╝
+# Contract: docs/workflows/publish-v1-tag.md
 name: "Publish v1 tag"
 
 on:
@@ -29,7 +30,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 

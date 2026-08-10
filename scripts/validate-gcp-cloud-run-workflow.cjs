@@ -9,16 +9,24 @@ const workflowPath = path.join(
   'gcp-cloud-run-deploy.yml',
 );
 
+const customerTemplateDir = path.join(repoRoot, 'workflow-templates', 'customer');
 const callerTemplatePaths = [
-  'workflow-templates/fe-nextjs.yml',
-  'workflow-templates/fe-react.yml',
-  'workflow-templates/be-nodejs.yml',
-  'workflow-templates/be-nestjs.yml',
-].map((templatePath) => path.join(repoRoot, templatePath));
-const allTemplatePaths = [
-  ...callerTemplatePaths,
-  path.join(repoRoot, 'workflow-templates/standalone-lint.yml'),
-];
+  'fe-nextjs.yml',
+  'fe-react.yml',
+  'be-nodejs.yml',
+  'be-nestjs.yml',
+].map((name) => path.join(customerTemplateDir, name));
+
+function collectYamlFiles(directory) {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collectYamlFiles(entryPath);
+    return entry.isFile() && entry.name.endsWith('.yml') ? [entryPath] : [];
+  });
+}
+
+const allTemplatePaths = collectYamlFiles(path.join(repoRoot, 'workflow-templates'));
 
 const requiredInputs = [
   'system-name',
@@ -168,8 +176,8 @@ for (const templatePath of allTemplatePaths) {
   const relativeTemplatePath = path.relative(repoRoot, templatePath);
   const template = fs.readFileSync(templatePath, 'utf8');
   for (const [label, pattern] of [
-    ['old central workflow repo', /Tone-Lloyd-Sir-Catubag-CICD\/central-workflow/i],
-    ['old stable ref during GCP migration', /@v1\b/],
+    ['old central workflow repo', /(?:Tone-Lloyd-Sir-Catubag-CICD\/central-workflow|Tone-Lloyd-Sir-Catubag-CICD\/cicd-workflow|ImplementSprint\/central-workflow)/i],
+    ['retired smoke ref', /@v0\.1\.7-smoke\b/],
   ]) {
     if (pattern.test(template)) {
       fail(`${relativeTemplatePath} forbidden ${label}`);

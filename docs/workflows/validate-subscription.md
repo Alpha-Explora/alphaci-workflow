@@ -20,7 +20,7 @@ Downstream paid jobs must declare `needs: validate-access` so subscription failu
 ```yaml
 jobs:
   validate-access:
-    uses: Tone-Lloyd-Sir-Catubag-CICD/central-workflow/.github/workflows/validate-subscription.yml@v1
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v1
     with:
       validation-api-url: ${{ env.CI_VALIDATE_URL }}
     secrets:
@@ -28,5 +28,5 @@ jobs:
 
   unit-tests:
     needs: validate-access
-    uses: Tone-Lloyd-Sir-Catubag-CICD/central-workflow/.github/workflows/frontend-tests.yml@v1
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/frontend-tests.yml@v1
 ```

@@ -130,10 +130,10 @@ jobs:
               const data = require('./coverage/coverage-summary.json');
               console.log(data.total.lines.pct);
             ")
-            echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            echo "coverage=$COVERAGE" >> "$GITHUB_OUTPUT"
             echo "Line Coverage: ${COVERAGE}%"
 
-            THRESHOLD=${{ inputs.coverage-threshold }}
+            THRESHOLD="${{ inputs.coverage-threshold }}"
             COVERAGE="${COVERAGE}" THRESHOLD="${THRESHOLD}" node -e "
               const coverage = Number(process.env.COVERAGE);
               const threshold = Number(process.env.THRESHOLD);
@@ -144,7 +144,7 @@ jobs:
               console.log('Coverage ' + coverage + '% meets threshold ' + threshold + '%');
             "
           else
-            echo "coverage=unknown" >> $GITHUB_OUTPUT
+            echo "coverage=unknown" >> "$GITHUB_OUTPUT"
             echo "Warning: Coverage summary not found"
           fi
 

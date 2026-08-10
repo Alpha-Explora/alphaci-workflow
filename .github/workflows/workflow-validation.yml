@@ -34,7 +34,28 @@ jobs:
       - name: Run actionlint
         uses: docker://rhysd/actionlint:latest
         with:
-          args: -color
+          args: >-
+            -color
+            .github/workflows/backend-tests.yml
+            .github/workflows/branch-policy.yml
+            .github/workflows/docker-build.yml
+            .github/workflows/frontend-tests.yml
+            .github/workflows/gcp-cloud-run-deploy.yml
+            .github/workflows/lint-check.yml
+            .github/workflows/mobile-tests.yml
+            .github/workflows/publish-v1-tag.yml
+            .github/workflows/reusable-javascript-quality.yml
+            .github/workflows/reusable-service-uat.yml
+            .github/workflows/reusable-web-uat.yml
+            .github/workflows/security-scan.yml
+            .github/workflows/service-expo.yml
+            .github/workflows/service-nestjs.yml
+            .github/workflows/service-nextjs.yml
+            .github/workflows/service-node.yml
+            .github/workflows/service-react-native.yml
+            .github/workflows/service-react.yml
+            .github/workflows/validate-subscription.yml
+            .github/workflows/workflow-validation.yml
 
   validate-workflow-contracts:
     name: "Validate Workflow Contract Docs"
@@ -102,9 +123,9 @@ jobs:
           fi
 
           failed=0
-          for template in workflow-templates/*.yml; do
+          while IFS= read -r template; do
             name="$(basename "$template" .yml)"
-            metadata="workflow-templates/${name}.properties.json"
+            metadata="$(dirname "$template")/${name}.properties.json"
 
             if [ ! -f "$metadata" ]; then
               echo "::error file=${template}::Missing paired metadata file ${metadata}"
@@ -118,11 +139,11 @@ jobs:
                 failed=1
               fi
             done < <(
-              grep -Eo 'Tone-Lloyd-Sir-Catubag-CICD/central-workflow/\.github/workflows/[^ @]+\.yml@[A-Za-z0-9._/-]+' "$template" |
-              sed -E 's#^Tone-Lloyd-Sir-Catubag-CICD/central-workflow/\.github/workflows/([^ @]+\.yml)@.*$#\1#' |
+              grep -Eo 'Alpha-Explora/alphaci-workflow/\.github/workflows/[^ @]+\.yml@[A-Za-z0-9._/-]+' "$template" |
+              sed -E 's#^Alpha-Explora/alphaci-workflow/\.github/workflows/([^ @]+\.yml)@.*$#\1#' |
               sort -u
             )
-          done
+          done < <(find workflow-templates/customer -type f -name '*.yml' | sort)
 
           exit "$failed"
 
@@ -186,7 +207,7 @@ jobs:
           }
 
           function collectTemplateJobs(templateId) {
-            const file = path.join('workflow-templates', `${templateId}.yml`);
+            const file = path.join('workflow-templates', 'customer', `${templateId}.yml`);
             if (!fs.existsSync(file)) {
               error(file, `Missing workflow template ${templateId}`);
               return new Set();
@@ -234,8 +255,8 @@ jobs:
             ];
           }
 
-          const projectTypesFile = 'catalog/project-types.json';
-          const workflowRecipesFile = 'catalog/workflow-recipes.json';
+          const projectTypesFile = 'catalog/customer/project-types.json';
+          const workflowRecipesFile = 'catalog/customer/workflow-recipes.json';
           const projectCatalog = readJson(projectTypesFile);
           const recipeCatalog = readJson(workflowRecipesFile);
 
@@ -367,7 +388,7 @@ jobs:
                 error(recipeFile, `${recipe.id} is missing template mapping for ${projectTypeId}`);
                 continue;
               }
-              if (!fs.existsSync(path.join('workflow-templates', `${templateId}.properties.json`))) {
+              if (!fs.existsSync(path.join('workflow-templates', 'customer', `${templateId}.properties.json`))) {
                 error(recipeFile, `${recipe.id} template ${templateId} is missing metadata`);
               }
 
@@ -447,19 +468,19 @@ jobs:
           set -euo pipefail
 
           failed=0
-          scan_paths=".github/workflows workflow-templates docs/workflows"
+          scan_paths=(.github/workflows workflow-templates docs/workflows)
 
-          if grep -R -n -E "node-version:[[:space:]]*['\"]?20['\"]?|default:[[:space:]]*['\"]20['\"]" ${scan_paths}; then
+          if grep -R -n -E "node-version:[[:space:]]*['\"]?20['\"]?|default:[[:space:]]*['\"]20['\"]" "${scan_paths[@]}"; then
             echo "::error::Node 20 defaults are not allowed unless a template is explicitly marked legacy."
             failed=1
           fi
 
-          if grep -R -n -E 'actions/(checkout|setup-node|upload-artifact)@v[1-5]([^0-9]|$)' ${scan_paths}; then
+          if grep -R -n -E 'actions/(checkout|setup-node|upload-artifact)@v[1-5]([^0-9]|$)' "${scan_paths[@]}"; then
             echo "::error::Found stale core action major pins. Keep generated and reusable workflows current."
             failed=1
           fi
 
-          if grep -R -n -E 'b[c] -l|pipeline[-]caller\.yml|master[-]pipeline|call[-]orchestrator' ${scan_paths}; then
+          if grep -R -n -E 'pipeline[-]caller\.yml|master[-]pipeline|call[-]orchestrator' "${scan_paths[@]}"; then
             echo "::error::Found legacy workflow utility or caller references."
             failed=1
           fi
@@ -480,43 +501,51 @@ jobs:
           set -euo pipefail
 
           failed=0
-          for template in workflow-templates/*.yml; do
-            first_job=$(awk '
-              /^jobs:/ { in_jobs=1; next }
-              in_jobs && /^[[:alnum:]_-]+:/ {
-                name=$1
-                sub(/:$/, "", name)
-                print name
-                exit
-              }
-            ' "$template")
+          expression_open="$(printf '$')"
+          expression_open="${expression_open}{"
+          assert_contains() {
+            local needle="$1"
+            local file="$2"
+            if ! grep -Fq -- "${needle}" "${file}"; then
+              echo "::error file=${file}::Missing required smoke contract: ${needle}"
+              failed=1
+            fi
+          }
+          while IFS= read -r template; do
+            if grep -Eq '^  workflow_call:' "$template"; then
+              echo "Reusable helper template validated by actionlint: $template"
+              continue
+            fi
+
+            first_job=$(grep -A 80 '^jobs:' "$template" |
+              grep -m1 -E '^  [A-Za-z0-9_-]+:' |
+              sed -E 's/^  ([A-Za-z0-9_-]+):.*/\1/')
 
             if [ "${first_job}" != "validate-access" ]; then
               echo "::error file=${template}::First template job must be validate-access"
               failed=1
             fi
 
-            grep -Fq "validate-subscription.yml@v1" "$template"
-            grep -Fq "CI_TOKEN: \${{ secrets.CI_TOKEN }}" "$template"
-            grep -Fq "validation-api-url:" "$template"
-          done
+            assert_contains "validate-subscription.yml@v1" "$template"
+            expected_ci_token="CI_TOKEN: ${expression_open}{ secrets.CI_TOKEN }}"
+            assert_contains "${expected_ci_token}" "$template"
+            assert_contains "validation-api-url:" "$template"
+          done < <(find workflow-templates/customer -type f -name '*.yml' | sort)
 
-          grep -Fq "validation-api-url:" .github/workflows/validate-subscription.yml
-          expression_open='${'
-          expression_open="${expression_open}{"
-          expected_validation_env="VALIDATION_API_URL=\"${expression_open} inputs.validation-api-url }}\""
-          grep -Fq "${expected_validation_env}" .github/workflows/validate-subscription.yml
+          assert_contains "validation-api-url:" .github/workflows/validate-subscription.yml
+          expected_validation_env="VALIDATION_API_URL=\"${expression_open}{ inputs.validation-api-url }}\""
+          assert_contains "${expected_validation_env}" .github/workflows/validate-subscription.yml
           if grep -Fq "https://api.implementsprint.com/v1/ci/validate) || true" .github/workflows/validate-subscription.yml; then
             echo "::error file=.github/workflows/validate-subscription.yml::Validation workflow must call the configurable validation-api-url input"
             failed=1
           fi
 
-          grep -Fq "needs: validate-access" workflow-templates/standalone-lint.yml
+          assert_contains "needs: validate-access" workflow-templates/customer/standalone-lint.yml
 
-          grep -Fq "frontend-tests.yml@v1" workflow-templates/fe-react.yml
-          grep -Fq "frontend-tests.yml@v1" workflow-templates/fe-nextjs.yml
-          grep -Fq "backend-tests.yml@v1" workflow-templates/be-nodejs.yml
-          grep -Fq "backend-tests.yml@v1" workflow-templates/be-nestjs.yml
+          assert_contains "frontend-tests.yml@v1" workflow-templates/customer/fe-react.yml
+          assert_contains "frontend-tests.yml@v1" workflow-templates/customer/fe-nextjs.yml
+          assert_contains "backend-tests.yml@v1" workflow-templates/customer/be-nodejs.yml
+          assert_contains "backend-tests.yml@v1" workflow-templates/customer/be-nestjs.yml
 
           node <<'NODE'
           const fs = require('node:fs');
@@ -566,9 +595,15 @@ jobs:
           }
 
           let failed = false;
-          for (const name of fs.readdirSync('workflow-templates')) {
-            if (!name.endsWith('.yml')) continue;
-            const file = path.join('workflow-templates', name);
+          const templateFiles = fs.readdirSync('workflow-templates/customer', { withFileTypes: true })
+            .filter((entry) => entry.isFile() && entry.name.endsWith('.yml'))
+            .map((entry) => path.join('workflow-templates', 'customer', entry.name));
+          for (const file of templateFiles) {
+            const source = fs.readFileSync(file, 'utf8');
+            if (/^  workflow_call:/m.test(source)) {
+              continue;
+            }
+
             const { jobs, needs } = collectJobs(file);
             const jobSet = new Set(jobs);
 

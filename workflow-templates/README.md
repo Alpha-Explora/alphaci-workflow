@@ -1,10 +1,18 @@
 # Granular Workflow Templates
 
-These templates are the consumer-facing entrypoints for new repositories.
+These templates are the customer-facing entrypoints for new repositories.
+
+The central repository is organized into three logical areas:
+
+- `workflow-templates/customer/` contains caller templates and their catalog metadata for generated customer repositories.
+- `workflow-templates/product/` is reserved for AlphaCI product-specific caller templates.
+- `workflow-templates/legacy/` contains retired provider-specific examples kept only for historical migration reference.
+
+GitHub Actions runtime workflows remain flat under `.github/workflows/`; GitHub does not load reusable workflows from subdirectories.
 
 - Copy the closest `*.yml` file into `.github/workflows/` in the consumer repo.
 - Keep ordering in the copied workflow with `needs`.
-- Call central reusable workflows directly from `Alpha-Explora/alphaci-workflow/.github/workflows/*.yml@v1` during the GCP migration branch.
+- Call central reusable workflows directly from `Alpha-Explora/alphaci-workflow/.github/workflows/*.yml@v1`.
 - Every template starts with `validate-access`, then deploys successful pushes from `test`, `uat`, and `main` through `gcp-cloud-run-deploy.yml` using repository variables and Workload Identity Federation.
 - Every `validate-access` job passes `validation-api-url` from `env.CI_VALIDATE_URL` so generated workflows can target the deployed backend or MVP tunnel.
 - Do not use old long-pipeline caller files for new granular workflows.
@@ -27,13 +35,13 @@ jobs while keeping `validate-access` first.
 
 Generated repositories must receive these repository variables before deploy-gcp can run:
 
-- ALPHACI_GCP_PROJECT_ID`r
-- ALPHACI_GCP_REGION`r
-- ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER`r
-- ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT`r
-- ALPHACI_ARTIFACT_REGISTRY_REPOSITORY`r
-- ALPHACI_CLOUD_RUN_SERVICE`r
-- ALPHACI_RUNTIME_SERVICE_ACCOUNT`r
-- ALPHACI_IMAGE_NAME`r
+- `ALPHACI_GCP_PROJECT_ID`
+- `ALPHACI_GCP_REGION`
+- `ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT`
+- `ALPHACI_ARTIFACT_REGISTRY_REPOSITORY`
+- `ALPHACI_CLOUD_RUN_SERVICE`
+- `ALPHACI_RUNTIME_SERVICE_ACCOUNT`
+- `ALPHACI_IMAGE_NAME`
 
 Do not add GOOGLE_APPLICATION_CREDENTIALS, service account JSON, VERCEL_TOKEN, or RENDER_API_KEY to generated deployment workflows.

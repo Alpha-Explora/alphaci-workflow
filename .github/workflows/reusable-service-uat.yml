@@ -1,3 +1,4 @@
+# Contract: docs/workflows/reusable-service-uat.md
 name: "Reusable: Service UAT Gate"
 
 on:
@@ -107,7 +108,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Run UAT Deployment Command
         env:
@@ -175,7 +176,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager

@@ -130,7 +130,7 @@ jobs:
               const data = require('./coverage/coverage-summary.json');
               console.log(data.total.lines.pct);
             ")
-            echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            echo "coverage=$COVERAGE" >> "$GITHUB_OUTPUT"
             echo "Line Coverage: ${COVERAGE}%"
 
             if [ "${ENFORCE_COVERAGE}" != "true" ]; then
@@ -148,7 +148,7 @@ jobs:
               console.log('Coverage ' + coverage + '% meets threshold ' + threshold + '%');
             "
           else
-            echo "coverage=unknown" >> $GITHUB_OUTPUT
+            echo "coverage=unknown" >> "$GITHUB_OUTPUT"
             if [ "${ENFORCE_COVERAGE}" = "true" ]; then
               echo "coverage/coverage-summary.json not found - failing coverage gate"
               exit 1

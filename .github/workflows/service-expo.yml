@@ -1,3 +1,4 @@
+# Contract: docs/workflows/service-expo.md
 name: "Service: Expo"
 
 on:
@@ -147,7 +148,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Detect Package Manager
         id: package-manager

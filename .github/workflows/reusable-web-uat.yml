@@ -1,3 +1,4 @@
+# Contract: docs/workflows/reusable-web-uat.md
 name: "Reusable: Web UAT"
 
 on:
@@ -137,7 +138,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Run UAT Deployment Command
         env:
@@ -231,7 +232,7 @@ jobs:
         working-directory: ./${{ inputs.service-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1

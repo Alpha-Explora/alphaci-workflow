@@ -1,4 +1,5 @@
-# Contract: resolves per-branch governance for AlphaCI generated pipelines.
+# Contract: docs/workflows/branch-policy.md
+# Resolves per-branch governance for AlphaCI generated pipelines.
 #
 # Centralised deliberately: coverage thresholds, lint strictness, and the
 # SonarCloud gate policy are AlphaCI governance rules, so they must not be
