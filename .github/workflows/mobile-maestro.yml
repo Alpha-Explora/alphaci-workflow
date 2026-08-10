@@ -89,7 +89,7 @@ jobs:
               STACK="kotlin"
               ;;
             *)
-              echo "Ã¢Å’ Unsupported project-type '${STACK}'. Allowed values: auto, react-native, expo, kotlin."
+              echo "�¢�� Unsupported project-type '${STACK}'. Allowed values: auto, react-native, expo, kotlin."
               exit 1
               ;;
           esac
@@ -103,14 +103,14 @@ jobs:
             elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
               PM="npm"
             else
-              echo "Ã¢Å’ package.json or lockfile is required for React Native/Expo Maestro runs."
+              echo "�¢�� package.json or lockfile is required for React Native/Expo Maestro runs."
               exit 1
             fi
           fi
 
           echo "stack=${STACK}" >> "$GITHUB_OUTPUT"
           echo "package_manager=${PM}" >> "$GITHUB_OUTPUT"
-          echo "Ã¢Å“â€¦ Detected stack=${STACK}, package_manager=${PM}"
+          echo "�¢��â�¦ Detected stack=${STACK}, package_manager=${PM}"
 
       - name: Setup Node.js ${{ inputs.node-version }} (npm)
         if: ${{ steps.detect-toolchain.outputs.stack == 'node-mobile' && steps.detect-toolchain.outputs.package_manager == 'npm' }}
@@ -157,7 +157,7 @@ jobs:
       - name: Validate Maestro workspace
         run: |
           if [ ! -d ".maestro" ]; then
-            echo "Ã¢Å’ Required .maestro directory was not found."
+            echo "�¢�� Required .maestro directory was not found."
             echo "Create .maestro and add at least one flow file before enabling Maestro CI."
             exit 1
           fi
@@ -168,12 +168,12 @@ jobs:
           done < <(find .maestro -type f \( -name "*.yaml" -o -name "*.yml" \) -print0)
 
           if [ "${#MAESTRO_FLOW_FILES[@]}" -eq 0 ]; then
-            echo "Ã¢Å’ No Maestro flow files were found under .maestro/."
+            echo "�¢�� No Maestro flow files were found under .maestro/."
             echo "Add at least one .yaml or .yml flow file before enabling Maestro CI."
             exit 1
           fi
 
-          echo "Ã¢Å“â€¦ Found ${#MAESTRO_FLOW_FILES[@]} Maestro flow file(s)."
+          echo "�¢��â�¦ Found ${#MAESTRO_FLOW_FILES[@]} Maestro flow file(s)."
 
       - name: Install Maestro CLI
         run: |
@@ -195,7 +195,7 @@ jobs:
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ -f "${EXPECTED_APK}" ]; then
-            echo "Ã¢Å“â€¦ Expected APK exists: ${EXPECTED_APK}"
+            echo "�¢��â�¦ Expected APK exists: ${EXPECTED_APK}"
             exit 0
           fi
 
@@ -207,9 +207,9 @@ jobs:
           if [ -n "${CANDIDATE}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
             cp "${CANDIDATE}" "${EXPECTED_APK}"
-            echo "Ã¢Å“â€¦ Normalized APK path: ${CANDIDATE} -> ${EXPECTED_APK}"
+            echo "�¢��â�¦ Normalized APK path: ${CANDIDATE} -> ${EXPECTED_APK}"
           else
-            echo "Ã¢Å’ No Android APK was found in the downloaded artifact payload."
+            echo "�¢�� No Android APK was found in the downloaded artifact payload."
             exit 1
           fi
 
@@ -233,13 +233,13 @@ jobs:
           if [ -n "${TARGET_PROPS}" ]; then
             if grep -q '^kotlinVersion=' "${TARGET_PROPS}"; then
               CURRENT_VERSION=$(grep '^kotlinVersion=' "${TARGET_PROPS}" | head -n 1 | cut -d'=' -f2-)
-              echo "Ã¢â€žÂ¹Ã¯Â¸ Preserving project kotlinVersion=${CURRENT_VERSION}"
+              echo "�¢â�ž�¹�¯�¸ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
               echo 'kotlinVersion=2.0.21' >> "${TARGET_PROPS}"
-              echo "Ã¢Å“â€¦ Added fallback kotlinVersion=2.0.21"
+              echo "�¢��â�¦ Added fallback kotlinVersion=2.0.21"
             fi
           else
-            echo "Ã¢â€žÂ¹Ã¯Â¸ No gradle.properties file found for kotlinVersion fallback."
+            echo "�¢â�ž�¹�¯�¸ No gradle.properties file found for kotlinVersion fallback."
           fi
 
       - name: Setup JDK ${{ inputs.java-version }}
@@ -278,7 +278,7 @@ jobs:
           }
 
           if [ -f "${EXPECTED_APK}" ]; then
-            echo "Ã¢Å“â€¦ Found app APK at expected path."
+            echo "�¢��â�¦ Found app APK at expected path."
             exit 0
           fi
 
@@ -287,21 +287,21 @@ jobs:
           if [ -n "${CANDIDATE}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
             cp "${CANDIDATE}" "${EXPECTED_APK}"
-            echo "Ã¢Å“â€¦ Normalized APK path for Maestro: ${CANDIDATE} -> ${EXPECTED_APK}"
+            echo "�¢��â�¦ Normalized APK path for Maestro: ${CANDIDATE} -> ${EXPECTED_APK}"
             exit 0
           fi
 
           if [ "${SKIP_BUILD}" = "true" ]; then
-            echo "Ã¢Å’ skip-build mode expected a pre-built artifact, but no APK was found after normalization."
+            echo "�¢�� skip-build mode expected a pre-built artifact, but no APK was found after normalization."
             echo "Ensure build-artifact-name points to a valid Android artifact payload from the build stage."
             exit 1
           fi
 
-          echo "Ã¢â€žÂ¹Ã¯Â¸ APK candidate missing. Triggering fallback build command once..."
+          echo "�¢â�ž�¹�¯�¸ APK candidate missing. Triggering fallback build command once..."
           ${ANDROID_BUILD_COMMAND}
 
           if [ -f "${EXPECTED_APK}" ]; then
-            echo "Ã¢Å“â€¦ Fallback build produced expected APK."
+            echo "�¢��â�¦ Fallback build produced expected APK."
             exit 0
           fi
 
@@ -309,18 +309,18 @@ jobs:
           if [ -n "${CANDIDATE_AFTER}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
             cp "${CANDIDATE_AFTER}" "${EXPECTED_APK}"
-            echo "Ã¢Å“â€¦ Normalized APK path for Maestro after fallback build."
+            echo "�¢��â�¦ Normalized APK path for Maestro after fallback build."
             exit 0
           fi
 
-          echo "Ã¢Å’ Unable to find or produce Android app APK for Maestro."
+          echo "�¢�� Unable to find or produce Android app APK for Maestro."
           if [ -d "android/app/build/outputs/apk" ]; then
-            echo "Ã°Å¸â€œ android/app APK output tree:"
+            echo "�°�¸â�� android/app APK output tree:"
             find android/app/build/outputs/apk -maxdepth 4 -type f | sort
           fi
 
           if [ -d "app/build/outputs/apk" ]; then
-            echo "Ã°Å¸â€œ app APK output tree:"
+            echo "�°�¸â�� app APK output tree:"
             find app/build/outputs/apk -maxdepth 4 -type f | sort
           fi
 
@@ -355,7 +355,7 @@ jobs:
           export PATH="$HOME/.maestro/bin:$PATH"
           : > "${LOG_FILE}"
 
-          echo "Ã¢Â³ Waiting for Android emulator boot completion..."
+          echo "�¢�³ Waiting for Android emulator boot completion..."
           SERIAL=""
           for ATTEMPT in $(seq 1 60); do
             SERIAL="$(adb devices | awk 'NR>1 && $1 ~ /^emulator-/ {print $1; exit}')"
@@ -366,12 +366,12 @@ jobs:
           done
 
           if [ -z "${SERIAL}" ]; then
-            echo "Ã¢Å’ Could not detect emulator serial after 60s."
+            echo "�¢�� Could not detect emulator serial after 60s."
             adb devices -l || true
             exit 1
           fi
 
-          echo "Ã¢â€žÂ¹Ã¯Â¸ Using emulator serial: ${SERIAL}"
+          echo "�¢â�ž�¹�¯�¸ Using emulator serial: ${SERIAL}"
           adb -s "${SERIAL}" wait-for-device
 
           BOOT_RETRIES=0
@@ -385,7 +385,7 @@ jobs:
 
             if [ "${STATE}" = "offline" ]; then
               OFFLINE_RESETS=$((OFFLINE_RESETS + 1))
-              echo "Ã¢Å¡Â Ã¯Â¸ Emulator is offline (attempt ${OFFLINE_RESETS}/${MAX_OFFLINE_RESETS}); resetting adb."
+              echo "�¢�¡� �¯�¸ Emulator is offline (attempt ${OFFLINE_RESETS}/${MAX_OFFLINE_RESETS}); resetting adb."
               adb kill-server || true
               sleep 2
               adb start-server || true
@@ -393,7 +393,7 @@ jobs:
             fi
 
             if [ "${OFFLINE_RESETS}" -ge "${MAX_OFFLINE_RESETS}" ]; then
-              echo "Ã¢Å’ Emulator remained offline after ${MAX_OFFLINE_RESETS} adb resets."
+              echo "�¢�� Emulator remained offline after ${MAX_OFFLINE_RESETS} adb resets."
               adb devices -l || true
               exit 1
             fi
@@ -407,8 +407,8 @@ jobs:
             fi
 
             if [ "${BOOT_RETRIES}" -ge "${MAX_BOOT_RETRIES}" ]; then
-              echo "Ã¢Å’ Emulator boot not ready after ${MAX_BOOT_RETRIES}s."
-              echo "Ã¢â€žÂ¹Ã¯Â¸ Last state: deviceState=${STATE:-unknown}, sys.boot_completed=${SYS_BOOT_COMPLETED:-unset}, dev.bootcomplete=${DEV_BOOT_COMPLETED:-unset}, init.svc.bootanim=${BOOT_ANIM:-unset}"
+              echo "�¢�� Emulator boot not ready after ${MAX_BOOT_RETRIES}s."
+              echo "�¢â�ž�¹�¯�¸ Last state: deviceState=${STATE:-unknown}, sys.boot_completed=${SYS_BOOT_COMPLETED:-unset}, dev.bootcomplete=${DEV_BOOT_COMPLETED:-unset}, init.svc.bootanim=${BOOT_ANIM:-unset}"
               adb devices -l || true
               adb -s "${SERIAL}" shell getprop | head -80 || true
               exit 1
@@ -418,7 +418,7 @@ jobs:
           done
 
           adb -s "${SERIAL}" shell input keyevent 82 || true
-          echo "Ã¢Å“â€¦ Emulator boot completed"
+          echo "�¢��â�¦ Emulator boot completed"
 
           APP_APK="android/app/build/outputs/apk/debug/app-debug.apk"
           if [ ! -f "${APP_APK}" ]; then
@@ -438,11 +438,11 @@ jobs:
           fi
 
           if [ -z "${APP_APK}" ] || [ ! -f "${APP_APK}" ]; then
-            echo "Ã¢Å’ Could not resolve app APK path for Maestro execution."
+            echo "�¢�� Could not resolve app APK path for Maestro execution."
             exit 1
           fi
 
-          echo "Ã°Å¸â€œÂ¦ Installing APK: ${APP_APK}"
+          echo "�°�¸â���¦ Installing APK: ${APP_APK}"
           adb install -r "${APP_APK}"
 
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
@@ -454,7 +454,7 @@ jobs:
                 *"--include-tags"*|*"--exclude-tags"*) ;;
                 *)
                   MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags ios"
-                  echo "Ã¢â€žÂ¹Ã¯Â¸ Auto-applied Maestro Android filter: --exclude-tags ios"
+                  echo "�¢â�ž�¹�¯�¸ Auto-applied Maestro Android filter: --exclude-tags ios"
                   ;;
               esac
               ;;
@@ -463,21 +463,21 @@ jobs:
           FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
           if [ -n "${FLOW_APP_ID}" ]; then
             if adb shell pm list packages | tr -d '\r' | grep -q "^package:${FLOW_APP_ID}$"; then
-              echo "Ã¢Å“â€¦ Flow appId is installed: ${FLOW_APP_ID}"
+              echo "�¢��â�¦ Flow appId is installed: ${FLOW_APP_ID}"
               adb shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
             else
-              echo "Ã¢Å’ Flow appId not installed on emulator: ${FLOW_APP_ID}"
-              echo "Ã°Å¸â€œÂ¦ Installed package sample:"
+              echo "�¢�� Flow appId not installed on emulator: ${FLOW_APP_ID}"
+              echo "�°�¸â���¦ Installed package sample:"
               adb shell pm list packages | head -n 30 || true
               exit 1
             fi
           else
-            echo "Ã¢Å¡Â Ã¯Â¸ No appId found in Maestro flow files."
+            echo "�¢�¡� �¯�¸ No appId found in Maestro flow files."
           fi
 
-          echo "Ã¢â€žÂ¹Ã¯Â¸ Maestro command: ${MAESTRO_CMD}"
+          echo "�¢â�ž�¹�¯�¸ Maestro command: ${MAESTRO_CMD}"
 
-          echo "Ã¢â€“Â¶Ã¯Â¸ Running Maestro tests..."
+          echo "�¢â���¶�¯�¸ Running Maestro tests..."
           set +e
           bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
           MAESTRO_STATUS=$?
@@ -518,5 +518,5 @@ jobs:
       - name: Fail if Maestro Android tests failed
         if: ${{ steps.maestro-android-run.outputs.maestro_status != '0' }}
         run: |
-          echo "Ã¢Å’ Maestro Android tests failed with exit code ${{ steps.maestro-android-run.outputs.maestro_status }}."
+          echo "�¢�� Maestro Android tests failed with exit code ${{ steps.maestro-android-run.outputs.maestro_status }}."
           exit 1

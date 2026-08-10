@@ -181,12 +181,12 @@ jobs:
           )
 
           if [ -z "${MISSING_PACKAGES}" ]; then
-            echo "Ã¢Å“â€¦ Required React Native CLI dependencies are present."
+            echo "�¢��â�¦ Required React Native CLI dependencies are present."
             exit 0
           fi
 
-          echo "Ã¢Å¡Â Ã¯Â¸ Missing React Native CLI dependencies: ${MISSING_PACKAGES}"
-          echo "Ã¢â€žÂ¹Ã¯Â¸ Installing missing dependencies to keep CI builds stable."
+          echo "�¢�¡� �¯�¸ Missing React Native CLI dependencies: ${MISSING_PACKAGES}"
+          echo "�¢â�ž�¹�¯�¸ Installing missing dependencies to keep CI builds stable."
 
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable
@@ -214,16 +214,16 @@ jobs:
           done < <(find . -type f -path '*/android/app/src/main/java/*/MainApplication.java' -print0)
 
           if [ "${#MAIN_APP_FILES[@]}" -eq 0 ]; then
-            echo "Ã¢â€žÂ¹Ã¯Â¸ No MainApplication.java files found to normalize."
+            echo "�¢â�ž�¹�¯�¸ No MainApplication.java files found to normalize."
             exit 0
           fi
 
           for MAIN_APP in "${MAIN_APP_FILES[@]}"; do
             if grep -q 'DefaultNewArchitectureEntryPoint\.releaseLevel' "${MAIN_APP}"; then
               perl -0pi -e 's/DefaultNewArchitectureEntryPoint\.releaseLevel\s*=\s*([^;]+);/DefaultNewArchitectureEntryPoint.setReleaseLevel($1);/g' "${MAIN_APP}"
-              echo "Ã¢Å“â€¦ Normalized releaseLevel API usage in ${MAIN_APP}"
+              echo "�¢��â�¦ Normalized releaseLevel API usage in ${MAIN_APP}"
             else
-              echo "Ã¢â€žÂ¹Ã¯Â¸ ${MAIN_APP} already uses compatible release level API."
+              echo "�¢â�ž�¹�¯�¸ ${MAIN_APP} already uses compatible release level API."
             fi
           done
 
@@ -233,12 +233,12 @@ jobs:
           BUILD_GRADLE="android/app/build.gradle"
 
           if [ ! -f "${BUILD_GRADLE}" ]; then
-            echo "Ã¢â€žÂ¹Ã¯Â¸ No ${BUILD_GRADLE} file found to patch."
+            echo "�¢â�ž�¹�¯�¸ No ${BUILD_GRADLE} file found to patch."
             exit 0
           fi
 
           if grep -Fq 'debuggableVariants = []' "${BUILD_GRADLE}"; then
-            echo "Ã¢â€žÂ¹Ã¯Â¸ Debug JS bundling is already forced in ${BUILD_GRADLE}."
+            echo "�¢â�ž�¹�¯�¸ Debug JS bundling is already forced in ${BUILD_GRADLE}."
             exit 0
           fi
 
@@ -255,10 +255,10 @@ jobs:
           )
 
           if needle not in content:
-              raise SystemExit(f"Ã¢Å’ Unable to find a react {{ block in {build_gradle_path}.")
+              raise SystemExit(f"�¢�� Unable to find a react {{ block in {build_gradle_path}.")
 
           build_gradle_path.write_text(content.replace(needle, replacement, 1), encoding="utf-8")
-          print(f"Ã¢Å“â€¦ Forced debug JS bundling in {build_gradle_path}.")
+          print(f"�¢��â�¦ Forced debug JS bundling in {build_gradle_path}.")
           PY
 
       - name: Resolve Gradle Wrapper Directory
@@ -271,7 +271,7 @@ jobs:
           else
             WRAPPER_PATH=$(find . -maxdepth 4 -type f -name gradlew | head -n 1)
             if [ -z "${WRAPPER_PATH}" ]; then
-              echo "Ã¢Å’ Could not find gradlew in project."
+              echo "�¢�� Could not find gradlew in project."
               exit 1
             fi
             GRADLE_DIR=$(dirname "${WRAPPER_PATH}")
@@ -279,7 +279,7 @@ jobs:
           fi
 
           echo "gradle_dir=${GRADLE_DIR}" >> "$GITHUB_OUTPUT"
-          echo "Ã¢Å“â€¦ Using gradle wrapper directory: ${GRADLE_DIR}"
+          echo "�¢��â�¦ Using gradle wrapper directory: ${GRADLE_DIR}"
 
       - name: Ensure Kotlin Version Fallback
         run: |
@@ -287,10 +287,10 @@ jobs:
             TARGET_PROPS="${{ steps.gradle.outputs.gradle_dir }}/gradle.properties"
             if grep -q '^kotlinVersion=' "${TARGET_PROPS}"; then
               CURRENT_VERSION=$(grep '^kotlinVersion=' "${TARGET_PROPS}" | head -n 1 | cut -d'=' -f2-)
-              echo "Ã¢â€žÂ¹Ã¯Â¸ Preserving project kotlinVersion=${CURRENT_VERSION}"
+              echo "�¢â�ž�¹�¯�¸ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
               echo 'kotlinVersion=2.0.21' >> "${TARGET_PROPS}"
-              echo "Ã¢Å“â€¦ Added fallback kotlinVersion=2.0.21"
+              echo "�¢��â�¦ Added fallback kotlinVersion=2.0.21"
             fi
           fi
 
@@ -311,7 +311,7 @@ jobs:
           chmod +x gradlew
 
           if [ -n "${CUSTOM_ANDROID_BUILD_COMMAND}" ]; then
-            echo "Ã¢â€žÂ¹Ã¯Â¸ Running custom Android build command."
+            echo "�¢â�ž�¹�¯�¸ Running custom Android build command."
             bash -c "${CUSTOM_ANDROID_BUILD_COMMAND}"
             exit 0
           fi
@@ -330,18 +330,18 @@ jobs:
           AAB_PATH=$(find "${SEARCH_ROOT}" -type f -name "*.aab" -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n 1 | cut -f2-)
 
           if [ -z "${APK_PATH}" ] && [ -z "${AAB_PATH}" ]; then
-            echo "Ã¢Å’ No APK/AAB outputs found under ${SEARCH_ROOT}."
+            echo "�¢�� No APK/AAB outputs found under ${SEARCH_ROOT}."
             exit 1
           fi
 
           if [ -n "${APK_PATH}" ]; then
             cp "${APK_PATH}" "${OUTPUT_DIR}/${{ inputs.system-name }}-android.apk"
-            echo "Ã¢Å“â€¦ Staged APK: ${APK_PATH}"
+            echo "�¢��â�¦ Staged APK: ${APK_PATH}"
           fi
 
           if [ -n "${AAB_PATH}" ]; then
             cp "${AAB_PATH}" "${OUTPUT_DIR}/${{ inputs.system-name }}-android.aab"
-            echo "Ã¢Å“â€¦ Staged AAB: ${AAB_PATH}"
+            echo "�¢��â�¦ Staged AAB: ${AAB_PATH}"
           fi
 
       - name: Upload Android Artifact

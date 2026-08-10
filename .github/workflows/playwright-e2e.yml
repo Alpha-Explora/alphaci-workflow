@@ -1,8 +1,8 @@
 # Contract: docs/workflows/playwright-e2e.md
-# Ã¢â€¢â€Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢â€”
-# Ã¢â€¢â€˜  REUSABLE: Playwright E2E Tests                                Ã¢â€¢â€˜
-# Ã¢â€¢â€˜  Runs Playwright-based browser tests for web systems           Ã¢â€¢â€˜
-# Ã¢â€¢Å¡Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢Ã¢â€¢
+# �¢â�¢â���¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢â��
+# �¢â�¢â��  REUSABLE: Playwright E2E Tests                                �¢â�¢â��
+# �¢â�¢â��  Runs Playwright-based browser tests for web systems           �¢â�¢â��
+# �¢â�¢�¡�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢�¢â�¢
 name: "Reusable: Playwright E2E"
 
 on:
@@ -141,7 +141,7 @@ jobs:
           echo "browsers_json=${BROWSERS_JSON}" >> "$GITHUB_OUTPUT"
 
   playwright-e2e:
-    name: "Playwright E2E Ã¢â‚¬â€ ${{ inputs.system-name }}"
+    name: "Playwright E2E �¢â�¬â�� ${{ inputs.system-name }}"
     needs: [prepare]
     if: ${{ needs.prepare.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
@@ -176,11 +176,11 @@ jobs:
           E2E_TESTS_DIRECTORY: ${{ inputs.e2e-tests-directory }}
         run: |
           if [ ! -d "${E2E_TESTS_DIRECTORY}" ]; then
-            echo "Ã¢Å’ E2E tests folder not found: ${E2E_TESTS_DIRECTORY}"
+            echo "�¢�� E2E tests folder not found: ${E2E_TESTS_DIRECTORY}"
             echo "Expected E2E tests under ${E2E_TESTS_DIRECTORY}."
             exit 1
           fi
-          echo "Ã¢Å“â€¦ E2E tests folder found: ${E2E_TESTS_DIRECTORY}"
+          echo "�¢��â�¦ E2E tests folder found: ${E2E_TESTS_DIRECTORY}"
 
       - name: Install Playwright browsers
         run: |
@@ -195,7 +195,7 @@ jobs:
           E2E_TEST_CMD: ${{ inputs.test-command }}
           E2E_BROWSER: ${{ matrix.browser }}
         run: |
-          # Substitute {browser} placeholder using env var Ã¢â‚¬â€ avoids eval on raw input
+          # Substitute {browser} placeholder using env var �¢â�¬â�� avoids eval on raw input
           CMD="${E2E_TEST_CMD//\{browser\}/${E2E_BROWSER}}"
           echo "Running browser: ${E2E_BROWSER}"
           echo "Using Playwright local browser execution"

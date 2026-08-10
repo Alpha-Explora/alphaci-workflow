@@ -65,7 +65,7 @@ jobs:
           elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
             echo "pm=npm" >> "$GITHUB_OUTPUT"
           else
-            echo "Ã¢Å’ package.json is required for Maestro runs."
+            echo "�¢�� package.json is required for Maestro runs."
             exit 1
           fi
 
@@ -113,7 +113,7 @@ jobs:
       - name: Validate Maestro workspace
         run: |
           if [ ! -d ".maestro" ]; then
-            echo "Ã¢Å’ Required .maestro directory was not found."
+            echo "�¢�� Required .maestro directory was not found."
             echo "Create .maestro and add at least one flow file before enabling Maestro CI."
             exit 1
           fi
@@ -124,12 +124,12 @@ jobs:
           done < <(find .maestro -type f \( -name "*.yaml" -o -name "*.yml" \) -print0)
 
           if [ "${#MAESTRO_FLOW_FILES[@]}" -eq 0 ]; then
-            echo "Ã¢Å’ No Maestro flow files were found under .maestro/."
+            echo "�¢�� No Maestro flow files were found under .maestro/."
             echo "Add at least one .yaml or .yml flow file before enabling Maestro CI."
             exit 1
           fi
 
-          echo "Ã¢Å“â€¦ Found ${#MAESTRO_FLOW_FILES[@]} Maestro flow file(s)."
+          echo "�¢��â�¦ Found ${#MAESTRO_FLOW_FILES[@]} Maestro flow file(s)."
 
       - name: Install Maestro CLI
         run: |
@@ -165,9 +165,9 @@ jobs:
             mkdir -p "${DEST_DIR}"
             unzip -o "${ZIP_FILE}" -d "${DEST_DIR}"
             rm -f "${ZIP_FILE}"
-            echo "Ã¢Å“â€¦ Extracted pre-built iOS artifact into ${DEST_DIR}: ${ZIP_FILE}"
+            echo "�¢��â�¦ Extracted pre-built iOS artifact into ${DEST_DIR}: ${ZIP_FILE}"
           else
-            echo "Ã¢Å’ No iOS zip artifact found in downloaded artifact payload."
+            echo "�¢�� No iOS zip artifact found in downloaded artifact payload."
             exit 1
           fi
 
@@ -208,26 +208,26 @@ jobs:
             CONTAINER_FLAG="-project"
             CONTAINER_PATH="${PROJECT_PATH}"
           else
-            echo "Ã¢Å’ No Xcode workspace/project found under ios/."
+            echo "�¢�� No Xcode workspace/project found under ios/."
             exit 1
           fi
 
           AVAILABLE_SCHEMES=$(LIST_JSON="${LIST_JSON}" python3 -c "import json, os; data = json.loads(os.environ['LIST_JSON']); schemes = (data.get('workspace', {}).get('schemes') or []) + (data.get('project', {}).get('schemes') or []); seen = []; [seen.append(scheme) for scheme in schemes if scheme not in seen]; print('\\n'.join(seen))")
 
-          echo "Ã¢â€žÂ¹Ã¯Â¸ Available schemes:"
+          echo "�¢â�ž�¹�¯�¸ Available schemes:"
           printf '%s\n' "${AVAILABLE_SCHEMES}"
 
           SCHEME=$(CONTAINER_PATH="${CONTAINER_PATH}" AVAILABLE_SCHEMES="${AVAILABLE_SCHEMES}" python3 -c "import os, re; container_path = os.environ.get('CONTAINER_PATH', ''); schemes = [line.strip() for line in os.environ.get('AVAILABLE_SCHEMES', '').splitlines() if line.strip()]; container_name = os.path.splitext(os.path.basename(container_path))[0]; preferred_names = [container_name]; excluded = re.compile(r'^(Pods($|-)|.*Tests?$|.*UITests?$|.*UnitTests?$|.*IntegrationTests?$|.*SnapshotTests?$|.*tvOS.*|.*macOS.*)$', re.I); exact = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and scheme.lower() == preferred.lower()), None); contains = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and preferred and preferred.lower() in scheme.lower()), None); fallback = next((scheme for scheme in schemes if not excluded.match(scheme)), schemes[0] if schemes else ''); print(exact or contains or fallback)")
 
           if [ -z "${SCHEME}" ]; then
-            echo "Ã¢Å’ Could not resolve an iOS scheme for build."
+            echo "�¢�� Could not resolve an iOS scheme for build."
             exit 1
           fi
 
           echo "container_flag=${CONTAINER_FLAG}" >> "$GITHUB_OUTPUT"
           echo "container_path=${CONTAINER_PATH}" >> "$GITHUB_OUTPUT"
           echo "scheme=${SCHEME}" >> "$GITHUB_OUTPUT"
-          echo "Ã¢Å“â€¦ Using iOS scheme: ${SCHEME}"
+          echo "�¢��â�¦ Using iOS scheme: ${SCHEME}"
 
       - name: Build iOS app binary
         if: ${{ !inputs.skip-build }}
@@ -240,12 +240,12 @@ jobs:
           SKIP_BUNDLING: ""
         run: |
           if [ -n "${IOS_BUILD_COMMAND}" ]; then
-            echo "Ã¢â€žÂ¹Ã¯Â¸ Running custom iOS app build command for Maestro."
+            echo "�¢â�ž�¹�¯�¸ Running custom iOS app build command for Maestro."
             bash -c "${IOS_BUILD_COMMAND}"
             exit 0
           fi
 
-          echo "Ã¢â€žÂ¹Ã¯Â¸ Running explicit xcodebuild for Maestro iOS simulator configuration."
+          echo "�¢â�ž�¹�¯�¸ Running explicit xcodebuild for Maestro iOS simulator configuration."
           xcodebuild \
             ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
             -scheme "${SCHEME}" \
@@ -264,16 +264,16 @@ jobs:
         run: |
           APP_PATH=$(find ios/build -type d -name "*.app" | sort | head -n 1)
           if [ -z "${APP_PATH}" ]; then
-            echo "Ã¢Å’ Unable to find iOS .app bundle for Maestro."
+            echo "�¢�� Unable to find iOS .app bundle for Maestro."
             if [ -d "ios/build" ]; then
-              echo "Ã°Å¸â€œ Build output tree:"
+              echo "�°�¸â�� Build output tree:"
               find ios/build -maxdepth 5 | sort
             fi
             exit 1
           fi
 
           echo "app_path=${APP_PATH}" >> "$GITHUB_OUTPUT"
-          echo "Ã¢Å“â€¦ Resolved iOS app bundle: ${APP_PATH}"
+          echo "�¢��â�¦ Resolved iOS app bundle: ${APP_PATH}"
 
       - name: Resolve iOS bundle identifier
         id: ios-bundle-id
@@ -281,18 +281,18 @@ jobs:
           APP_PATH="${{ steps.ios-app.outputs.app_path }}"
 
           if [ ! -f "${APP_PATH}/Info.plist" ]; then
-            echo "Ã¢Å’ Info.plist not found in app bundle: ${APP_PATH}"
+            echo "�¢�� Info.plist not found in app bundle: ${APP_PATH}"
             exit 1
           fi
 
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${APP_PATH}/Info.plist" 2>/dev/null || true)
           if [ -z "${BUNDLE_ID}" ]; then
-            echo "Ã¢Å’ Could not resolve CFBundleIdentifier from ${APP_PATH}/Info.plist"
+            echo "�¢�� Could not resolve CFBundleIdentifier from ${APP_PATH}/Info.plist"
             exit 1
           fi
 
           echo "bundle_id=${BUNDLE_ID}" >> "$GITHUB_OUTPUT"
-          echo "Ã¢Å“â€¦ Resolved iOS bundle identifier: ${BUNDLE_ID}"
+          echo "�¢��â�¦ Resolved iOS bundle identifier: ${BUNDLE_ID}"
 
       - name: Boot iOS simulator
         id: ios-sim
@@ -301,19 +301,19 @@ jobs:
 
           if [ -n "${BOOTED_UDID}" ]; then
             SIM_UDID="${BOOTED_UDID}"
-            echo "Ã¢Å“â€¦ Using already booted iPhone simulator: ${SIM_UDID}"
+            echo "�¢��â�¦ Using already booted iPhone simulator: ${SIM_UDID}"
           else
             SIM_UDID=$(xcrun simctl list devices available | grep -m 1 'iPhone' | sed -E 's/.*\(([A-F0-9-]+)\) .*/\1/' || true)
             if [ -z "${SIM_UDID}" ]; then
-              echo "Ã¢Å’ No available iPhone simulator device found."
+              echo "�¢�� No available iPhone simulator device found."
               xcrun simctl list devices available
               exit 1
             fi
 
-            echo "Ã¢Â³ Booting iPhone simulator: ${SIM_UDID}"
+            echo "�¢�³ Booting iPhone simulator: ${SIM_UDID}"
             xcrun simctl boot "${SIM_UDID}" || true
             xcrun simctl bootstatus "${SIM_UDID}" -b
-            echo "Ã¢Å“â€¦ iPhone simulator booted: ${SIM_UDID}"
+            echo "�¢��â�¦ iPhone simulator booted: ${SIM_UDID}"
           fi
 
           echo "sim_udid=${SIM_UDID}" >> "$GITHUB_OUTPUT"
@@ -324,7 +324,7 @@ jobs:
           SIM_UDID="${{ steps.ios-sim.outputs.sim_udid }}"
 
           xcrun simctl install "${SIM_UDID}" "${APP_PATH}"
-          echo "Ã¢Å“â€¦ Installed app on simulator ${SIM_UDID}"
+          echo "�¢��â�¦ Installed app on simulator ${SIM_UDID}"
 
       - name: Prepare Maestro iOS run log
         run: |
@@ -357,7 +357,7 @@ jobs:
                 *"--include-tags"*|*"--exclude-tags"*) ;;
                 *)
                   MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags android"
-                  echo "Ã¢â€žÂ¹Ã¯Â¸ Auto-applied Maestro iOS filter: --exclude-tags android"
+                  echo "�¢â�ž�¹�¯�¸ Auto-applied Maestro iOS filter: --exclude-tags android"
                   ;;
               esac
               ;;
@@ -365,13 +365,13 @@ jobs:
 
           FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
           if [ -n "${FLOW_APP_ID}" ] && [ -n "${RESOLVED_BUNDLE_ID}" ] && [ "${FLOW_APP_ID}" != "${RESOLVED_BUNDLE_ID}" ]; then
-            echo "Ã¢Å¡Â Ã¯Â¸ Flow appId (${FLOW_APP_ID}) differs from built bundle id (${RESOLVED_BUNDLE_ID})."
+            echo "�¢�¡� �¯�¸ Flow appId (${FLOW_APP_ID}) differs from built bundle id (${RESOLVED_BUNDLE_ID})."
           fi
 
           xcrun simctl launch "${SIM_UDID}" "${RESOLVED_BUNDLE_ID}" >/dev/null 2>&1 || true
 
-          echo "Ã¢â€žÂ¹Ã¯Â¸ Using bundle id: ${RESOLVED_BUNDLE_ID}"
-          echo "Ã¢â€žÂ¹Ã¯Â¸ Maestro command: ${MAESTRO_CMD}"
+          echo "�¢â�ž�¹�¯�¸ Using bundle id: ${RESOLVED_BUNDLE_ID}"
+          echo "�¢â�ž�¹�¯�¸ Maestro command: ${MAESTRO_CMD}"
 
           set +e
           bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
@@ -393,5 +393,5 @@ jobs:
       - name: Fail if Maestro iOS tests failed
         if: ${{ steps.maestro-ios-run.outputs.maestro_status != '0' }}
         run: |
-          echo "Ã¢Å’ Maestro iOS tests failed with exit code ${{ steps.maestro-ios-run.outputs.maestro_status }}."
+          echo "�¢�� Maestro iOS tests failed with exit code ${{ steps.maestro-ios-run.outputs.maestro_status }}."
           exit 1
