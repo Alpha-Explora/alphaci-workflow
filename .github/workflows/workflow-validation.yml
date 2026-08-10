@@ -503,6 +503,14 @@ jobs:
           failed=0
           expression_open="$(printf '$')"
           expression_open="${expression_open}{"
+          assert_contains() {
+            local needle="$1"
+            local file="$2"
+            if ! grep -Fq -- "${needle}" "${file}"; then
+              echo "::error file=${file}::Missing required smoke contract: ${needle}"
+              failed=1
+            fi
+          }
           while IFS= read -r template; do
             if grep -Eq '^  workflow_call:' "$template"; then
               echo "Reusable helper template validated by actionlint: $template"
@@ -518,26 +526,26 @@ jobs:
               failed=1
             fi
 
-            grep -Fq "validate-subscription.yml@v1" "$template"
+            assert_contains "validate-subscription.yml@v1" "$template"
             expected_ci_token="CI_TOKEN: ${expression_open}{ secrets.CI_TOKEN }}"
-            grep -Fq "${expected_ci_token}" "$template"
-            grep -Fq "validation-api-url:" "$template"
+            assert_contains "${expected_ci_token}" "$template"
+            assert_contains "validation-api-url:" "$template"
           done < <(find workflow-templates/customer -type f -name '*.yml' | sort)
 
-          grep -Fq "validation-api-url:" .github/workflows/validate-subscription.yml
+          assert_contains "validation-api-url:" .github/workflows/validate-subscription.yml
           expected_validation_env="VALIDATION_API_URL=\"${expression_open} inputs.validation-api-url }}\""
-          grep -Fq "${expected_validation_env}" .github/workflows/validate-subscription.yml
+          assert_contains "${expected_validation_env}" .github/workflows/validate-subscription.yml
           if grep -Fq "https://api.implementsprint.com/v1/ci/validate) || true" .github/workflows/validate-subscription.yml; then
             echo "::error file=.github/workflows/validate-subscription.yml::Validation workflow must call the configurable validation-api-url input"
             failed=1
           fi
 
-          grep -Fq "needs: validate-access" workflow-templates/customer/standalone-lint.yml
+          assert_contains "needs: validate-access" workflow-templates/customer/standalone-lint.yml
 
-          grep -Fq "frontend-tests.yml@v1" workflow-templates/customer/fe-react.yml
-          grep -Fq "frontend-tests.yml@v1" workflow-templates/customer/fe-nextjs.yml
-          grep -Fq "backend-tests.yml@v1" workflow-templates/customer/be-nodejs.yml
-          grep -Fq "backend-tests.yml@v1" workflow-templates/customer/be-nestjs.yml
+          assert_contains "frontend-tests.yml@v1" workflow-templates/customer/fe-react.yml
+          assert_contains "frontend-tests.yml@v1" workflow-templates/customer/fe-nextjs.yml
+          assert_contains "backend-tests.yml@v1" workflow-templates/customer/be-nodejs.yml
+          assert_contains "backend-tests.yml@v1" workflow-templates/customer/be-nestjs.yml
 
           node <<'NODE'
           const fs = require('node:fs');
