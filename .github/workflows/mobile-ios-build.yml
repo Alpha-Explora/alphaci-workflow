@@ -1,4 +1,4 @@
-﻿# Contract: docs/workflows/mobile-ios-build.md
+# Contract: docs/workflows/mobile-ios-build.md
 name: "Reusable: Mobile iOS Build"
 
 on:

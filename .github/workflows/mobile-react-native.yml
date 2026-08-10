@@ -1,4 +1,4 @@
-﻿# Contract: docs/workflows/mobile-react-native.md
+# Contract: docs/workflows/mobile-react-native.md
 name: "React Native Mobile CI/CD Pipeline"
 
 on:

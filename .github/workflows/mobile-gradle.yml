@@ -1,4 +1,4 @@
-﻿# Contract: docs/workflows/mobile-gradle.md
+# Contract: docs/workflows/mobile-gradle.md
 name: "Reusable: Mobile Gradle Build"
 
 on:
