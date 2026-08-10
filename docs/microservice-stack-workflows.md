@@ -2,6 +2,35 @@
 
 This workflow set is designed as a reusable library for service-by-service CI/CD instead of a monolithic pipeline.
 
+## AlphaCI production contract
+
+AlphaCI's backend is the reference seven-service consumer of this model. Its
+active deployment workflows live in `Alpha-Explora/alphaci-be`:
+
+- `deploy-edge-gateway.yml`
+- `deploy-identity-workspace.yml`
+- `deploy-project-management.yml`
+- `deploy-pipeline-gateway.yml`
+- `deploy-customer-runtime.yml`
+- `deploy-billing-subscriptions.yml`
+- `deploy-platform-ops.yml`
+
+Each workflow builds `Dockerfile.service`, pushes an immutable image to the
+`alphaci-20260629` Artifact Registry repository, deploys a Cloud Run candidate
+on port `8080` without traffic, and verifies readiness without changing stable
+traffic. `edge-gateway` is the public load-balancer entry; the other
+six services are private and are invoked by its service account. The root
+`alphaci-be` Cloud Run image/workflow path is retired and is not a deployment
+or rollback target; rollback restores a previously verified microservices
+revision.
+
+For this product, `main` is the pre-merge validation line. Production callers
+run from `prod`; the live GitHub OIDC provider rejects `main` for production
+authentication. The current GitHub plan cannot enforce branch protection, so
+automatic production push triggers are disabled. Use manual review, merge only
+after the main checks and smoke gates pass, then manually dispatch each
+production workflow with its confirmation value.
+
 ## User-facing onboarding layer
 
 - `workflow-templates/`
