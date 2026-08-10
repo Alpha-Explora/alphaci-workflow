@@ -1,4 +1,4 @@
-# Granular frontend Next.js workflow.
+# Granular frontend React workflow.
 # Copy to .github/workflows/frontend-ci.yml in a consumer repository.
 
 name: "Frontend CI"
@@ -46,7 +46,7 @@ env:
 
 jobs:
   validate-access:
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v0.1.7-smoke
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v1
     with:
       validation-api-url: ${{ env.CI_VALIDATE_URL }}
     secrets:
@@ -54,27 +54,25 @@ jobs:
 
   unit-tests:
     needs: validate-access
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/frontend-tests.yml@v0.1.7-smoke
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/frontend-tests.yml@v1
     with:
       working-directory: ${{ inputs.service_path || '.' }}
       system-name: ${{ inputs.service_name || 'frontend' }}
       node-version: ${{ inputs.node_version || 24 }}
       coverage-threshold: ${{ inputs.coverage_threshold || 80 }}
       enforce-coverage: ${{ inputs.enforce_coverage != false }}
-      test-command: npm run test
 
   lint:
     needs: validate-access
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/lint-check.yml@v0.1.7-smoke
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/lint-check.yml@v1
     with:
       working-directory: ${{ inputs.service_path || '.' }}
       system-name: ${{ inputs.service_name || 'frontend' }}
       node-version: ${{ inputs.node_version || 24 }}
-      lint-command: npm run lint
 
   security:
     needs: validate-access
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/security-scan.yml@v0.1.7-smoke
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/security-scan.yml@v1
     with:
       working-directory: ${{ inputs.service_path || '.' }}
       system-name: ${{ inputs.service_name || 'frontend' }}
@@ -99,7 +97,7 @@ jobs:
   deploy-gcp:
     needs: [validate-access, unit-tests, lint, security, build]
     if: ${{ github.event_name == 'push' && (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main') }}
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v0.1.7-smoke
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
     with:
       system-name: ${{ inputs.service_name || 'frontend' }}
       working-directory: ${{ inputs.service_path || '.' }}

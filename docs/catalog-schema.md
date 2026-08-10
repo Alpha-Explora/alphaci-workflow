@@ -1,14 +1,12 @@
 # Catalog Schema
 
-The `catalog/` folder is the contract consumed by the SaaS API. It lets the API expose supported stacks, actions, providers, plans, and stable workflow refs without parsing workflow YAML.
+The `catalog/customer/` folder is the customer-project catalog consumed by the SaaS API. It lets the API expose supported stacks, starter kits, and workflow recipes without parsing workflow YAML.
 
 ## Files
 
-- `stacks.json`: project stacks that can be generated.
-- `actions.json`: selectable CI/CD capabilities.
-- `providers.json`: deployment provider options and setup requirements.
-- `plans.json`: plan limits and feature access.
-- `workflow-refs.json`: stable reusable workflow and action locations.
+- `catalog/customer/project-types.json`: supported project types and starter-kit paths.
+- `catalog/customer/starter-kits.json`: external starter repositories used for generated projects.
+- `catalog/customer/workflow-recipes.json`: supported workflow recipes and template mappings.
 
 ## Common Fields
 
@@ -45,5 +43,5 @@ Plans are ordered by `rank`. A plan can enable stacks, actions, auto-promotion, 
 Example:
 
 ```text
-Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/master-pipeline-fe.yml@v1
+Alpha-Explora/alphaci-workflow/.github/workflows/frontend-tests.yml@v1
 ```

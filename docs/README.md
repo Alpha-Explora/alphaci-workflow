@@ -3,9 +3,12 @@
 This folder documents how to set up each template with the central reusable pipelines.
 
 Scope covered:
-- Local templates in this workspace
-- Central workflow caller templates
-- Legacy remote-sourced templates from the original ImplementSprint org are historical references; generated customer workflows should use `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow@v1`.
+- Product-specific caller templates used by AlphaCI itself
+- Customer caller templates generated into new repositories
+- Legacy provider examples retained only for migration history
+
+The source of truth is `Alpha-Explora/alphaci-workflow`. Generated customer
+workflows must reference `Alpha-Explora/alphaci-workflow/.github/workflows/*@v1`.
 
 AlphaCI's current production backend is the seven-service Cloud Run stack in
 `Alpha-Explora/alphaci-be`. Use the GCP Cloud Run workflow and per-service

@@ -37,7 +37,7 @@ on:
 
 jobs:
   unit-tests:
-    uses: Tone-Lloyd-Sir-Catubag-CICD/central-workflow/.github/workflows/backend-tests.yml@v1
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/backend-tests.yml@v1
     with:
       working-directory: .
       system-name: backend
@@ -52,13 +52,13 @@ Ordering belongs in the caller workflow with `needs`. For example, a Docker buil
 ```yaml
 jobs:
   unit-tests:
-    uses: Tone-Lloyd-Sir-Catubag-CICD/central-workflow/.github/workflows/backend-tests.yml@v1
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/backend-tests.yml@v1
     with:
       system-name: backend
 
   docker:
     needs: [unit-tests]
-    uses: Tone-Lloyd-Sir-Catubag-CICD/central-workflow/.github/workflows/docker-build.yml@v1
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/docker-build.yml@v1
     with:
       working-directory: .
       image-name: backend

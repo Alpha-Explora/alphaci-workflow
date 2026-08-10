@@ -1282,7 +1282,7 @@ jobs:
     if: >-
       always() &&
       github.event_name == 'push' &&
-      github.repository != 'ImplementSprint/greenovate-fe' && github.repository != 'ImplementSprint/central-workflow' && github.repository != 'ImplementSprint/sho-team-fe' && github.repository != 'ImplementSprint/trini-thrive' &&
+      github.repository != 'ImplementSprint/greenovate-fe' && github.repository != 'Alpha-Explora/alphaci-workflow' && github.repository != 'ImplementSprint/sho-team-fe' && github.repository != 'ImplementSprint/trini-thrive' &&
       (github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
       (
         (github.ref == 'refs/heads/uat' && (needs.deploy-preview.result == 'failure' || needs.production-gate.result == 'failure')) ||

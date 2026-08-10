@@ -154,7 +154,7 @@ concurrency:
 jobs:
   systems-config:
     name: "Resolve Mobile Systems Configuration"
-    if: ${{ github.repository != 'ImplementSprint/central-workflow' }}
+    if: ${{ github.repository != 'Alpha-Explora/alphaci-workflow' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -870,7 +870,7 @@ jobs:
     needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-expo-release, mobile-kotlin, mobile-react-native, mobile-react-native-release, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release]
     if: >-
       always() &&
-      github.repository != 'ImplementSprint/central-workflow' &&
+      github.repository != 'Alpha-Explora/alphaci-workflow' &&
       (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_deploy == true) &&
@@ -1424,7 +1424,7 @@ jobs:
     if: >-
       always() &&
       github.event_name == 'push' &&
-      github.repository != 'ImplementSprint/central-workflow' &&
+      github.repository != 'Alpha-Explora/alphaci-workflow' &&
       github.ref == 'refs/heads/main' &&
       needs.version-main-release.result == 'failure' &&
       !contains(github.event.head_commit.message, '[skip-revert]') &&
