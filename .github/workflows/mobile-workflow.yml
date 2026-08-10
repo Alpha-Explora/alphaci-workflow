@@ -1,10 +1,10 @@
 # Contract: docs/workflows/mobile-workflow.md
-# ├┬в├втм┬в├втм┬├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├втмт
-# ├┬в├втм┬в├втм╦  ORCHESTRATOR: Expo Mobile CI/CD Pipeline                      ├┬в├втм┬в├втм╦
-# ├┬в├втм┬в├втм╦  Stage 1 (gates): test ├┬в├втм┬а├втмтв typescript ├┬в├втм┬а├втмтв lint ├┬в├втм┬а├втмтв security         ├┬в├втм┬в├втм╦
-# ├┬в├втм┬в├втм╦  Stage 2 (build): local Android build ├т├┬╖ local iOS build        ├┬в├втм┬в├втм╦
-# ├┬в├втм┬в├втм╦  Stage 3 (test):  Maestro Android E2E ├т├┬╖ Maestro iOS E2E         ├┬в├втм┬в├втм╦
-# ├┬в├втм┬в├┬б├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в├┬в├втм┬в
+# ├втАвтАЭ├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАвтАФ
+# ├втАвтАШ  ORCHESTRATOR: Expo Mobile CI/CD Pipeline                      ├втАвтАШ
+# ├втАвтАШ  Stage 1 (gates): test ├втАатАЩ typescript ├втАатАЩ lint ├втАатАЩ security         ├втАвтАШ
+# ├втАвтАШ  Stage 2 (build): local Android build ├В┬╖ local iOS build        ├втАвтАШ
+# ├втАвтАШ  Stage 3 (test):  Maestro Android E2E ├В┬╖ Maestro iOS E2E         ├втАвтАШ
+# ├втАв┼б├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв├втАв
 name: "Expo Mobile CI/CD Pipeline"
 
 on:
@@ -96,7 +96,7 @@ permissions:
 
 jobs:
   expo-typescript-standard:
-    name: "Expo ├┬в├вт┬м├втм┬ TypeScript Standard"
+    name: "Expo ├втВмтАЭ TypeScript Standard"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -109,12 +109,12 @@ jobs:
       - name: Validate Expo + TypeScript standard
         run: |
           if [ ! -f "package.json" ]; then
-            echo "├┬в├т package.json is required for Expo systems."
+            echo "├в┼Т package.json is required for Expo systems."
             exit 1
           fi
 
           if [ ! -f "tsconfig.json" ]; then
-            echo "├┬в├т tsconfig.json is required for Expo systems."
+            echo "├в┼Т tsconfig.json is required for Expo systems."
             exit 1
           fi
 
@@ -199,9 +199,9 @@ jobs:
           }
           NODE
 
-  # ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м Stage 1A: Unit Tests (Jest) ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м
+  # ├втАЭтВм├втАЭтВм Stage 1A: Unit Tests (Jest) ├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм
   mobile-unit-tests:
-    name: "Mobile ├┬в├вт┬м├втм┬ Jest Unit Tests"
+    name: "Mobile ├втВмтАЭ Jest Unit Tests"
     uses: ./.github/workflows/mobile-tests.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -211,9 +211,9 @@ jobs:
       test-command: "npx jest --coverage --verbose --ci --forceExit --runInBand"
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
-  # ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м Stage 1B: Lint (parallel with tests) ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м
+  # ├втАЭтВм├втАЭтВм Stage 1B: Lint (parallel with tests) ├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм
   mobile-lint:
-    name: "Mobile ├┬в├вт┬м├втм┬ Lint Check"
+    name: "Mobile ├втВмтАЭ Lint Check"
     if: ${{ inputs.enable-lint }}
     uses: ./.github/workflows/lint-check.yml
     with:
@@ -221,9 +221,9 @@ jobs:
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
 
-  # ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м Stage 1C: Security Scan (parallel with tests) ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м
+  # ├втАЭтВм├втАЭтВм Stage 1C: Security Scan (parallel with tests) ├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм
   mobile-security:
-    name: "Mobile ├┬в├вт┬м├втм┬ Security Scan"
+    name: "Mobile ├втВмтАЭ Security Scan"
     if: ${{ inputs.enable-security-scan }}
     uses: ./.github/workflows/security-scan.yml
     with:
@@ -233,7 +233,7 @@ jobs:
       # Keep test branch unblocked by HIGH findings; enforce HIGH on uat/main.
       fail-on-high: ${{ github.ref_name != 'test' && github.base_ref != 'test' }}
 
-  # ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м Stage 2A: Local Android Build ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м
+  # ├втАЭтВм├втАЭтВм Stage 2A: Local Android Build ├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм
   android-build:
     name: "Android App Build (.apk)"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
@@ -260,7 +260,7 @@ jobs:
           elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
             echo "pm=npm" >> "$GITHUB_OUTPUT"
           else
-            echo "├┬в├т package.json is required."
+            echo "├в┼Т package.json is required."
             exit 1
           fi
 
@@ -316,10 +316,10 @@ jobs:
           if [ -f "android/gradle.properties" ]; then
             if grep -q '^kotlinVersion=' android/gradle.properties; then
               CURRENT_VERSION=$(grep '^kotlinVersion=' android/gradle.properties | head -n 1 | cut -d'=' -f2-)
-              echo "├┬в├втм┼╛├┬╣├┬п├┬╕ Preserving project kotlinVersion=${CURRENT_VERSION}"
+              echo "├втАЮ┬╣├п┬╕ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
               echo 'kotlinVersion=2.0.21' >> android/gradle.properties
-              echo "├┬в├т├втм┬ж Added fallback kotlinVersion=2.0.21"
+              echo "├в┼УтАж Added fallback kotlinVersion=2.0.21"
             fi
           fi
 
@@ -337,7 +337,7 @@ jobs:
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ -f "${EXPECTED_APK}" ]; then
-            echo "├┬в├т├втм┬ж Android APK already present at expected path: ${EXPECTED_APK}"
+            echo "├в┼УтАж Android APK already present at expected path: ${EXPECTED_APK}"
             exit 0
           fi
 
@@ -345,9 +345,9 @@ jobs:
           if [ -n "${CANDIDATE_APK}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
             cp "${CANDIDATE_APK}" "${EXPECTED_APK}"
-            echo "├┬в├т├втм┬ж Normalized Android APK path: ${CANDIDATE_APK} -> ${EXPECTED_APK}"
+            echo "├в┼УтАж Normalized Android APK path: ${CANDIDATE_APK} -> ${EXPECTED_APK}"
           else
-            echo "├┬в├т No Android APK was produced after build."
+            echo "├в┼Т No Android APK was produced after build."
             exit 1
           fi
 
@@ -356,7 +356,7 @@ jobs:
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
           if [ ! -f "${EXPECTED_APK}" ]; then
-            echo "├┬в├т Android APK not found at ${EXPECTED_APK} after build."
+            echo "├в┼Т Android APK not found at ${EXPECTED_APK} after build."
             exit 1
           fi
 
@@ -365,7 +365,7 @@ jobs:
           cp "${EXPECTED_APK}" "${ARTIFACT_DIR}/android/app/build/outputs/apk/debug/app-debug.apk"
 
           echo "artifact_path=${PWD}/${ARTIFACT_DIR}" >> "$GITHUB_OUTPUT"
-          echo "├┬в├т├втм┬ж Android app APK ready for upload."
+          echo "├в┼УтАж Android app APK ready for upload."
 
       - name: Upload Android build artifact
         uses: actions/upload-artifact@v6
@@ -374,7 +374,7 @@ jobs:
           path: ${{ steps.archive-android.outputs.artifact_path }}
           retention-days: 14
 
-  # ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м Stage 2B: Local iOS Build ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м
+  # ├втАЭтВм├втАЭтВм Stage 2B: Local iOS Build ├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм
   ios-build:
     name: "iOS Simulator App Build (.app)"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
@@ -401,7 +401,7 @@ jobs:
           elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
             echo "pm=npm" >> "$GITHUB_OUTPUT"
           else
-            echo "├┬в├т package.json is required."
+            echo "├в┼Т package.json is required."
             exit 1
           fi
 
@@ -487,26 +487,26 @@ jobs:
             CONTAINER_FLAG="-project"
             CONTAINER_PATH="${PROJECT_PATH}"
           else
-            echo "├┬в├т No Xcode workspace/project found under ios/."
+            echo "├в┼Т No Xcode workspace/project found under ios/."
             exit 1
           fi
 
           AVAILABLE_SCHEMES=$(LIST_JSON="${LIST_JSON}" python3 -c "import json, os; data = json.loads(os.environ['LIST_JSON']); schemes = (data.get('workspace', {}).get('schemes') or []) + (data.get('project', {}).get('schemes') or []); seen = []; [seen.append(scheme) for scheme in schemes if scheme not in seen]; print('\\n'.join(seen))")
 
-          echo "├┬в├втм┼╛├┬╣├┬п├┬╕ Available schemes:"
+          echo "├втАЮ┬╣├п┬╕ Available schemes:"
           printf '%s\n' "${AVAILABLE_SCHEMES}"
 
           SCHEME=$(CONTAINER_PATH="${CONTAINER_PATH}" AVAILABLE_SCHEMES="${AVAILABLE_SCHEMES}" python3 -c "import os, re; container_path = os.environ.get('CONTAINER_PATH', ''); schemes = [line.strip() for line in os.environ.get('AVAILABLE_SCHEMES', '').splitlines() if line.strip()]; container_name = os.path.splitext(os.path.basename(container_path))[0]; preferred_names = [container_name]; excluded = re.compile(r'^(Pods($|-)|.*Tests?$|.*UITests?$|.*UnitTests?$|.*IntegrationTests?$|.*SnapshotTests?$|.*tvOS.*|.*macOS.*)$', re.I); exact = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and scheme.lower() == preferred.lower()), None); contains = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and preferred and preferred.lower() in scheme.lower()), None); fallback = next((scheme for scheme in schemes if not excluded.match(scheme)), schemes[0] if schemes else ''); print(exact or contains or fallback)")
 
           if [ -z "${SCHEME}" ]; then
-            echo "├┬в├т Could not resolve an iOS scheme for build."
+            echo "├в┼Т Could not resolve an iOS scheme for build."
             exit 1
           fi
 
           echo "container_flag=${CONTAINER_FLAG}" >> "$GITHUB_OUTPUT"
           echo "container_path=${CONTAINER_PATH}" >> "$GITHUB_OUTPUT"
           echo "scheme=${SCHEME}" >> "$GITHUB_OUTPUT"
-          echo "├┬в├т├втм┬ж Using iOS scheme: ${SCHEME}"
+          echo "├в┼УтАж Using iOS scheme: ${SCHEME}"
 
       - name: Build iOS app binary
         env:
@@ -518,13 +518,13 @@ jobs:
           SKIP_BUNDLING: ""
         run: |
           if [ -n "${IOS_BUILD_COMMAND}" ]; then
-            echo "├┬в├втм┼╛├┬╣├┬п├┬╕ Running custom iOS app build command for Maestro."
+            echo "├втАЮ┬╣├п┬╕ Running custom iOS app build command for Maestro."
             # Use bash -c with the command passed via env var to avoid direct eval of interpolated input
             bash -c "${IOS_BUILD_COMMAND}"
             exit 0
           fi
 
-          echo "├┬в├втм┼╛├┬╣├┬п├┬╕ Running explicit xcodebuild for the default Maestro iOS simulator configuration."
+          echo "├втАЮ┬╣├п┬╕ Running explicit xcodebuild for the default Maestro iOS simulator configuration."
           xcodebuild \
             ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
             -scheme "${SCHEME}" \
@@ -543,33 +543,33 @@ jobs:
           EXPECTED_APP="ios/build/Build/Products/Debug-iphonesimulator/MaestroApp.app"
 
           if [ -d "${EXPECTED_APP}" ]; then
-            echo "├┬в├т├втм┬ж iOS app bundle already present at expected path: ${EXPECTED_APP}"
+            echo "├в┼УтАж iOS app bundle already present at expected path: ${EXPECTED_APP}"
             exit 0
           fi
 
           CANDIDATE_APP=$(find ios/build -type d -name "*.app" | sort | head -n 1)
           if [ -z "${CANDIDATE_APP}" ]; then
-            echo "├┬в├т No iOS .app bundle was produced after build."
+            echo "├в┼Т No iOS .app bundle was produced after build."
             exit 1
           fi
 
           mkdir -p "$(dirname "${EXPECTED_APP}")"
           rm -rf "${EXPECTED_APP}"
           cp -R "${CANDIDATE_APP}" "${EXPECTED_APP}"
-          echo "├┬в├т├втм┬ж Normalized iOS app bundle path: ${CANDIDATE_APP} -> ${EXPECTED_APP}"
+          echo "├в┼УтАж Normalized iOS app bundle path: ${CANDIDATE_APP} -> ${EXPECTED_APP}"
 
       - name: Archive iOS build outputs
         id: archive-ios
         run: |
           APP_PATH="ios/build/Build/Products/Debug-iphonesimulator/MaestroApp.app"
           if [ ! -d "${APP_PATH}" ]; then
-            echo "├┬в├т iOS .app bundle not found after the app build step."
+            echo "├в┼Т iOS .app bundle not found after the app build step."
             exit 1
           fi
           ZIP_PATH="maestro-ios-build.app.zip"
           ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
           echo "artifact_path=${PWD}/${ZIP_PATH}" >> "$GITHUB_OUTPUT"
-          echo "├┬в├т├втм┬ж iOS app bundle zipped for upload."
+          echo "├в┼УтАж iOS app bundle zipped for upload."
 
       - name: Upload iOS build artifact
         uses: actions/upload-artifact@v6
@@ -578,9 +578,9 @@ jobs:
           path: ${{ steps.archive-ios.outputs.artifact_path }}
           retention-days: 14
 
-  # ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м Stage 3A: Maestro Android E2E ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м
+  # ├втАЭтВм├втАЭтВм Stage 3A: Maestro Android E2E ├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм
   mobile-maestro:
-    name: "Mobile ├┬в├вт┬м├втм┬ Maestro Android E2E"
+    name: "Mobile ├втВмтАЭ Maestro Android E2E"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build]
     if: |
       always() &&
@@ -602,9 +602,9 @@ jobs:
       skip-build: ${{ needs.android-build.result == 'success' }}
       build-artifact-name: ${{ needs.android-build.result == 'success' && format('{0}-android-maestro-build', inputs.system-name) || '' }}
 
-  # ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м Stage 3B: Maestro iOS E2E ├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м├┬в├втм┬├вт┬м
+  # ├втАЭтВм├втАЭтВм Stage 3B: Maestro iOS E2E ├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм├втАЭтВм
   mobile-maestro-ios:
-    name: "Mobile ├┬в├вт┬м├втм┬ Maestro iOS E2E"
+    name: "Mobile ├втВмтАЭ Maestro iOS E2E"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build]
     if: |
       always() &&

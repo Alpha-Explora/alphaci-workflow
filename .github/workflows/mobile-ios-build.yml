@@ -50,7 +50,7 @@ jobs:
           elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
             echo "pm=npm" >> "$GITHUB_OUTPUT"
           else
-            echo "ÃÂ¢Ãâ package.json is required for iOS builds."
+            echo "Ã¢Å’ package.json is required for iOS builds."
             exit 1
           fi
 
@@ -138,26 +138,26 @@ jobs:
             CONTAINER_FLAG="-project"
             CONTAINER_PATH="${PROJECT_PATH}"
           else
-            echo "ÃÂ¢Ãâ No Xcode workspace/project found under ios/."
+            echo "Ã¢Å’ No Xcode workspace/project found under ios/."
             exit 1
           fi
 
           AVAILABLE_SCHEMES=$(LIST_JSON="${LIST_JSON}" python3 -c "import json, os; data = json.loads(os.environ['LIST_JSON']); schemes = (data.get('workspace', {}).get('schemes') or []) + (data.get('project', {}).get('schemes') or []); seen = []; [seen.append(scheme) for scheme in schemes if scheme not in seen]; print('\\n'.join(seen))")
 
-            echo "ÃÂ¢Ã¢â¬Å¾ÃÂ¹ÃÂ¯ÃÂ¸ Available schemes:"
+            echo "Ã¢â€žÂ¹Ã¯Â¸ Available schemes:"
             printf '%s\n' "${AVAILABLE_SCHEMES}"
 
           SCHEME=$(CONTAINER_PATH="${CONTAINER_PATH}" AVAILABLE_SCHEMES="${AVAILABLE_SCHEMES}" python3 -c "import os, re, sys; container_path = os.environ.get('CONTAINER_PATH', ''); schemes = [line.strip() for line in os.environ.get('AVAILABLE_SCHEMES', '').splitlines() if line.strip()]; container_name = os.path.splitext(os.path.basename(container_path))[0]; preferred_names = [container_name]; excluded = re.compile(r'^(Pods($|-)|.*Tests?$|.*UITests?$|.*UnitTests?$|.*IntegrationTests?$|.*SnapshotTests?$|.*tvOS.*|.*macOS.*)$', re.I); exact = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and scheme.lower() == preferred.lower()), None); contains = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and preferred and preferred.lower() in scheme.lower()), None); fallback = next((scheme for scheme in schemes if not excluded.match(scheme)), schemes[0] if schemes else ''); print(exact or contains or fallback)")
 
           if [ -z "${SCHEME}" ]; then
-            echo "ÃÂ¢Ãâ Could not resolve an iOS scheme for build."
+            echo "Ã¢Å’ Could not resolve an iOS scheme for build."
             exit 1
           fi
 
           echo "container_flag=${CONTAINER_FLAG}" >> "$GITHUB_OUTPUT"
           echo "container_path=${CONTAINER_PATH}" >> "$GITHUB_OUTPUT"
           echo "scheme=${SCHEME}" >> "$GITHUB_OUTPUT"
-          echo "ÃÂ¢ÃâÃ¢â¬Â¦ Using iOS scheme: ${SCHEME}"
+          echo "Ã¢Å“â€¦ Using iOS scheme: ${SCHEME}"
 
       - name: Build iOS Simulator App
         id: build-ios
@@ -183,7 +183,7 @@ jobs:
 
           APP_PATH=$(find ios/build/Build/Products -type d -name "*.app" | head -n 1)
           if [ -z "${APP_PATH}" ]; then
-            echo "ÃÂ¢Ãâ iOS simulator app output (.app) not found."
+            echo "Ã¢Å’ iOS simulator app output (.app) not found."
             exit 1
           fi
 

@@ -84,7 +84,7 @@ permissions:
 
 jobs:
   rn-typescript-standard:
-    name: "React Native ÃÂ¢Ã¢âÂ¬Ã¢â¬Â TypeScript Standard"
+    name: "React Native Ã¢â‚¬â€ TypeScript Standard"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -97,22 +97,22 @@ jobs:
       - name: Validate React Native + TypeScript standard
         run: |
           if [ ! -f "package.json" ]; then
-            echo "ÃÂ¢Ãâ package.json is required for React Native systems."
+            echo "Ã¢Å’ package.json is required for React Native systems."
             exit 1
           fi
 
           if [ ! -f "tsconfig.json" ]; then
-            echo "ÃÂ¢Ãâ tsconfig.json is required for React Native systems."
+            echo "Ã¢Å’ tsconfig.json is required for React Native systems."
             exit 1
           fi
 
           if [ ! -d "android" ]; then
-            echo "ÃÂ¢Ãâ android/ directory is required for React Native systems."
+            echo "Ã¢Å’ android/ directory is required for React Native systems."
             exit 1
           fi
 
           if [ ! -d "ios" ]; then
-            echo "ÃÂ¢Ãâ ios/ directory is required for React Native systems."
+            echo "Ã¢Å’ ios/ directory is required for React Native systems."
             exit 1
           fi
 
@@ -198,7 +198,7 @@ jobs:
           NODE
 
   mobile-unit-tests:
-    name: "Mobile ÃÂ¢Ã¢âÂ¬Ã¢â¬Â Jest Unit Tests"
+    name: "Mobile Ã¢â‚¬â€ Jest Unit Tests"
     uses: ./.github/workflows/mobile-tests.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -208,7 +208,7 @@ jobs:
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
   mobile-lint:
-    name: "Mobile ÃÂ¢Ã¢âÂ¬Ã¢â¬Â Lint Check"
+    name: "Mobile Ã¢â‚¬â€ Lint Check"
     if: ${{ inputs.enable-lint }}
     uses: ./.github/workflows/lint-check.yml
     with:
@@ -217,7 +217,7 @@ jobs:
       node-version: ${{ inputs.node-version }}
 
   mobile-security:
-    name: "Mobile ÃÂ¢Ã¢âÂ¬Ã¢â¬Â Security Scan"
+    name: "Mobile Ã¢â‚¬â€ Security Scan"
     if: ${{ inputs.enable-security-scan }}
     uses: ./.github/workflows/security-scan.yml
     with:
