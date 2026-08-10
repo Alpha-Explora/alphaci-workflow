@@ -272,17 +272,21 @@ jobs:
           APPROVED_CLOUD_RUN_SERVICE_NAME="$(jq -er '.target.cloudRunServiceName' <<<"${RESPONSE}")"
           APPROVED_RUNTIME_SERVICE_ACCOUNT="$(jq -er '.target.runtimeServiceAccount' <<<"${RESPONSE}")"
 
-          echo "deployment_id=${DEPLOYMENT_ID}" >> "$GITHUB_OUTPUT"
-          echo "gcp_project_id=${APPROVED_PROJECT_ID}" >> "$GITHUB_OUTPUT"
-          echo "wif_provider=${APPROVED_WIF_PROVIDER}" >> "$GITHUB_OUTPUT"
-          echo "deployer_service_account=${APPROVED_DEPLOYER_SERVICE_ACCOUNT}" >> "$GITHUB_OUTPUT"
-          echo "GCP_PROJECT_ID=${APPROVED_PROJECT_ID}" >> "$GITHUB_ENV"
-          echo "GCP_REGION=${APPROVED_REGION}" >> "$GITHUB_ENV"
-          echo "ARTIFACT_REGISTRY_REPOSITORY=${APPROVED_ARTIFACT_REGISTRY_REPOSITORY}" >> "$GITHUB_ENV"
-          echo "IMAGE_NAME=${APPROVED_IMAGE_NAME}" >> "$GITHUB_ENV"
-          echo "CLOUD_RUN_SERVICE_NAME=${APPROVED_CLOUD_RUN_SERVICE_NAME}" >> "$GITHUB_ENV"
-          echo "RUNTIME_SERVICE_ACCOUNT=${APPROVED_RUNTIME_SERVICE_ACCOUNT}" >> "$GITHUB_ENV"
-          echo "WORKFLOW_APPROVAL_URL=${APPROVAL_URL}" >> "$GITHUB_ENV"
+          {
+            echo "deployment_id=${DEPLOYMENT_ID}"
+            echo "gcp_project_id=${APPROVED_PROJECT_ID}"
+            echo "wif_provider=${APPROVED_WIF_PROVIDER}"
+            echo "deployer_service_account=${APPROVED_DEPLOYER_SERVICE_ACCOUNT}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "GCP_PROJECT_ID=${APPROVED_PROJECT_ID}"
+            echo "GCP_REGION=${APPROVED_REGION}"
+            echo "ARTIFACT_REGISTRY_REPOSITORY=${APPROVED_ARTIFACT_REGISTRY_REPOSITORY}"
+            echo "IMAGE_NAME=${APPROVED_IMAGE_NAME}"
+            echo "CLOUD_RUN_SERVICE_NAME=${APPROVED_CLOUD_RUN_SERVICE_NAME}"
+            echo "RUNTIME_SERVICE_ACCOUNT=${APPROVED_RUNTIME_SERVICE_ACCOUNT}"
+            echo "WORKFLOW_APPROVAL_URL=${APPROVAL_URL}"
+          } >> "$GITHUB_ENV"
       - name: Validate OIDC permission
         shell: bash
         run: |

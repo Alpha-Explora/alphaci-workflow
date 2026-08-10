@@ -144,7 +144,7 @@ jobs:
               console.log('Coverage ' + coverage + '% meets threshold ' + threshold + '%');
             "
           else
-            echo "coverage=unknown" >> $GITHUB_OUTPUT
+            echo "coverage=unknown" >> "$GITHUB_OUTPUT"
             echo "Warning: Coverage summary not found"
           fi
 

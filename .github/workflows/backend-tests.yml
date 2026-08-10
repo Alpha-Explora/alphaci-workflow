@@ -148,7 +148,7 @@ jobs:
               console.log('Coverage ' + coverage + '% meets threshold ' + threshold + '%');
             "
           else
-            echo "coverage=unknown" >> $GITHUB_OUTPUT
+            echo "coverage=unknown" >> "$GITHUB_OUTPUT"
             if [ "${ENFORCE_COVERAGE}" = "true" ]; then
               echo "coverage/coverage-summary.json not found - failing coverage gate"
               exit 1

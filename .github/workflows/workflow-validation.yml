@@ -123,8 +123,6 @@ jobs:
           fi
 
           failed=0
-          expression_open="$(printf '$')"
-          expression_open="${expression_open}{"
           while IFS= read -r template; do
             name="$(basename "$template" .yml)"
             metadata="$(dirname "$template")/${name}.properties.json"
@@ -503,6 +501,8 @@ jobs:
           set -euo pipefail
 
           failed=0
+          expression_open="$(printf '$')"
+          expression_open="${expression_open}{"
           while IFS= read -r template; do
             if grep -Eq '^  workflow_call:' "$template"; then
               echo "Reusable helper template validated by actionlint: $template"
