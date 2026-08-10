@@ -507,15 +507,9 @@ jobs:
               continue
             fi
 
-            first_job=$(awk '
-              /^jobs:/ { in_jobs=1; next }
-              in_jobs && /^  [[:alnum:]_-]+:/ {
-                name=$1
-                sub(/:$/, "", name)
-                print name
-                exit
-              }
-            ' "$template")
+            first_job=$(grep -A 80 '^jobs:' "$template" |
+              grep -m1 -E '^  [A-Za-z0-9_-]+:' |
+              sed -E 's/^  ([A-Za-z0-9_-]+):.*/\1/')
 
             if [ "${first_job}" != "validate-access" ]; then
               echo "::error file=${template}::First template job must be validate-access"
