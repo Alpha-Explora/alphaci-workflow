@@ -1,0 +1,6 @@
+{
+  "name": "Trivy Security Scan",
+  "description": "Reusable filesystem security scan for customer services.",
+  "categories": ["ci", "security"],
+  "filePatterns": []
+}

@@ -1,3 +1,4 @@
+# Contract: docs/workflows/service-node.md
 name: "Service: Node.js"
 
 on:

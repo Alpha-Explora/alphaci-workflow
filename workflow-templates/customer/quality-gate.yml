@@ -72,10 +72,10 @@ jobs:
     steps:
       # ── Setup ────────────────────────────────────────────────────────────────
       - name: "Checkout code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: "Setup Node.js ${{ inputs.node_version }}"
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node_version }}
           cache: "npm"
@@ -136,7 +136,7 @@ jobs:
       # ── Upload coverage artifacts ─────────────────────────────────────────────
       - name: "Upload coverage artifacts"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-${{ inputs.service_name }}-${{ github.sha }}
           path: |
@@ -148,7 +148,7 @@ jobs:
       # ── Upload JUnit test results ─────────────────────────────────────────────
       - name: "Upload test results (JUnit)"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results-${{ inputs.service_name }}-${{ github.sha }}
           path: ${{ inputs.working_directory }}/test-results/junit.xml

@@ -1,0 +1,6 @@
+{
+  "name": "Quality Gate",
+  "description": "Reusable quality gate for customer service delivery.",
+  "categories": ["ci", "quality"],
+  "filePatterns": ["package.json$"]
+}

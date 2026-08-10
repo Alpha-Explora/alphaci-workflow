@@ -58,7 +58,7 @@ jobs:
     steps:
       # ── Setup ────────────────────────────────────────────────────────────────
       - name: "Checkout code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ── Trivy filesystem scan ─────────────────────────────────────────────────
       # Produces two output formats:
@@ -130,7 +130,7 @@ jobs:
       # ── Upload raw JSON artifact ──────────────────────────────────────────────
       - name: "Upload Trivy JSON artifact"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: trivy-${{ inputs.service_name }}-${{ github.sha }}
           path: trivy-results.json

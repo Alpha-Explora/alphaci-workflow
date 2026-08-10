@@ -37,8 +37,19 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  CI_VALIDATE_URL: https://api.alphaci.com.ph/api/v1/ci/validate
+
 jobs:
+  validate-access:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v1
+    with:
+      validation-api-url: ${{ env.CI_VALIDATE_URL }}
+    secrets:
+      CI_TOKEN: ${{ secrets.CI_TOKEN }}
+
   discover:
+    needs: validate-access
     name: "Discover Next.js Service"
     runs-on: ubuntu-latest
     outputs:
@@ -61,7 +72,7 @@ jobs:
       k6-script-path: ${{ steps.discover.outputs.k6-script-path }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -80,7 +91,7 @@ jobs:
 
   pipeline:
     name: "Run Next.js Pipeline"
-    needs: [discover]
+    needs: [validate-access, discover]
     if: ${{ needs.discover.outputs.should-run == 'true' }}
     uses: Alpha-Explora/alphaci-workflow/.github/workflows/service-nextjs.yml@v1
     with:

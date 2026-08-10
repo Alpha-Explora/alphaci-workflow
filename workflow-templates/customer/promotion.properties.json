@@ -1,0 +1,6 @@
+{
+  "name": "Environment Promotion",
+  "description": "Promote a verified branch to the next environment.",
+  "categories": ["ci", "promotion"],
+  "filePatterns": []
+}
