@@ -533,7 +533,7 @@ jobs:
           done < <(find workflow-templates/customer -type f -name '*.yml' | sort)
 
           assert_contains "validation-api-url:" .github/workflows/validate-subscription.yml
-          expected_validation_env="VALIDATION_API_URL=\"${expression_open} inputs.validation-api-url }}\""
+          expected_validation_env="VALIDATION_API_URL=\"${expression_open}{ inputs.validation-api-url }}\""
           assert_contains "${expected_validation_env}" .github/workflows/validate-subscription.yml
           if grep -Fq "https://api.implementsprint.com/v1/ci/validate) || true" .github/workflows/validate-subscription.yml; then
             echo "::error file=.github/workflows/validate-subscription.yml::Validation workflow must call the configurable validation-api-url input"
