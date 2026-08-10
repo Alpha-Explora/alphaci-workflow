@@ -78,6 +78,21 @@ on:
         type: string
         default: "maestro test .maestro"
         description: "Maestro iOS test command"
+      ios-runner:
+        required: false
+        type: string
+        default: "macos-15"
+        description: "GitHub macOS runner label for iOS builds"
+      ios-xcode-version:
+        required: false
+        type: string
+        default: "16.4"
+        description: "Preferred Xcode version"
+      ios-xcode-fallbacks:
+        required: false
+        type: string
+        default: "16.3,16.2,26.2"
+        description: "Fallback Xcode versions"
 
 permissions:
   contents: read

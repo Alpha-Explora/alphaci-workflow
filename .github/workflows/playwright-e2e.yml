@@ -19,9 +19,14 @@ on:
         description: "System name for display/artifacts"
       node-version:
         required: false
-        type: number
-        default: 24
+        type: string
+        default: "24"
         description: "Node.js version"
+      package-manager:
+        required: false
+        type: string
+        default: "auto"
+        description: "Package manager override"
       install-command:
         required: false
         type: string
