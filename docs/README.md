@@ -92,10 +92,10 @@ Internal API Center:
 All template callers are designed for:
 - `test`
 - `uat`
-- `main`
+- `prod`
 
 Promotion intent is linear:
-- `test` -> `uat` -> `main`
+- `test` -> `uat` -> `prod`
 
 ## Notes
 

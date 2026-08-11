@@ -5,9 +5,9 @@ name: "Frontend CI"
 
 on:
   push:
-    branches: [test, uat, main]
+    branches: [test, uat, prod]
   pull_request:
-    branches: [test, uat, main]
+    branches: [test, uat, prod]
   workflow_dispatch:
     inputs:
       service_name:
@@ -98,14 +98,14 @@ jobs:
       - run: npm run build
   deploy-gcp:
     needs: [validate-access, unit-tests, lint, security, build]
-    if: ${{ github.event_name == 'push' && (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main') }}
+    if: ${{ github.event_name == 'push' && (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'prod') }}
     uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
     with:
       system-name: ${{ inputs.service_name || 'frontend' }}
       working-directory: ${{ inputs.service_path || '.' }}
       checkout-ref: ${{ github.sha }}
       source-branch: ${{ github.ref_name }}
-      environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'uat' && 'uat' || 'dev' }}
+      environment: ${{ github.ref_name == 'prod' && 'prod' || github.ref_name == 'uat' && 'uat' || 'dev' }}
       gcp-project-id: ${{ vars.ALPHACI_GCP_PROJECT_ID }}
       gcp-region: ${{ vars.ALPHACI_GCP_REGION || 'asia-southeast1' }}
       workload-identity-provider: ${{ vars.ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER }}

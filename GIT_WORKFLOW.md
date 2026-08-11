@@ -25,13 +25,18 @@
 
 This document defines the end-to-end Git workflow for all repositories under the **ImplementSprint** organization. It covers branching, merging, code review, promotion, versioning, and CI/CD integration — aligned with the central-workflow reusable pipeline framework.
 
+> AlphaCI product repositories use a current release override: `main` is the
+> validation baseline, while production promotion runs from the manually
+> reviewed `prod` branch. Generated AlphaCI callers must use `test`, `uat`, and
+> `prod`; they must not deploy `main` directly to production.
+
 ### Core Principles
 
-- **Linear promotion**: code flows in one direction — `test` → `uat` → `main`
+- **Linear promotion**: code flows in one direction — `test` → `uat` → `prod`
 - **No direct pushes** to protected branches; all changes arrive via pull requests
-- **Automated promotion**: merging into `test` auto-creates a PR to `uat`; merging into `uat` auto-creates a PR to `main`
+- **Automated promotion**: merging into `test` auto-creates a PR to `uat`; production promotion from `uat` to `prod` is manually reviewed
 - **Every merge triggers CI**: builds, tests, lint, security scans, and quality gates run on every push/PR to protected branches
-- **Production is gated**: merges to `main` require a production-readiness gate and optional manual approval
+- **Production is gated**: production promotion to `prod` requires a production-readiness gate and manual approval
 
 ---
 
@@ -43,7 +48,8 @@ This document defines the end-to-end Git workflow for all repositories under the
 |--------|-------------|---------|-----------------|
 | `test` | Test / Preview | Integration branch — all feature work merges here first | Protected: require PR, require status checks |
 | `uat` | UAT | User acceptance testing — promoted from `test` | Protected: require PR, require status checks |
-| `main` | Production | Production releases — promoted from `uat` | Protected: require PR, require status checks, require approval |
+| `main` | Validation baseline | Default integration line; validate before production promotion | Protected: require PR and status checks |
+| `prod` | Production | Production releases — promoted from `uat` after manual review | Protected: require PR, require status checks, require approval |
 
 Required status checks for `test` and `uat` must include:
 
