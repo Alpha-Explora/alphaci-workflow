@@ -29,3 +29,14 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Local agent and automation state
+/.codex/
+/.superpowers/
+/.claude/
+/.agents/
+/docs/superpowers/
+/evidence/
+/artifacts/
+/docs/evidence/
+/docs/artifacts/
