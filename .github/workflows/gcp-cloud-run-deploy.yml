@@ -29,7 +29,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "Source branch. Only test/dev, uat/uat, main/prod, or approved preview may deploy."
+        description: "Source branch. Only test/dev, uat/uat, prod/prod, or approved preview may deploy."
       environment:
         required: false
         type: string
@@ -185,12 +185,12 @@ jobs:
             :
           elif [ "${BRANCH}" == "uat" ] && [ "${ENVIRONMENT}" == "uat" ]; then
             :
-          elif [ "${BRANCH}" == "main" ] && [ "${ENVIRONMENT}" == "prod" ]; then
+          elif [ "${BRANCH}" == "prod" ] && [ "${ENVIRONMENT}" == "prod" ]; then
             :
           elif [ "${ENVIRONMENT}" == "preview" ] && [ "${ALLOW_PREVIEW}" == "true" ]; then
             :
           else
-            echo "::error::Unsupported branch/environment mapping. Allowed: test->dev, uat->uat, main->prod, or explicit preview with allow-preview=true."
+            echo "::error::Unsupported branch/environment mapping. Allowed: test->dev, uat->uat, prod->prod, or explicit preview with allow-preview=true."
             exit 1
           fi
 

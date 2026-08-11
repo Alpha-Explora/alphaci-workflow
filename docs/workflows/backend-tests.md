@@ -30,9 +30,9 @@ name: Backend CI
 
 on:
   push:
-    branches: [test, uat, main]
+    branches: [test, uat, prod]
   pull_request:
-    branches: [test, uat, main]
+    branches: [test, uat, prod]
   workflow_dispatch:
 
 jobs:

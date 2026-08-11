@@ -72,7 +72,7 @@ The workflow validates branch and environment together before building:
 | --- | --- | --- |
 | `test` | `dev` | Deploy allowed. |
 | `uat` | `uat` | Deploy allowed. |
-| `main` | `prod` | Deploy allowed. |
+| `prod` | `prod` | Deploy allowed after the caller's manual production review. |
 | any branch | `preview` with `allow-preview=true` | Preview deploy allowed. |
 | anything else | anything else | Fails before build. |
 
@@ -84,7 +84,7 @@ Feature branches do not create long-lived Cloud Run services by default.
 jobs:
   deploy-gcp-backend:
     needs: [build, production-gate]
-    uses: cicd-external-project/cicd-workflow/.github/workflows/gcp-cloud-run-deploy.yml@feature/migrate-vercel-render-to-gcp
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
     permissions:
       contents: read
       id-token: write
@@ -93,7 +93,7 @@ jobs:
       working-directory: backend
       checkout-ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       source-branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-      environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'dev' }}
+      environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'prod' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'dev' }}
       gcp-project-id: alphaci-runtime
       gcp-region: asia-southeast1
       workload-identity-provider: projects/123/locations/global/workloadIdentityPools/github/providers/github
@@ -113,7 +113,7 @@ jobs:
 jobs:
   deploy-gcp-frontend:
     needs: [build, production-gate]
-    uses: cicd-external-project/cicd-workflow/.github/workflows/gcp-cloud-run-deploy.yml@feature/migrate-vercel-render-to-gcp
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
     permissions:
       contents: read
       id-token: write
@@ -122,7 +122,7 @@ jobs:
       working-directory: web
       checkout-ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       source-branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-      environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'dev' }}
+      environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'prod' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'dev' }}
       gcp-project-id: alphaci-runtime
       gcp-region: asia-southeast1
       workload-identity-provider: projects/123/locations/global/workloadIdentityPools/github/providers/github
@@ -155,7 +155,7 @@ Then it calls the tagged candidate URL plus `health-path` with an `Authorization
 | Message | Meaning | Fix |
 | --- | --- | --- |
 | Missing GitHub OIDC token permission | Caller or reusable workflow does not grant `id-token: write`. | Add `permissions.id-token: write`. |
-| Unsupported branch/environment mapping | Caller tried to deploy an unmapped long-lived branch/environment. | Use `test/dev`, `uat/uat`, `main/prod`, or explicit preview. |
+| Unsupported branch/environment mapping | Caller tried to deploy an unmapped long-lived branch/environment. | Use `test/dev`, `uat/uat`, `prod/prod`, or explicit preview. |
 | health-path must start with `/` | Caller passed a relative path without a leading slash. | Use `/` or a path such as `/health`. |
 | Required API is not enabled | Target GCP project is missing a required API. | Enable Cloud Run, Artifact Registry, or IAM Credentials in bootstrap. |
 | Unable to resolve pushed image digest | Artifact Registry did not return a digest for the pushed tag. | Check repository permissions and push result. |
