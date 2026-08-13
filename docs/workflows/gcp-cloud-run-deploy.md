@@ -16,7 +16,7 @@ This workflow is the GCP replacement path for new AlphaCI-managed deployments. I
 | `working-directory` | no | `.` | Project directory. |
 | `checkout-ref` | no | | Commit SHA or ref to checkout. |
 | `source-branch` | no | | Source branch used for branch gating and image tags. |
-| `environment` | no | `dev` | AlphaCI environment: `dev`, `uat`, `prod`, or `preview`. |
+| `environment` | no | `preview` | AlphaCI environment: `preview`, `uat`, or `prod`. |
 | `gcp-project-id` | yes | | Target GCP project ID. |
 | `gcp-region` | yes | | Target Cloud Run region. |
 | `workload-identity-provider` | yes | | Full Workload Identity Provider resource name. |
@@ -70,9 +70,9 @@ The workflow validates branch and environment together before building:
 
 | Source branch | Environment | Result |
 | --- | --- | --- |
-| `test` | `dev` | Deploy allowed. |
+| `test` | `preview` | Deploy allowed. |
 | `uat` | `uat` | Deploy allowed. |
-| `prod` | `prod` | Deploy allowed after the caller's manual production review. |
+| `main` | `prod` | Deploy allowed after the caller's manual production review. |
 | any branch | `preview` with `allow-preview=true` | Preview deploy allowed. |
 | anything else | anything else | Fails before build. |
 
@@ -93,7 +93,7 @@ jobs:
       working-directory: backend
       checkout-ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       source-branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-      environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'prod' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'dev' }}
+      environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'preview' }}
       gcp-project-id: alphaci-runtime
       gcp-region: asia-southeast1
       workload-identity-provider: projects/123/locations/global/workloadIdentityPools/github/providers/github
@@ -101,7 +101,7 @@ jobs:
       runtime-service-account: orders-api-runtime@alphaci-runtime.iam.gserviceaccount.com
       artifact-registry-repository: alphaci-services
       image-name: orders-api
-      cloud-run-service-name: orders-api-dev
+      cloud-run-service-name: orders-api-preview
       docker-context: .
       dockerfile-path: Dockerfile
       health-path: /health
@@ -122,7 +122,7 @@ jobs:
       working-directory: web
       checkout-ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       source-branch: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-      environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'prod' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'dev' }}
+      environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'prod' || (github.event.workflow_run.head_branch || github.ref_name) == 'uat' && 'uat' || 'preview' }}
       gcp-project-id: alphaci-runtime
       gcp-region: asia-southeast1
       workload-identity-provider: projects/123/locations/global/workloadIdentityPools/github/providers/github
@@ -130,7 +130,7 @@ jobs:
       runtime-service-account: orders-web-runtime@alphaci-runtime.iam.gserviceaccount.com
       artifact-registry-repository: alphaci-services
       image-name: orders-web
-      cloud-run-service-name: orders-web-dev
+      cloud-run-service-name: orders-web-preview
       docker-context: .
       dockerfile-path: Dockerfile
       health-path: /
@@ -138,7 +138,7 @@ jobs:
 
 ## Runtime Secrets
 
-This workflow does not accept raw secret values. Secret Manager references should be resolved by the backend/control plane before deploy and attached to the Cloud Run service in a later hardening slice. Until that slice lands, callers must not pass secret values through inputs, environment dumps, or logs.
+This workflow does not accept raw secret values. Before deployment it resolves metadata-only customer secret references for the selected project and environment, then passes only `KEY=secret-id:latest` bindings to Cloud Run. Secret payloads remain in Secret Manager and are read by the customer runtime identity. Stale bindings for the same customer service/environment are removed on the next deployment; unrelated bindings remain untouched.
 
 ## Health Probe
 
@@ -155,7 +155,7 @@ Then it calls the tagged candidate URL plus `health-path` with an `Authorization
 | Message | Meaning | Fix |
 | --- | --- | --- |
 | Missing GitHub OIDC token permission | Caller or reusable workflow does not grant `id-token: write`. | Add `permissions.id-token: write`. |
-| Unsupported branch/environment mapping | Caller tried to deploy an unmapped long-lived branch/environment. | Use `test/dev`, `uat/uat`, `prod/prod`, or explicit preview. |
+| Unsupported branch/environment mapping | Caller tried to deploy an unmapped long-lived branch/environment. | Use `test/preview`, `uat/uat`, `main/prod`, or explicit preview. |
 | health-path must start with `/` | Caller passed a relative path without a leading slash. | Use `/` or a path such as `/health`. |
 | Required API is not enabled | Target GCP project is missing a required API. | Enable Cloud Run, Artifact Registry, or IAM Credentials in bootstrap. |
 | Unable to resolve pushed image digest | Artifact Registry did not return a digest for the pushed tag. | Check repository permissions and push result. |
@@ -169,4 +169,4 @@ Run this from the repository root:
 node scripts/validate-gcp-cloud-run-workflow.cjs
 ```
 
-The contract test checks required inputs, WIF permissions, preflight checks, digest deployment, branch/preview gates, private health probing, safe outputs, generated caller-template deploy jobs, repository-variable wiring, and forbidden static-key or legacy-provider patterns.
+The contract test checks required inputs, WIF permissions, preflight checks, digest deployment, branch/preview gates, private health probing, customer secret-reference wiring, safe outputs, generated caller-template deploy jobs, repository-variable wiring, and forbidden static-key or legacy-provider patterns.

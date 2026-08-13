@@ -311,7 +311,7 @@ jobs:
 
           gcloud config set project "${GCP_PROJECT_ID}" --quiet
 
-          for api in run.googleapis.com artifactregistry.googleapis.com iamcredentials.googleapis.com; do
+          for api in run.googleapis.com artifactregistry.googleapis.com iamcredentials.googleapis.com secretmanager.googleapis.com; do
             if ! gcloud services list \
               --project "${GCP_PROJECT_ID}" \
               --enabled \
@@ -381,11 +381,70 @@ jobs:
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
           echo "digest-uri=${IMAGE_WITHOUT_TAG}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve customer runtime secret references
+        id: runtime_secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+
+          # Read Secret Manager metadata only; secret payloads never enter the workflow.
+          SECRET_FILTER="labels.environment=${ENVIRONMENT} AND name:alphaci-${CLOUD_RUN_SERVICE_NAME}-"
+          SECRET_JSON="$(gcloud secrets list \
+            --project "${GCP_PROJECT_ID}" \
+            --filter "${SECRET_FILTER}" \
+            --format=json)"
+          SECRET_PREFIX="alphaci-${CLOUD_RUN_SERVICE_NAME}-"
+          if [ "${ENVIRONMENT}" != "prod" ]; then
+            SECRET_PREFIX="${SECRET_PREFIX}${ENVIRONMENT}-"
+          fi
+          SECRET_ARGS="$(jq -r --arg prefix "${SECRET_PREFIX}" '
+            [.[] |
+              ((.labels.env_key // ((.name | split("/") | last) | sub("^" + $prefix; "") | gsub("-"; "_"))) | ascii_upcase)
+                + "=" + (.name | split("/") | last) + ":latest")]
+            | join(",")
+          ' <<<"${SECRET_JSON}")"
+          if [ -n "${SECRET_ARGS}" ]; then
+            echo "set_secrets=${SECRET_ARGS}" >> "$GITHUB_OUTPUT"
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "set_secrets=" >> "$GITHUB_OUTPUT"
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          REMOVE_SECRETS=""
+          if gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format=json >/tmp/alphaci-cloud-run-service.json 2>/dev/null; then
+            REMOVE_SECRETS="$(jq -r --arg prefix "${SECRET_PREFIX}" '
+              [.spec.template.containers[]?.env[]?
+                | select(.valueSource.secretKeyRef.secret != null)
+                | select((.valueSource.secretKeyRef.secret | split("/") | last) | startswith($prefix))
+                | .name]
+              | unique | join(",")
+            ' /tmp/alphaci-cloud-run-service.json)"
+          fi
+          if [ -n "${REMOVE_SECRETS}" ]; then
+            echo "remove_secrets=${REMOVE_SECRETS}" >> "$GITHUB_OUTPUT"
+            echo "has_remove_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "remove_secrets=" >> "$GITHUB_OUTPUT"
+            echo "has_remove_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy Cloud Run service without traffic
         shell: bash
         run: |
           set -euo pipefail
           set +x
+          SECRET_ARGS=()
+          if [ "${{ steps.runtime_secrets.outputs.has_secrets }}" = "true" ]; then
+            SECRET_ARGS+=("--set-secrets=${{ steps.runtime_secrets.outputs.set_secrets }}")
+          fi
+          if [ "${{ steps.runtime_secrets.outputs.has_remove_secrets }}" = "true" ]; then
+            SECRET_ARGS+=("--remove-secrets=${{ steps.runtime_secrets.outputs.remove_secrets }}")
+          fi
           gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
@@ -393,6 +452,7 @@ jobs:
             --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
             --platform managed \
             --no-allow-unauthenticated \
+            "${SECRET_ARGS[@]}" \
             --no-traffic \
             --tag "${CANDIDATE_TAG}" \
             --labels "alphaci_managed=true,alphaci_system=${{ steps.metadata.outputs.safe-system }},alphaci_environment=${{ steps.metadata.outputs.safe-environment }},alphaci_correlation=${{ steps.metadata.outputs.correlation-id }},alphaci_commit=${GITHUB_SHA}" \
