@@ -97,7 +97,7 @@ jobs:
   deploy-gcp:
     needs: [validate-access, unit-tests, lint, security, build]
     if: ${{ github.event_name == 'push' && (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main') }}
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v0.1.7-smoke
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
     with:
       system-name: ${{ inputs.service_name || 'frontend' }}
       working-directory: ${{ inputs.service_path || '.' }}
