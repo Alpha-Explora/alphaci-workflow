@@ -32,8 +32,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Gated for the same reason as the v1 line: the internal branch is not a
+  # pull_request target either, so without this the internal tag would move to
+  # an unvalidated commit. Internal pipelines break just as loudly as customer
+  # ones — they are simply harder to notice.
+  validate:
+    name: "Validate before tagging"
+    uses: ./.github/workflows/workflow-validation.yml
+
   retag:
     name: "Move internal-v1 to current commit"
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

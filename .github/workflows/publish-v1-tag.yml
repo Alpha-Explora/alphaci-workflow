@@ -24,8 +24,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Workflow Validation triggers on pull_request only, so a direct push to main
+  # moved v1 with no check of any kind run against the commit every customer
+  # pipeline was about to pin to. Calling it here covers that path without
+  # running the suite twice, and a failing commit leaves v1 on the last good
+  # one — the safe direction to fail.
+  validate:
+    name: "Validate before tagging"
+    uses: ./.github/workflows/workflow-validation.yml
+
   retag:
     name: "Move v1 to current main"
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
