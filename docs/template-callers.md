@@ -10,7 +10,7 @@ Files covered:
 ## FE Caller
 
 Current orchestrator ref in template:
-- `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/master-pipeline-fe.yml@v1`
+- `Alpha-Explora/alphaci-workflow/.github/workflows/master-pipeline-fe.yml@v1`
 
 Required repository variables:
 - `FE_SINGLE_SYSTEMS_JSON` or `FE_MULTI_SYSTEMS_JSON`
@@ -61,7 +61,7 @@ Multi:
 ## BE Caller
 
 Current orchestrator ref in template:
-- `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/master-pipeline-be.yml@v1`
+- `Alpha-Explora/alphaci-workflow/.github/workflows/master-pipeline-be.yml@v1`
 
 Required repository variables:
 - `BACKEND_SINGLE_SYSTEMS_JSON` or `BACKEND_MULTI_SYSTEMS_JSON`
@@ -101,7 +101,7 @@ Node:
 ## Mobile Caller
 
 Current orchestrator ref in template:
-- `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/master-pipeline-mobile.yml@v1`
+- `Alpha-Explora/alphaci-workflow/.github/workflows/master-pipeline-mobile.yml@v1`
 
 Required repository variables:
 - `MOBILE_SINGLE_SYSTEMS_JSON` or `MOBILE_MULTI_SYSTEMS_JSON`

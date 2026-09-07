@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   pipeline:
-    uses: Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/master-pipeline-be.yml@v1
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/master-pipeline-be.yml@v1
     with:
       pipeline_mode: single
       enable_security_scan: true

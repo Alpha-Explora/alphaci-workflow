@@ -19,7 +19,7 @@ Optional generated files depend on selected catalog actions:
 ## Workflow Rules
 
 - Generated workflows must be thin callers.
-- Generated workflows must reference `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow` with a stable release tag such as `@v1`.
+- Generated workflows must reference `Alpha-Explora/alphaci-workflow` with a stable release tag such as `@v1`.
 - Generated workflows must not point to `@main`.
 - The default branch flow is `test -> uat -> main`.
 

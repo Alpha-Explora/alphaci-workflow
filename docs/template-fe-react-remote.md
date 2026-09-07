@@ -7,7 +7,7 @@ Verification date:
 - 2026-04-10
 
 Current caller workflow ref (documented exactly from remote default branch):
-- `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow/.github/workflows/master-pipeline-fe.yml@v1`
+- `Alpha-Explora/alphaci-workflow/.github/workflows/master-pipeline-fe.yml@v1`
 
 ## Required Branches
 

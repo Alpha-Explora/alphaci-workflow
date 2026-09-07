@@ -1,6 +1,6 @@
 # Migrating a Repository Without Workflows to Central Workflow
 
-This runbook is for teams whose repository does not have workflow files yet and needs first-time CI/CD onboarding through `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow` callers.
+This runbook is for teams whose repository does not have workflow files yet and needs first-time CI/CD onboarding through `Alpha-Explora/alphaci-workflow` callers.
 
 ## Scope
 

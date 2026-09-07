@@ -19,11 +19,11 @@ This layer turns the reusable stack workflows into a user-facing product flow.
    - narrows to the changed service when possible
    - infers the package manager
    - infers lint, typecheck, build, test, Playwright, and k6 defaults where they are safely detectable
-5. The caller workflow invokes the matching reusable stack workflow from `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow`.
+5. The caller workflow invokes the matching reusable stack workflow from `Alpha-Explora/alphaci-workflow`.
 
 ## Current assumptions
 
-- Central workflow repository reference is currently `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow@v1`
+- Central workflow repository reference is currently `Alpha-Explora/alphaci-workflow@v1`
 - Branch baseline is `test`, `uat`, and `main`
 - Optional deployment and approval wiring can be driven by repository variables such as:
   - `UAT_BASE_URL`

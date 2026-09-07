@@ -628,3 +628,125 @@ jobs:
           NODE
 
           exit "$failed"
+
+  validate-backend-contract:
+    name: "Validate Backend Contract"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      # The backend generates `uses:` references to these workflows by name.
+      # A rename or deletion here breaks every generated customer pipeline at
+      # runtime, in the customer's repository, where we cannot see it. This job
+      # is the seam that turns that into a build failure here instead.
+      - name: Assert generator-referenced workflows exist
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          failed=0
+          # Emitted by staged-workflow.builder.ts and the provider fragments.
+          required=(
+            validate-subscription.yml
+            backend-tests.yml
+            frontend-tests.yml
+            lint-check.yml
+            security-scan.yml
+            sonarcloud-scan.yml
+            docker-build.yml
+            production-gate.yml
+            # Distinct from workflow-templates/customer/promotion.yml. The
+            # generator calls the reusable workflow at this path; the template
+            # of the same name is a separate, copyable artifact. A check that
+            # only looked for "a file named promotion.yml" would pass while the
+            # generated pipeline still failed to resolve.
+            promotion.yml
+            gcp-cloud-run-deploy.yml
+            render-deploy.yml
+            vercel-deploy.yml
+          )
+
+          for workflow in "${required[@]}"; do
+            if [ ! -f ".github/workflows/${workflow}" ]; then
+              echo "::error::Backend generates a reference to .github/workflows/${workflow}, which does not exist"
+              failed=1
+            fi
+          done
+
+          exit "$failed"
+
+      - name: Assert catalog resolves against this repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const expectedRepo = 'Alpha-Explora/alphaci-workflow';
+          let failed = false;
+
+          const refs = JSON.parse(fs.readFileSync('catalog/workflow-refs.json', 'utf8'));
+          const stacks = JSON.parse(fs.readFileSync('catalog/stacks.json', 'utf8'));
+
+          if (refs.repository !== expectedRepo) {
+            console.error(`::error file=catalog/workflow-refs.json::repository must be ${expectedRepo}, found ${refs.repository}`);
+            failed = true;
+          }
+
+          // Every stack the product can offer must resolve to a workflow that
+          // exists here. Entries in `workflows` that no stack points at are not
+          // checked - they are inert, not broken.
+          for (const stack of stacks) {
+            const key = stack.serviceWorkflow;
+            if (!key) continue;
+            const workflowPath = refs.workflows?.[key];
+            if (!workflowPath) {
+              console.error(`::error file=catalog/stacks.json::stack ${stack.key} references workflow key ${key}, absent from workflow-refs.json`);
+              failed = true;
+              continue;
+            }
+            if (!fs.existsSync(workflowPath)) {
+              console.error(`::error file=catalog/workflow-refs.json::${key} points at ${workflowPath}, which does not exist`);
+              failed = true;
+            }
+          }
+
+          if (failed) process.exit(1);
+          console.log('Catalog resolves against this repository.');
+          NODE
+
+  validate-retired-organisations:
+    name: "Validate Retired Organisations"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      # These organisations no longer host the central workflows. A reference
+      # to one is either stale documentation or a generated pipeline pointed at
+      # a repository we no longer publish to. The guard that already existed for
+      # this ran inside a single script, which is why the docs drifted.
+      #
+      # cicd-external-project is deliberately NOT listed yet: it remains the
+      # live source until the backend cutover completes.
+      - name: Assert no retired organisation is referenced
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Both this file and the GCP guard script legitimately contain these
+          # names, as the patterns being searched for. Exclude them so the check
+          # does not match its own definition.
+          if grep -rn --exclude-dir=.git \
+            --exclude=validate-gcp-cloud-run-workflow.cjs \
+            --exclude=workflow-validation.yml \
+            -E 'Tone-Lloyd-Sir-Catubag-CICD|ImplementSprint/(central-workflow|cicd-workflow)' .; then
+            echo "::error::Reference to a retired organisation. The central workflow repository is Alpha-Explora/alphaci-workflow."
+            exit 1
+          fi
+
+          echo "No retired organisation references found."

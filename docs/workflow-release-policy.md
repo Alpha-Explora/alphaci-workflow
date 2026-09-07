@@ -1,6 +1,6 @@
 # Workflow Release Policy
 
-Generated customer repositories must use stable release refs from `Tone-Lloyd-Sir-Catubag-CICD/cicd-workflow`. Do not generate customer workflows that point to `@main`.
+Generated customer repositories must use stable release refs from `Alpha-Explora/alphaci-workflow`. Do not generate customer workflows that point to `@main`.
 
 ## Stable Refs
 
