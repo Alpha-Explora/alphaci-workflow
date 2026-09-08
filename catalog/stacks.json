@@ -17,7 +17,9 @@
       "typecheck": "npx tsc --noEmit",
       "unit": "npm test -- --runInBand",
       "build": "npm run build"
-    }
+    },
+    "language": "TypeScript",
+    "serviceTemplate": "nextjs-service-pipeline"
   },
   {
     "key": "react",
@@ -37,7 +39,9 @@
       "typecheck": "npx tsc --noEmit",
       "unit": "npm test -- --runInBand",
       "build": "npm run build"
-    }
+    },
+    "language": "TypeScript",
+    "serviceTemplate": "react-service-pipeline"
   },
   {
     "key": "nestjs",
@@ -58,7 +62,9 @@
       "unit": "npm test -- --runInBand",
       "e2e": "npm run test:e2e",
       "build": "npm run build"
-    }
+    },
+    "language": "TypeScript",
+    "serviceTemplate": "nest-service-pipeline"
   },
   {
     "key": "nodejs",
@@ -78,6 +84,32 @@
       "typecheck": "npx tsc --noEmit",
       "unit": "npm test -- --runInBand",
       "build": "npm run build"
-    }
+    },
+    "language": "TypeScript",
+    "serviceTemplate": "nodejs-service-pipeline"
+  },
+  {
+    "key": "dotnet",
+    "label": ".NET",
+    "kind": "backend",
+    "runtime": "dotnet",
+    "language": "C#",
+    "defaultRuntimeVersion": "10.0.x",
+    "supportedPackageManagers": [
+      "nuget"
+    ],
+    "defaultBuildOutput": "bin/Release",
+    "defaultCommands": {
+      "install": "dotnet restore",
+      "lint": "dotnet format --verify-no-changes",
+      "typecheck": "dotnet build --no-restore",
+      "unit": "dotnet test",
+      "build": "dotnet build --configuration Release"
+    },
+    "serviceTemplate": "dotnet-service-pipeline",
+    "repoShapes": [
+      "standalone",
+      "multi"
+    ]
   }
 ]
