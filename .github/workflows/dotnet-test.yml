@@ -1,0 +1,260 @@
+# Contract: docs/workflows/dotnet-test.md
+name: "Reusable: .NET Unit Tests"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory containing the solution or test projects"
+      system-name:
+        required: true
+        type: string
+        description: "System name for artifacts/display (e.g. StPeter-API)"
+      dotnet-version:
+        required: false
+        type: string
+        default: "10.0.x"
+        description: ".NET SDK version. 10.0 is the active LTS; 8.0 and 9.0 leave support in November 2026"
+      solution-path:
+        required: false
+        type: string
+        default: ""
+        description: "Solution or project to build and test, relative to working-directory. Empty lets the SDK discover it"
+      configuration:
+        required: false
+        type: string
+        default: "Release"
+        description: "Build configuration (Release|Debug)"
+      test-arguments:
+        required: false
+        type: string
+        default: ""
+        description: "Extra arguments appended to dotnet test (e.g. --filter Category!=Integration)"
+      coverage-threshold:
+        required: false
+        type: number
+        default: 80
+        description: "Minimum line coverage percentage"
+      enforce-coverage:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail when coverage is below threshold or no report was produced"
+      reportgenerator-version:
+        required: false
+        type: string
+        default: "5.*"
+        description: "Version range for the ReportGenerator global tool used to merge coverage"
+      upload-artifact:
+        required: false
+        type: boolean
+        default: true
+        description: "Upload the merged coverage report"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    outputs:
+      unit-test-result:
+        description: "Unit test pass/fail"
+        value: ${{ jobs.dotnet-unit-tests.outputs.result }}
+      coverage-percent:
+        description: "Code coverage percentage"
+        value: ${{ jobs.dotnet-unit-tests.outputs.coverage }}
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-unit-tests:
+    name: ".NET Unit Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      result: ${{ steps.test-run.outcome }}
+      coverage: ${{ steps.coverage-check.outputs.coverage }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      # Keyed on the project files rather than a lock file, because
+      # packages.lock.json is opt-in and most solutions do not have one. A key
+      # that never resolves would silently disable the cache instead of failing.
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # solution-path is optional, so it is passed as an array element that is
+      # simply absent when empty. Interpolating an empty string would leave a
+      # bare "" argument, which the SDK reads as a project named "".
+      - name: Restore Dependencies
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          dotnet restore "${target[@]}"
+
+      - name: Build
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+          CONFIGURATION: ${{ inputs.configuration }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          dotnet build "${target[@]}" --configuration "${CONFIGURATION}" --no-restore
+
+      # --no-build is deliberate: it guarantees the assemblies under test are the
+      # ones the build step above produced. Letting dotnet test rebuild would
+      # hide a build that only succeeds with different implicit arguments.
+      - name: Run Unit Tests
+        id: test-run
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+          CONFIGURATION: ${{ inputs.configuration }}
+          TEST_ARGUMENTS: ${{ inputs.test-arguments }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          # Split on whitespace deliberately: the caller passes a command-line
+          # fragment such as "--filter Category!=Integration", which has to reach
+          # dotnet as separate arguments rather than one quoted string.
+          extra=()
+          if [ -n "${TEST_ARGUMENTS}" ]; then
+            read -ra extra <<< "${TEST_ARGUMENTS}"
+          fi
+
+          dotnet test "${target[@]}" \
+            --configuration "${CONFIGURATION}" \
+            --no-build \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./TestResults \
+            --collect:"XPlat Code Coverage" \
+            "${extra[@]}"
+
+      # dotnet test writes each test project's report to its own GUID-named
+      # directory, so there is no fixed path to hand the coverage gate, and a
+      # solution with unit and integration test projects produces several. Both
+      # are merged into one report: picking the first would silently grade the
+      # whole solution on one project's coverage.
+      - name: Merge Coverage Reports
+        id: merge-coverage
+        if: always()
+        env:
+          ENFORCE_COVERAGE: ${{ inputs.enforce-coverage }}
+          REPORTGENERATOR_VERSION: ${{ inputs.reportgenerator-version }}
+          TEST_OUTCOME: ${{ steps.test-run.outcome }}
+        run: |
+          set -euo pipefail
+
+          # Depth 2 is exactly TestResults/<guid>/coverage.cobertura.xml, one per
+          # test project. The trx logger also stages a byte-identical copy of the
+          # last report under TestResults/<user>_<machine>_<time>/In/<machine>/,
+          # which an unrestricted find would pick up and weight twice.
+          reports=()
+          if [ -d ./TestResults ]; then
+            mapfile -t reports < <(find ./TestResults -mindepth 2 -maxdepth 2 -name 'coverage.cobertura.xml' -type f | sort)
+          fi
+          echo "Found ${#reports[@]} coverage report(s)."
+
+          if [ "${#reports[@]}" -eq 0 ]; then
+            # This step runs on failure too, so it must not diagnose a build or
+            # test failure as a coverage problem. When the tests did not pass
+            # there is nothing to explain here and the job is already failing;
+            # naming the collector then would send people to the wrong fix.
+            if [ "${TEST_OUTCOME}" != "success" ]; then
+              echo "No coverage to merge because the tests did not pass. See the test step above."
+              exit 0
+            fi
+
+            # Tests passed and still produced nothing, which is almost always a
+            # missing collector: the XPlat collector ships in coverlet.collector,
+            # and a test project without that PackageReference runs green and
+            # reports no coverage at all.
+            message="Tests passed but produced no Cobertura report. Add a PackageReference to coverlet.collector in each test project."
+            if [ "${ENFORCE_COVERAGE}" = "true" ]; then
+              echo "::error::${message}"
+              exit 1
+            fi
+            echo "::warning::${message} Enforcement is disabled, so the job continues."
+            exit 0
+          fi
+
+          dotnet tool install --global dotnet-reportgenerator-globaltool --version "${REPORTGENERATOR_VERSION}"
+          export PATH="${PATH}:${HOME}/.dotnet/tools"
+
+          joined="$(IFS=';'; printf '%s' "${reports[*]}")"
+
+          # Cobertura for the gate, lcov for SonarCloud, both from one merge so
+          # the two can never disagree about what was covered.
+          reportgenerator \
+            "-reports:${joined}" \
+            "-targetdir:coverage" \
+            "-reporttypes:Cobertura;lcov"
+
+          # ReportGenerator names its Cobertura output Cobertura.xml; the gate is
+          # pointed at the lower-case name used by every other stack.
+          mv coverage/Cobertura.xml coverage/coverage.cobertura.xml
+          ls -la coverage
+
+      - name: Parse Coverage
+        id: coverage-check
+        if: always()
+        uses: Alpha-Explora/alphaci-workflow/.github/actions/coverage-gate@v1
+        with:
+          report-path: coverage/coverage.cobertura.xml
+          format: cobertura
+          threshold: ${{ inputs.coverage-threshold }}
+          enforce: ${{ inputs.enforce-coverage }}
+          working-directory: ${{ inputs.working-directory }}
+
+      - name: Upload Coverage Artifact
+        if: ${{ inputs.upload-artifact && always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.system-name }}-coverage
+          path: ${{ inputs.working-directory }}/coverage
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.system-name }}-unit-test-results
+          path: ${{ inputs.working-directory }}/TestResults/**/*.trx
+          retention-days: 7
+          if-no-files-found: ignore

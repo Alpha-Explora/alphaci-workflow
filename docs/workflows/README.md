@@ -32,6 +32,10 @@ Customer catalog files live under `catalog/customer/`:
 | [lint-check.yml](lint-check.md) | quality | Run lint and optional format checks. |
 | [frontend-tests.yml](frontend-tests.md) | quality | Run frontend unit tests with coverage. |
 | [backend-tests.yml](backend-tests.md) | quality | Run backend unit and optional integration tests with coverage. |
+| [dotnet-test.yml](dotnet-test.md) | quality | Build and test a .NET solution, merging per-project coverage before the gate. |
+| [dotnet-analyze.yml](dotnet-analyze.md) | quality | Build a .NET solution with analyzers enabled and warnings escalated. |
+| [dotnet-format.yml](dotnet-format.md) | quality | Verify C# formatting and style with dotnet format. |
+| [dotnet-audit.yml](dotnet-audit.md) | security | Audit NuGet dependencies against known advisories. |
 | [mobile-tests.yml](mobile-tests.md) | quality | Run mobile unit tests with coverage. |
 | [security-scan.yml](security-scan.md) | security | Run dependency and source security scans. |
 | [docker-build.yml](docker-build.md) | build | Build, optionally push, and scan Docker images. |

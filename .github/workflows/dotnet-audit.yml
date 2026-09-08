@@ -1,0 +1,213 @@
+# Contract: docs/workflows/dotnet-audit.md
+name: "Reusable: .NET Dependency Audit"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory containing the solution or projects"
+      system-name:
+        required: true
+        type: string
+        description: "System name for artifacts/display (e.g. StPeter-API)"
+      dotnet-version:
+        required: false
+        type: string
+        default: "10.0.x"
+        description: ".NET SDK version"
+      solution-path:
+        required: false
+        type: string
+        default: ""
+        description: "Solution or project to audit, relative to working-directory. Empty lets the SDK discover it"
+      fail-on-severity:
+        required: false
+        type: string
+        default: "High"
+        description: "Lowest severity that fails the job (Low|Moderate|High|Critical), or 'none' to report only"
+      include-transitive:
+        required: false
+        type: boolean
+        default: true
+        description: "Audit transitive dependencies as well as direct ones"
+      upload-artifact:
+        required: false
+        type: boolean
+        default: true
+        description: "Upload the raw audit report"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    outputs:
+      audit-result:
+        description: "Audit pass/fail"
+        value: ${{ jobs.dotnet-audit.outputs.result }}
+      vulnerability-count:
+        description: "Number of distinct vulnerable packages found"
+        value: ${{ jobs.dotnet-audit.outputs.vulnerabilities }}
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-audit:
+    name: ".NET Dependency Audit"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      result: ${{ steps.audit.outcome }}
+      vulnerabilities: ${{ steps.audit.outputs.vulnerabilities }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore Dependencies
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          dotnet restore "${target[@]}"
+
+      # `dotnet list package --vulnerable` exits 0 whether or not it finds
+      # anything, so the exit code cannot be the gate: a High-severity advisory
+      # and a clean report are indistinguishable to the shell. The report is
+      # written as JSON and the decision is made from its contents.
+      - name: Collect Vulnerability Report
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+          INCLUDE_TRANSITIVE: ${{ inputs.include-transitive }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          scope=()
+          if [ "${INCLUDE_TRANSITIVE}" = "true" ]; then
+            scope+=(--include-transitive)
+          fi
+
+          mkdir -p audit
+          dotnet list package "${target[@]}" --vulnerable "${scope[@]}" \
+            --format json --output-version 1 > audit/vulnerable.json
+
+      - name: Evaluate Vulnerabilities
+        id: audit
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const RANK = { low: 1, moderate: 2, high: 3, critical: 4 };
+          const threshold = (process.env.FAIL_ON_SEVERITY || 'High').trim().toLowerCase();
+
+          if (threshold !== 'none' && !(threshold in RANK)) {
+            console.error(`::error::Unsupported fail-on-severity '${threshold}'. Use Low, Moderate, High, Critical, or none.`);
+            process.exit(1);
+          }
+
+          const report = JSON.parse(fs.readFileSync('audit/vulnerable.json', 'utf8'));
+
+          // The same package is listed once per project that resolves it, and
+          // again as a transitive of every dependent project. Counting rows
+          // would report one bad package as a dozen findings and make the
+          // numbers meaningless as a trend.
+          const findings = new Map();
+          for (const project of report.projects ?? []) {
+            for (const framework of project.frameworks ?? []) {
+              const packages = [
+                ...(framework.topLevelPackages ?? []),
+                ...(framework.transitivePackages ?? []),
+              ];
+              for (const pkg of packages) {
+                for (const vuln of pkg.vulnerabilities ?? []) {
+                  const key = `${pkg.id}@${pkg.resolvedVersion}:${vuln.advisoryurl}`;
+                  if (!findings.has(key)) {
+                    findings.set(key, {
+                      id: pkg.id,
+                      version: pkg.resolvedVersion,
+                      severity: String(vuln.severity ?? 'unknown'),
+                      url: vuln.advisoryurl,
+                    });
+                  }
+                }
+              }
+            }
+          }
+
+          const all = [...findings.values()].sort(
+            (a, b) => (RANK[b.severity.toLowerCase()] ?? 0) - (RANK[a.severity.toLowerCase()] ?? 0),
+          );
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `vulnerabilities=${all.length}\n`);
+
+          if (all.length === 0) {
+            console.log('No known vulnerable packages.');
+            process.exit(0);
+          }
+
+          for (const f of all) {
+            console.log(`${f.severity.padEnd(9)} ${f.id}@${f.version}  ${f.url}`);
+          }
+
+          if (threshold === 'none') {
+            console.log(`::warning::${all.length} vulnerable package(s) found; reporting only.`);
+            process.exit(0);
+          }
+
+          // An unrecognised severity is treated as blocking rather than ignored.
+          // A new severity name appearing upstream must not become a silent pass.
+          const blocking = all.filter(
+            (f) => (RANK[f.severity.toLowerCase()] ?? Number.MAX_SAFE_INTEGER) >= RANK[threshold],
+          );
+
+          if (blocking.length > 0) {
+            console.error(`::error::${blocking.length} package(s) at or above ${threshold} severity. Update them or pin a patched version.`);
+            process.exit(1);
+          }
+
+          console.log(`::warning::${all.length} vulnerable package(s) found, all below the ${threshold} threshold.`);
+          NODE
+
+      - name: Upload Audit Report
+        if: ${{ inputs.upload-artifact && always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.system-name }}-dotnet-audit
+          path: ${{ inputs.working-directory }}/audit/vulnerable.json
+          retention-days: 14
+          if-no-files-found: ignore

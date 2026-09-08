@@ -1,0 +1,138 @@
+# Granular backend .NET workflow.
+# Copy to .github/workflows/backend-ci.yml in a consumer repository.
+
+name: "Backend CI"
+
+on:
+  push:
+    branches: [dev, uat, main]
+  pull_request:
+    branches: [dev, uat, main]
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: "Service name for display and artifacts"
+        required: true
+        type: string
+        default: "backend"
+      service_path:
+        description: "Relative path to the .NET service"
+        required: false
+        type: string
+        default: "."
+      dotnet_version:
+        description: ".NET SDK version"
+        required: false
+        type: string
+        default: "10.0.x"
+      solution_path:
+        description: "Solution or project to build. Leave empty to let the SDK discover it."
+        required: false
+        type: string
+        default: ""
+      coverage_threshold:
+        description: "Minimum coverage percentage"
+        required: false
+        type: number
+        default: 80
+      enforce_coverage:
+        description: "Fail when coverage is below threshold or missing"
+        required: false
+        type: boolean
+        default: true
+      docker_image:
+        description: "Optional image name. Leave empty to skip Docker build."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  security-events: write
+
+jobs:
+  # validation-api-url is deliberately not passed. The env context is not
+  # available in a called workflow's `with:`, so `${{ env.* }}` there does not
+  # resolve, and validate-subscription.yml already defaults to the same URL.
+  validate-access:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v1
+    secrets:
+      CI_TOKEN: ${{ secrets.CI_TOKEN }}
+
+  unit-tests:
+    needs: validate-access
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-test.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      system-name: ${{ inputs.service_name || 'backend' }}
+      dotnet-version: ${{ inputs.dotnet_version || '10.0.x' }}
+      solution-path: ${{ inputs.solution_path || '' }}
+      coverage-threshold: ${{ inputs.coverage_threshold || 80 }}
+      enforce-coverage: ${{ inputs.enforce_coverage != false }}
+
+  # dotnet format is the .NET counterpart of lint-check.yml.
+  lint:
+    needs: validate-access
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-format.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      system-name: ${{ inputs.service_name || 'backend' }}
+      dotnet-version: ${{ inputs.dotnet_version || '10.0.x' }}
+      solution-path: ${{ inputs.solution_path || '' }}
+
+  # The compiler is the type checker for .NET, so analysis fills the slot a
+  # typecheck job fills for a Node service.
+  analyze:
+    needs: validate-access
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-analyze.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      system-name: ${{ inputs.service_name || 'backend' }}
+      dotnet-version: ${{ inputs.dotnet_version || '10.0.x' }}
+      solution-path: ${{ inputs.solution_path || '' }}
+
+  security:
+    needs: validate-access
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-audit.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      system-name: ${{ inputs.service_name || 'backend' }}
+      dotnet-version: ${{ inputs.dotnet_version || '10.0.x' }}
+      solution-path: ${{ inputs.solution_path || '' }}
+      fail-on-severity: High
+
+  docker:
+    needs: [validate-access, unit-tests, lint, analyze, security]
+    if: ${{ inputs.docker_image != '' }}
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/docker-build.yml@v1
+    with:
+      working-directory: ${{ inputs.service_path || '.' }}
+      image-name: ${{ inputs.docker_image }}
+      push-image: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+      scan-vulnerabilities: true
+
+  deploy-gcp:
+    needs: [validate-access, unit-tests, lint, analyze, security]
+    if: ${{ github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'uat' || github.ref_name == 'main') }}
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
+    with:
+      system-name: ${{ inputs.service_name || 'backend' }}
+      working-directory: ${{ inputs.service_path || '.' }}
+      checkout-ref: ${{ github.sha }}
+      source-branch: ${{ github.ref_name }}
+      environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'uat' && 'uat' || 'preview' }}
+      gcp-project-id: ${{ vars.ALPHACI_GCP_PROJECT_ID }}
+      gcp-region: ${{ vars.ALPHACI_GCP_REGION || 'asia-southeast1' }}
+      workload-identity-provider: ${{ vars.ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      deployer-service-account: ${{ vars.ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      artifact-registry-repository: ${{ vars.ALPHACI_ARTIFACT_REGISTRY_REPOSITORY }}
+      image-name: ${{ vars.ALPHACI_IMAGE_NAME || inputs.service_name || 'backend' }}
+      cloud-run-service-name: ${{ vars.ALPHACI_CLOUD_RUN_SERVICE }}
+      runtime-service-account: ${{ vars.ALPHACI_RUNTIME_SERVICE_ACCOUNT }}
+      deployment-target-id: ${{ github.ref_name == 'main' && vars.ALPHACI_DEPLOYMENT_TARGET_ID_PROD || github.ref_name == 'uat' && vars.ALPHACI_DEPLOYMENT_TARGET_ID_UAT || vars.ALPHACI_DEPLOYMENT_TARGET_ID_PREVIEW }}
+      docker-context: ${{ inputs.service_path || '.' }}
+      dockerfile-path: ${{ vars.ALPHACI_DOCKERFILE_PATH || 'Dockerfile' }}
+      health-path: ${{ vars.ALPHACI_HEALTH_PATH || '/health' }}
+      correlation-id: ${{ github.run_id }}-${{ github.run_attempt }}
