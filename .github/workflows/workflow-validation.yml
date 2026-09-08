@@ -39,6 +39,10 @@ jobs:
             .github/workflows/backend-tests.yml
             .github/workflows/branch-policy.yml
             .github/workflows/docker-build.yml
+            .github/workflows/dotnet-analyze.yml
+            .github/workflows/dotnet-audit.yml
+            .github/workflows/dotnet-format.yml
+            .github/workflows/dotnet-test.yml
             .github/workflows/frontend-tests.yml
             .github/workflows/gcp-cloud-run-deploy.yml
             .github/workflows/lint-check.yml
@@ -103,6 +107,66 @@ jobs:
 
       - name: Assert GCP Cloud Run workflow contract
         run: node scripts/validate-gcp-cloud-run-workflow.cjs
+
+  validate-stack-catalog:
+    name: "Validate Stack Catalog"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Assert every stack resolves to a real template
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          // The backend picks a project's pipeline template from this catalog
+          // when a project is created. A stack whose template is missing fails
+          // at provisioning time, in front of the customer, with a 404 naming a
+          // file nobody has heard of. Declaring the id here and checking it in
+          // this repository moves that failure to the commit that causes it.
+          const stacks = JSON.parse(fs.readFileSync('catalog/stacks.json', 'utf8'));
+          let failed = false;
+
+          const required = ['key', 'label', 'kind', 'runtime', 'language', 'serviceTemplate'];
+
+          for (const stack of stacks) {
+            for (const field of required) {
+              if (!stack[field]) {
+                console.error(`::error file=catalog/stacks.json::stack '${stack.key ?? '?'}' is missing ${field}`);
+                failed = true;
+              }
+            }
+
+            if (stack.kind !== 'frontend' && stack.kind !== 'backend') {
+              console.error(`::error file=catalog/stacks.json::stack '${stack.key}' has kind '${stack.kind}'; expected frontend or backend`);
+              failed = true;
+            }
+
+            if (!stack.serviceTemplate) continue;
+
+            for (const ext of ['yml', 'properties.json']) {
+              const file = `workflow-templates/customer/${stack.serviceTemplate}.${ext}`;
+              if (!fs.existsSync(file)) {
+                console.error(`::error file=catalog/stacks.json::stack '${stack.key}' references missing template ${file}`);
+                failed = true;
+              }
+            }
+          }
+
+          const keys = stacks.map((stack) => stack.key);
+          if (new Set(keys).size !== keys.length) {
+            console.error('::error file=catalog/stacks.json::duplicate stack key');
+            failed = true;
+          }
+
+          if (failed) process.exit(1);
+          console.log(`Stack catalog OK: ${keys.join(', ')}`);
+          NODE
 
   validate-granular-templates:
     name: "Validate Granular Templates"

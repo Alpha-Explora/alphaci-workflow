@@ -1,0 +1,113 @@
+# Contract: docs/workflows/dotnet-format.md
+name: "Reusable: .NET Format Check"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory containing the solution or projects"
+      system-name:
+        required: true
+        type: string
+        description: "System name for display (e.g. StPeter-API)"
+      dotnet-version:
+        required: false
+        type: string
+        default: "10.0.x"
+        description: ".NET SDK version"
+      solution-path:
+        required: false
+        type: string
+        default: ""
+        description: "Solution or project to check, relative to working-directory. Empty lets the SDK discover it"
+      fail-on-warning:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail on warning-level style violations as well as errors"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    outputs:
+      format-result:
+        description: "Format check pass/fail"
+        value: ${{ jobs.dotnet-format.outputs.result }}
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-format:
+    name: ".NET Format Check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      result: ${{ steps.format-run.outcome }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # dotnet format loads the project through MSBuild, so the package graph
+      # has to be present before it can resolve analyzers.
+      - name: Restore Dependencies
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          dotnet restore "${target[@]}"
+
+      # --verify-no-changes reports instead of rewriting, and exits non-zero when
+      # anything would change, so the exit code is the result and nothing here
+      # has to parse output to decide.
+      - name: Check Formatting
+        id: format-run
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+          FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          # dotnet format reports at and above the given severity. The relaxed
+          # setting still fails on error-level violations; it only stops warnings
+          # from blocking, which is what the dev branch policy asks for.
+          severity="error"
+          if [ "${FAIL_ON_WARNING}" = "true" ]; then
+            severity="warn"
+          fi
+          echo "Checking formatting at severity: ${severity}"
+
+          dotnet format "${target[@]}" --verify-no-changes --severity "${severity}" --no-restore

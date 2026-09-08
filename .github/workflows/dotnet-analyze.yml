@@ -1,0 +1,135 @@
+# Contract: docs/workflows/dotnet-analyze.md
+name: "Reusable: .NET Static Analysis"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory containing the solution or projects"
+      system-name:
+        required: true
+        type: string
+        description: "System name for display (e.g. StPeter-API)"
+      dotnet-version:
+        required: false
+        type: string
+        default: "10.0.x"
+        description: ".NET SDK version"
+      solution-path:
+        required: false
+        type: string
+        default: ""
+        description: "Solution or project to analyze, relative to working-directory. Empty lets the SDK discover it"
+      configuration:
+        required: false
+        type: string
+        default: "Release"
+        description: "Build configuration (Release|Debug)"
+      treat-warnings-as-errors:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail the build on compiler and analyzer warnings"
+      analysis-level:
+        required: false
+        type: string
+        default: "latest"
+        description: "AnalysisLevel passed to the build (e.g. latest, latest-recommended, none)"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    outputs:
+      analyze-result:
+        description: "Analysis pass/fail"
+        value: ${{ jobs.dotnet-analyze.outputs.result }}
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-analyze:
+    name: ".NET Static Analysis"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      result: ${{ steps.analyze.outcome }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore Dependencies
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          dotnet restore "${target[@]}"
+
+      # There is no separate type-check step for .NET: the compiler is the type
+      # checker, so this job is a build that refuses to ignore what the build
+      # says. --no-incremental forces analyzers to run over every file rather
+      # than only what changed, which is what makes the result reproducible.
+      - name: Build With Analyzers
+        id: analyze
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+          CONFIGURATION: ${{ inputs.configuration }}
+          TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat-warnings-as-errors }}
+          ANALYSIS_LEVEL: ${{ inputs.analysis-level }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          # Relaxed runs still fail on errors; only warnings stop blocking, which
+          # is the difference the dev and uat branch policies ask for.
+          #
+          # NU1901-NU1904 are NuGet Audit's vulnerable-package warnings. They are
+          # excluded here because -warnaserror would otherwise fail this job for
+          # any advisory at any severity, pre-empting dotnet-audit.yml and making
+          # its fail-on-severity policy unreachable. Dependency vulnerabilities
+          # are that job's decision; this one owns compiler and analyzer output.
+          strictness=()
+          if [ "${TREAT_WARNINGS_AS_ERRORS}" = "true" ]; then
+            strictness+=(-warnaserror -warnnotaserror:NU1901,NU1902,NU1903,NU1904)
+          fi
+          echo "Treat warnings as errors: ${TREAT_WARNINGS_AS_ERRORS}"
+
+          dotnet build "${target[@]}" \
+            --configuration "${CONFIGURATION}" \
+            --no-restore \
+            --no-incremental \
+            "${strictness[@]}" \
+            -p:EnableNETAnalyzers=true \
+            -p:AnalysisLevel="${ANALYSIS_LEVEL}"
