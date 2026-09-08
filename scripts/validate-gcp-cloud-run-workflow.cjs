@@ -78,7 +78,7 @@ const requiredPatterns = [
   ['private Cloud Run health token', /gcloud auth print-identity-token/],
   ['healthy revision promotion', /gcloud run services update-traffic/],
   ['revision promotion target', /--to-revisions/],
-  ['test branch maps to preview', /\$\{BRANCH\}"\s*==\s*"test".*\$\{ENVIRONMENT\}"\s*==\s*"preview"/s],
+  ['dev branch maps to preview', /\$\{BRANCH\}"\s*==\s*"dev".*\$\{ENVIRONMENT\}"\s*==\s*"preview"/s],
   ['uat branch maps to uat', /\$\{BRANCH\}"\s*==\s*"uat".*\$\{ENVIRONMENT\}"\s*==\s*"uat"/s],
   ['main branch maps to prod', /\$\{BRANCH\}"\s*==\s*"main".*\$\{ENVIRONMENT\}"\s*==\s*"prod"/s],
   ['service URL output', /service-url:/],
