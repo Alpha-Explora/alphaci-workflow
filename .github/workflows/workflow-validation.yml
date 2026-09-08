@@ -744,9 +744,15 @@ jobs:
           if grep -rn --exclude-dir=.git \
             --exclude=validate-gcp-cloud-run-workflow.cjs \
             --exclude=workflow-validation.yml \
-            -E 'Tone-Lloyd-Sir-Catubag-CICD|ImplementSprint/(central-workflow|cicd-workflow)' .; then
-            echo "::error::Reference to a retired organisation. The central workflow repository is Alpha-Explora/alphaci-workflow."
+            -E 'Tone-Lloyd-Sir-Catubag-CICD|ImplementSprint/(central-workflow|cicd-workflow)|@implementsprint|api\.implementsprint\.com' .; then
+            echo "::error::Reference to a retired organisation. The central workflow repository is Alpha-Explora/alphaci-workflow and the platform API is api.alphaci.com.ph."
             exit 1
           fi
+
+          # Deliberately not matched yet: the template-repo references in
+          # docs/template-*.md. Those describe the retired long-pipeline caller
+          # architecture, so repointing the organisation would leave them accurate
+          # about the owner and wrong about the workflows. They need deleting or
+          # rewriting, which is a decision rather than a rename.
 
           echo "No retired organisation references found."

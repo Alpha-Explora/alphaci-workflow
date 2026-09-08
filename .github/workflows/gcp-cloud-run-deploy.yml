@@ -180,14 +180,14 @@ jobs:
             exit 1
           fi
 
-          if [ "${BRANCH}" == "test" ] && [ "${ENVIRONMENT}" == "preview" ]; then
+          if [ "${BRANCH}" == "dev" ] && [ "${ENVIRONMENT}" == "preview" ]; then
             :
           elif [ "${BRANCH}" == "uat" ] && [ "${ENVIRONMENT}" == "uat" ]; then
             :
           elif [ "${BRANCH}" == "main" ] && [ "${ENVIRONMENT}" == "prod" ]; then
             :
           else
-            echo "::error::Unsupported branch/environment mapping. Allowed: test->preview, uat->uat, main->prod."
+            echo "::error::Unsupported branch/environment mapping. Allowed: dev->preview, uat->uat, main->prod."
             exit 1
           fi
 

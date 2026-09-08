@@ -4,9 +4,9 @@ name: "React Native Service Pipeline"
 
 on:
   push:
-    branches: [test, uat, prod]
+    branches: [dev, uat, main]
   pull_request:
-    branches: [test, uat, prod]
+    branches: [dev, uat, main]
   workflow_dispatch:
     inputs:
       service_path:

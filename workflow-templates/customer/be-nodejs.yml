@@ -5,9 +5,9 @@ name: "Backend CI"
 
 on:
   push:
-    branches: [test, uat, prod]
+    branches: [dev, uat, main]
   pull_request:
-    branches: [test, uat, prod]
+    branches: [dev, uat, main]
   workflow_dispatch:
     inputs:
       service_name:
@@ -48,7 +48,7 @@ permissions:
   security-events: write
 
 env:
-  CI_VALIDATE_URL: https://api.implementsprint.com/v1/ci/validate
+  CI_VALIDATE_URL: https://api.alphaci.com.ph/api/v1/ci/validate
 
 jobs:
   validate-access:
@@ -97,7 +97,7 @@ jobs:
       scan-vulnerabilities: true
   deploy-gcp:
     needs: [validate-access, unit-tests, lint, security]
-    if: ${{ github.event_name == 'push' && (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main') }}
+    if: ${{ github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'uat' || github.ref_name == 'main') }}
     uses: Alpha-Explora/alphaci-workflow/.github/workflows/gcp-cloud-run-deploy.yml@v1
     with:
       system-name: ${{ inputs.service_name || 'backend' }}

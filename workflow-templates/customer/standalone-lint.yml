@@ -5,9 +5,9 @@ name: "Lint"
 
 on:
   push:
-    branches: [test, uat, prod]
+    branches: [dev, uat, main]
   pull_request:
-    branches: [test, uat, prod]
+    branches: [dev, uat, main]
   workflow_dispatch:
     inputs:
       service_name:
@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 env:
-  CI_VALIDATE_URL: https://api.implementsprint.com/v1/ci/validate
+  CI_VALIDATE_URL: https://api.alphaci.com.ph/api/v1/ci/validate
 
 jobs:
   validate-access:
