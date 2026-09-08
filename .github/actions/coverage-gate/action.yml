@@ -1,0 +1,79 @@
+name: "Coverage Gate"
+description: "Read line coverage from a report in any supported format and enforce a threshold."
+
+inputs:
+  report-path:
+    description: "Path to the coverage report, relative to working-directory"
+    required: true
+  format:
+    description: "Report format (istanbul-summary|cobertura|lcov|jacoco)"
+    required: false
+    default: "istanbul-summary"
+  threshold:
+    description: "Minimum line coverage percentage"
+    required: false
+    default: "80"
+  enforce:
+    description: "Fail the job when coverage is below threshold or the report is missing"
+    required: false
+    default: "true"
+  working-directory:
+    description: "Directory the report path is relative to"
+    required: false
+    default: "."
+
+outputs:
+  coverage:
+    description: "Line coverage percentage, or 'unknown' when the report was missing and enforcement is off"
+    value: ${{ steps.gate.outputs.coverage }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Enforce coverage threshold
+      id: gate
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        COVERAGE_FORMAT: ${{ inputs.format }}
+        COVERAGE_REPORT_PATH: ${{ inputs.report-path }}
+        COVERAGE_THRESHOLD: ${{ inputs.threshold }}
+        COVERAGE_ENFORCE: ${{ inputs.enforce }}
+        PARSER: ${{ github.action_path }}/parse-coverage.mjs
+      run: |
+        set -uo pipefail
+
+        # A missing report and a low percentage are different failures and read
+        # differently in the log: one means the test command is not emitting the
+        # format this gate was told to expect, the other means the code is under
+        # -tested. Collapsing them into one message sent people to the wrong fix.
+        if ! COVERAGE="$(node "${PARSER}")"; then
+          if [ "${COVERAGE_ENFORCE}" != "true" ]; then
+            echo "coverage=unknown" >> "$GITHUB_OUTPUT"
+            echo "::warning::Coverage could not be read; enforcement is disabled so the job continues."
+            exit 0
+          fi
+          exit 1
+        fi
+
+        echo "coverage=${COVERAGE}" >> "$GITHUB_OUTPUT"
+        echo "Line coverage: ${COVERAGE}% (${COVERAGE_FORMAT})"
+
+        if [ "${COVERAGE_ENFORCE}" != "true" ]; then
+          echo "Coverage threshold enforcement disabled."
+          exit 0
+        fi
+
+        COVERAGE="${COVERAGE}" THRESHOLD="${COVERAGE_THRESHOLD}" node -e "
+          const coverage = Number(process.env.COVERAGE);
+          const threshold = Number(process.env.THRESHOLD);
+          if (!Number.isFinite(coverage)) {
+            console.error('::error::Coverage value was not numeric.');
+            process.exit(1);
+          }
+          if (coverage < threshold) {
+            console.error('::error::Coverage ' + coverage + '% is below the ' + threshold + '% threshold.');
+            process.exit(1);
+          }
+          console.log('Coverage ' + coverage + '% meets the ' + threshold + '% threshold.');
+        "

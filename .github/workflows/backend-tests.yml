@@ -38,6 +38,16 @@ on:
         type: number
         default: 80
         description: "Minimum coverage percentage"
+      coverage-report-path:
+        required: false
+        type: string
+        default: "coverage/coverage-summary.json"
+        description: "Coverage report path, relative to working-directory"
+      coverage-format:
+        required: false
+        type: string
+        default: "istanbul-summary"
+        description: "Coverage report format (istanbul-summary|cobertura|lcov|jacoco)"
       enforce-coverage:
         required: false
         type: boolean
@@ -121,40 +131,13 @@ jobs:
       - name: Parse Coverage
         id: coverage-check
         if: always()
-        env:
-          ENFORCE_COVERAGE: ${{ inputs.enforce-coverage }}
-          THRESHOLD: ${{ inputs.coverage-threshold }}
-        run: |
-          if [ -f "coverage/coverage-summary.json" ]; then
-            COVERAGE=$(node -e "
-              const data = require('./coverage/coverage-summary.json');
-              console.log(data.total.lines.pct);
-            ")
-            echo "coverage=$COVERAGE" >> "$GITHUB_OUTPUT"
-            echo "Line Coverage: ${COVERAGE}%"
-
-            if [ "${ENFORCE_COVERAGE}" != "true" ]; then
-              echo "Coverage threshold enforcement disabled"
-              exit 0
-            fi
-
-            COVERAGE="${COVERAGE}" THRESHOLD="${THRESHOLD}" node -e "
-              const coverage = Number(process.env.COVERAGE);
-              const threshold = Number(process.env.THRESHOLD);
-              if (coverage < threshold) {
-                console.error('Coverage ' + coverage + '% is below threshold ' + threshold + '%');
-                process.exit(1);
-              }
-              console.log('Coverage ' + coverage + '% meets threshold ' + threshold + '%');
-            "
-          else
-            echo "coverage=unknown" >> "$GITHUB_OUTPUT"
-            if [ "${ENFORCE_COVERAGE}" = "true" ]; then
-              echo "coverage/coverage-summary.json not found - failing coverage gate"
-              exit 1
-            fi
-            echo "coverage/coverage-summary.json not found - coverage gate disabled"
-          fi
+        uses: Alpha-Explora/alphaci-workflow/.github/actions/coverage-gate@v1
+        with:
+          report-path: ${{ inputs.coverage-report-path }}
+          format: ${{ inputs.coverage-format }}
+          threshold: ${{ inputs.coverage-threshold }}
+          enforce: ${{ inputs.enforce-coverage }}
+          working-directory: ${{ inputs.working-directory }}
 
       - name: Upload Coverage Artifact
         if: ${{ inputs.upload-artifact && always() }}
