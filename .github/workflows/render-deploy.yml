@@ -15,7 +15,7 @@ on:
       environment:
         required: true
         type: string
-        description: "Deployment environment (test|uat|production)"
+        description: "Deployment environment (dev|uat|production)"
       branch:
         required: true
         type: string
@@ -61,7 +61,7 @@ on:
         default: true
         description: "Require checks.apiCenter=true in health payload"
     secrets:
-      RENDER_DEPLOY_HOOK_URL_TEST:
+      RENDER_DEPLOY_HOOK_URL_DEV:
         required: false
         description: "Render deploy hook URL for test"
       RENDER_DEPLOY_HOOK_URL_UAT:
@@ -73,7 +73,7 @@ on:
       RENDER_DEPLOY_HOOK_URL:
         required: false
         description: "Fallback Render deploy hook URL"
-      RENDER_HEALTHCHECK_URL_TEST:
+      RENDER_HEALTHCHECK_URL_DEV:
         required: false
         description: "Render health URL for test"
       RENDER_HEALTHCHECK_URL_UAT:
@@ -138,11 +138,11 @@ jobs:
           HEALTHCHECK_INTERVAL_SECONDS: ${{ inputs.healthcheck-interval-seconds }}
           HEALTHCHECK_EXPECTED_STATUSES: ${{ inputs.healthcheck-expected-statuses }}
           DEPLOY_HOOK_URL_INPUT: ${{ inputs.deploy-hook-url }}
-          RENDER_DEPLOY_HOOK_URL_TEST: ${{ secrets.RENDER_DEPLOY_HOOK_URL_TEST }}
+          RENDER_DEPLOY_HOOK_URL_DEV: ${{ secrets.RENDER_DEPLOY_HOOK_URL_DEV }}
           RENDER_DEPLOY_HOOK_URL_UAT: ${{ secrets.RENDER_DEPLOY_HOOK_URL_UAT }}
           RENDER_DEPLOY_HOOK_URL_MAIN: ${{ secrets.RENDER_DEPLOY_HOOK_URL_MAIN }}
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-          RENDER_HEALTHCHECK_URL_TEST: ${{ secrets.RENDER_HEALTHCHECK_URL_TEST }}
+          RENDER_HEALTHCHECK_URL_DEV: ${{ secrets.RENDER_HEALTHCHECK_URL_DEV }}
           RENDER_HEALTHCHECK_URL_UAT: ${{ secrets.RENDER_HEALTHCHECK_URL_UAT }}
           RENDER_HEALTHCHECK_URL_MAIN: ${{ secrets.RENDER_HEALTHCHECK_URL_MAIN }}
           RENDER_HEALTHCHECK_URL: ${{ secrets.RENDER_HEALTHCHECK_URL }}
@@ -163,8 +163,8 @@ jobs:
 
           if [ -z "${deploy_hook_url}" ]; then
             case "${branch_name}" in
-              test)
-                deploy_hook_url="${RENDER_DEPLOY_HOOK_URL_TEST:-${RENDER_DEPLOY_HOOK_URL:-}}"
+              dev)
+                deploy_hook_url="${RENDER_DEPLOY_HOOK_URL_DEV:-${RENDER_DEPLOY_HOOK_URL:-}}"
                 ;;
               uat)
                 deploy_hook_url="${RENDER_DEPLOY_HOOK_URL_UAT:-${RENDER_DEPLOY_HOOK_URL:-}}"
@@ -223,8 +223,8 @@ jobs:
             health_seed_url="${HEALTHCHECK_URL}"
           else
             case "${branch_name}" in
-              test)
-                health_seed_url="${RENDER_HEALTHCHECK_URL_TEST:-${RENDER_HEALTHCHECK_URL:-}}"
+              dev)
+                health_seed_url="${RENDER_HEALTHCHECK_URL_DEV:-${RENDER_HEALTHCHECK_URL:-}}"
                 ;;
               uat)
                 health_seed_url="${RENDER_HEALTHCHECK_URL_UAT:-${RENDER_HEALTHCHECK_URL:-}}"

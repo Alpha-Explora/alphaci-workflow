@@ -11,7 +11,7 @@ on:
       direction:
         required: true
         type: string
-        description: "Promotion direction: test-to-uat or uat-to-main"
+        description: "Promotion direction: dev-to-uat or uat-to-main"
       system1-name:
         required: false
         type: string
@@ -193,20 +193,20 @@ jobs:
 
           VERSION_TAG="${VERSION_TAG_INPUT}"
 
-          if [ "${DIRECTION}" = "test-to-uat" ]; then
-            SOURCE_BRANCH="test"
+          if [ "${DIRECTION}" = "dev-to-uat" ]; then
+            SOURCE_BRANCH="dev"
             TARGET_BRANCH="uat"
-            TITLE="🚀 Release: Promote TEST → UAT (${SHORT_SHA})"
-            HEADER="## 🚀 Promote TEST → UAT"
-            CONTEXT_LABEL="TEST"
+            TITLE="🚀 Release: Promote DEV → UAT (${SHORT_SHA})"
+            HEADER="## 🚀 Promote DEV → UAT"
+            CONTEXT_LABEL="DEV"
             FOOTER="*Merge this PR to continue promotion into UAT.*"
-            INTRO="This PR was **automatically created** after the required CI quality gates and promotion checks passed on the ${BT}test${BT} branch."
+            INTRO="This PR was **automatically created** after the required CI quality gates and promotion checks passed on the ${BT}dev${BT} branch."
 
-            if [ "${PIPELINE_KIND}" = "single" ] && { [ -z "${VERSION_TAG}" ] || [ "${VERSION_TAG}" = "test-v" ]; }; then
-              VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+            if [ "${PIPELINE_KIND}" = "single" ] && { [ -z "${VERSION_TAG}" ] || [ "${VERSION_TAG}" = "dev-v" ]; }; then
+              VERSION_TAG=$(git tag -l 'dev-v*' | grep -E '^dev-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
             fi
             if [ "${PIPELINE_KIND}" = "single" ] && [ -z "${VERSION_TAG}" ]; then
-              echo "⚠️ Unable to resolve TEST version tag for PR body; falling back to per-system versions or N/A."
+              echo "⚠️ Unable to resolve DEV version tag for PR body; falling back to per-system versions or N/A."
             fi
           elif [ "${DIRECTION}" = "uat-to-main" ]; then
             SOURCE_BRANCH="uat"
@@ -221,10 +221,10 @@ jobs:
               VERSION_TAG=$(git tag -l 'uat-v*' | grep -E '^uat-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
             fi
             if [ "${PIPELINE_KIND}" = "single" ] && [ -z "${VERSION_TAG}" ]; then
-              VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+              VERSION_TAG=$(git tag -l 'dev-v*' | grep -E '^dev-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
             fi
           else
-            echo "❌ Invalid direction: ${DIRECTION}. Expected test-to-uat or uat-to-main."
+            echo "❌ Invalid direction: ${DIRECTION}. Expected dev-to-uat or uat-to-main."
             exit 1
           fi
 
@@ -448,7 +448,7 @@ jobs:
             fi
             CHECKLIST+=$'\n'"- [ ] $(printf "${CHECKLIST_TEMPLATE}" "${SYSTEM_NAME}")"
           done < <(echo "${SYSTEMS_JSON}" | jq -r '.[].name')
-          if [ "${DIRECTION}" = "test-to-uat" ]; then
+          if [ "${DIRECTION}" = "dev-to-uat" ]; then
             CHECKLIST+=$'\n- [ ] Ready for UAT validation'
           else
             CHECKLIST+=$'\n- [ ] All acceptance criteria met'

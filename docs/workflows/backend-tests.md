@@ -18,7 +18,7 @@ Runs backend unit tests and optional integration tests with coverage.
 - Source workflow: `.github/workflows/backend-tests.yml`
 - Trigger: `workflow_call`
 - Required inputs: `system-name`
-- Optional inputs: `working-directory`, `backend-stack`, `node-version`, `test-command`, `integration-test-command`, `coverage-threshold`, `enforce-coverage`, `run-parallel`, `upload-artifact`, `checkout-ref`
+- Optional inputs: `working-directory`, `backend-stack`, `node-version`, `test-command`, `integration-test-command`, `coverage-threshold`, `coverage-report-path`, `coverage-format`, `enforce-coverage`, `run-parallel`, `upload-artifact`, `checkout-ref`
 - Secrets: none
 - Outputs: `unit-test-result`, `integration-test-result`, `coverage-percent`
 
@@ -71,3 +71,12 @@ jobs:
 - If `enforce-coverage` is `true`, missing or below-threshold coverage fails the workflow.
 - If `enforce-coverage` is `false`, missing coverage is reported as `unknown` and does not fail the workflow by itself.
 - Use `checkout-ref` when a `workflow_run` chain must test the original triggering commit instead of the default branch commit.
+- Coverage is read by the `coverage-gate` composite action, which understands
+  `istanbul-summary`, `cobertura`, `lcov` and `jacoco`. The default is
+  `istanbul-summary`, so JavaScript callers need change nothing. Set
+  `coverage-format` and `coverage-report-path` together when a runner emits
+  something else — Coverlet emits Cobertura, for instance.
+- A missing report and a below-threshold percentage fail with different
+  messages. The first means the test command is not emitting the format this
+  gate expects, which is usually a reporter that was never configured; the
+  second means the code is under-tested. They need different fixes.
