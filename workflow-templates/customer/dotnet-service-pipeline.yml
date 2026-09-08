@@ -53,11 +53,14 @@ permissions:
   security-events: write
 
 jobs:
-  # validation-api-url is deliberately not passed. The env context is not
-  # available in a called workflow's `with:`, so `${{ env.* }}` there does not
-  # resolve, and validate-subscription.yml already defaults to the same URL.
+  # The env context is not available in a called workflow's `with:`, so the
+  # `${{ env.CI_VALIDATE_URL }}` the other customer templates pass here does not
+  # resolve. vars is available, with the platform URL as the fallback, so a
+  # repository can point at another deployment without editing this file.
   validate-access:
     uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v1
+    with:
+      validation-api-url: ${{ vars.ALPHACI_VALIDATE_URL || 'https://api.alphaci.com.ph/api/v1/ci/validate' }}
     secrets:
       CI_TOKEN: ${{ secrets.CI_TOKEN }}
 

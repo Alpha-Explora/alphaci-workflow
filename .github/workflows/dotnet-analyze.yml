@@ -122,7 +122,9 @@ jobs:
           # are that job's decision; this one owns compiler and analyzer output.
           strictness=()
           if [ "${TREAT_WARNINGS_AS_ERRORS}" = "true" ]; then
-            strictness+=(-warnaserror -warnnotaserror:NU1901,NU1902,NU1903,NU1904)
+            # Quoted so the commas read as part of one MSBuild argument
+            # rather than as array element separators (shellcheck SC2054).
+            strictness+=(-warnaserror "-warnnotaserror:NU1901,NU1902,NU1903,NU1904")
           fi
           echo "Treat warnings as errors: ${TREAT_WARNINGS_AS_ERRORS}"
 
