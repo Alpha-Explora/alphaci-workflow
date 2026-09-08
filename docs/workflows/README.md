@@ -36,6 +36,7 @@ Customer catalog files live under `catalog/customer/`:
 | [dotnet-analyze.yml](dotnet-analyze.md) | quality | Build a .NET solution with analyzers enabled and warnings escalated. |
 | [dotnet-format.yml](dotnet-format.md) | quality | Verify C# formatting and style with dotnet format. |
 | [dotnet-audit.yml](dotnet-audit.md) | security | Audit NuGet dependencies against known advisories. |
+| [sonarcloud-dotnet-scan.yml](sonarcloud-dotnet-scan.md) | quality | Analyse C# with SonarScanner for .NET. |
 | [mobile-tests.yml](mobile-tests.md) | quality | Run mobile unit tests with coverage. |
 | [security-scan.yml](security-scan.md) | security | Run dependency and source security scans. |
 | [docker-build.yml](docker-build.md) | build | Build, optionally push, and scan Docker images. |

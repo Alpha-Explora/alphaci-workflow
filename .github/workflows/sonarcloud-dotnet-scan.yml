@@ -1,0 +1,190 @@
+# Contract: docs/workflows/sonarcloud-dotnet-scan.md
+name: "Reusable: SonarCloud .NET Analysis"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory containing the solution"
+      system-name:
+        required: true
+        type: string
+        description: "System name for display (e.g. StPeter-API)"
+      dotnet-version:
+        required: false
+        type: string
+        default: "10.0.x"
+        description: ".NET SDK version"
+      solution-path:
+        required: false
+        type: string
+        default: ""
+        description: "Solution or project to analyse, relative to working-directory. Empty lets the SDK discover it"
+      configuration:
+        required: false
+        type: string
+        default: "Release"
+        description: "Build configuration (Release|Debug)"
+      sources-path:
+        required: false
+        type: string
+        default: "src"
+        description: "Value for sonar.sources"
+      tests-path:
+        required: false
+        type: string
+        default: "tests"
+        description: "Value for sonar.tests. Must not overlap sources-path"
+      coverage-report-path:
+        required: false
+        type: string
+        default: "coverage/coverage.cobertura.xml"
+        description: "Cobertura coverage report, relative to working-directory"
+      coverage-artifact-name:
+        required: false
+        type: string
+        default: ""
+        description: "Name of coverage artifact to download (leave empty to skip)"
+      quality-gate-wait:
+        required: false
+        type: boolean
+        default: false
+        description: "Block until SonarCloud returns the quality gate result"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    outputs:
+      status:
+        description: "Analysis pass/fail"
+        value: ${{ jobs.sonarcloud-dotnet.outputs.status }}
+    secrets:
+      SONAR_TOKEN:
+        required: false
+      SONAR_PROJECT_KEY:
+        required: false
+      SONAR_ORGANIZATION:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  sonarcloud-dotnet:
+    name: "SonarCloud .NET Analysis"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      status: ${{ steps.scan.outcome }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          # Sonar reads history to attribute issues to authors and to decide
+          # what is new code. A shallow clone makes every line look new.
+          fetch-depth: 0
+
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      # The scanner is a .NET tool, and on some images the SDK ships without a
+      # JRE. SonarScanner needs Java to run the analysis itself.
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Download Coverage Report
+        if: ${{ inputs.coverage-artifact-name != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.coverage-artifact-name }}
+          path: ${{ inputs.working-directory }}/coverage
+
+      - name: Validate SonarCloud project access
+        id: preflight
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${SONAR_TOKEN}" ] || [ -z "${SONAR_ORGANIZATION}" ] || [ -z "${SONAR_PROJECT_KEY}" ]; then
+            echo "::error::SonarCloud secrets are not configured for this repository."
+            exit 1
+          fi
+          echo "SonarCloud credentials present."
+
+      # begin -> build -> end is the whole point of this workflow. The scanner
+      # collects Roslyn analyzer output while the compiler runs, which is why
+      # the generic sonar-scanner CLI cannot analyse C# at all: it only reads
+      # files that already exist.
+      - name: Run SonarCloud Analysis
+        id: scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+          CONFIGURATION: ${{ inputs.configuration }}
+          SOURCES_PATH: ${{ inputs.sources-path }}
+          TESTS_PATH: ${{ inputs.tests-path }}
+          COVERAGE_REPORT_PATH: ${{ inputs.coverage-report-path }}
+          QUALITY_GATE_WAIT: ${{ inputs.quality-gate-wait }}
+        run: |
+          set -euo pipefail
+
+          if [ "${SOURCES_PATH}" = "${TESTS_PATH}" ]; then
+            echo "::error::sonar.sources and sonar.tests are both '${SOURCES_PATH}'. Sonar refuses to index a file as source and test, and fails the scan."
+            exit 1
+          fi
+
+          dotnet tool install --global dotnet-sonarscanner
+          export PATH="${PATH}:${HOME}/.dotnet/tools"
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          # Coverage is optional: a repository whose tests produced no report
+          # should still get code analysis rather than no analysis at all.
+          coverage=()
+          if [ -f "${COVERAGE_REPORT_PATH}" ]; then
+            coverage+=("/d:sonar.cs.vscoveragexml.reportsPaths=${COVERAGE_REPORT_PATH}")
+            coverage+=("/d:sonar.coverageReportPaths=${COVERAGE_REPORT_PATH}")
+            echo "Coverage report found at ${COVERAGE_REPORT_PATH}"
+          else
+            echo "::warning::No coverage report at ${COVERAGE_REPORT_PATH}; analysing without coverage."
+          fi
+
+          gate=()
+          if [ "${QUALITY_GATE_WAIT}" = "true" ]; then
+            gate+=("/d:sonar.qualitygate.wait=true")
+          fi
+
+          dotnet sonarscanner begin \
+            /k:"${SONAR_PROJECT_KEY}" \
+            /o:"${SONAR_ORGANIZATION}" \
+            /d:sonar.token="${SONAR_TOKEN}" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.sources="${SOURCES_PATH}" \
+            /d:sonar.tests="${TESTS_PATH}" \
+            "${coverage[@]}" \
+            "${gate[@]}"
+
+          dotnet build "${target[@]}" --configuration "${CONFIGURATION}"
+
+          dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
