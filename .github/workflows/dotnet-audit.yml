@@ -50,6 +50,15 @@ on:
       vulnerability-count:
         description: "Number of distinct vulnerable packages found"
         value: ${{ jobs.dotnet-audit.outputs.vulnerabilities }}
+      vulnerabilities-critical:
+        description: "Distinct vulnerable packages at critical severity"
+        value: ${{ jobs.dotnet-audit.outputs.vulnerabilities-critical }}
+      vulnerabilities-high:
+        description: "Distinct vulnerable packages at high severity"
+        value: ${{ jobs.dotnet-audit.outputs.vulnerabilities-high }}
+      vulnerabilities-items:
+        description: "JSON array of {package,severity,title} for the findings, capped"
+        value: ${{ jobs.dotnet-audit.outputs.vulnerabilities-items }}
 
 permissions:
   contents: read
@@ -62,6 +71,9 @@ jobs:
     outputs:
       result: ${{ steps.audit.outcome }}
       vulnerabilities: ${{ steps.audit.outputs.vulnerabilities }}
+      vulnerabilities-critical: ${{ steps.audit.outputs.vulnerabilities-critical }}
+      vulnerabilities-high: ${{ steps.audit.outputs.vulnerabilities-high }}
+      vulnerabilities-items: ${{ steps.audit.outputs.vulnerabilities-items }}
     defaults:
       run:
         working-directory: ./${{ inputs.working-directory }}
@@ -174,6 +186,24 @@ jobs:
           );
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `vulnerabilities=${all.length}\n`);
+
+          // Per-severity counts and the findings themselves, so the platform
+          // can say WHICH package is vulnerable instead of only how many are.
+          // Severity is lowercased because the backend filters on it by value.
+          const countBy = (name) =>
+            all.filter((f) => f.severity.toLowerCase() === name).length;
+          const items = all.slice(0, 20).map((f) => ({
+            package: `${f.id}@${f.version}`,
+            severity: f.severity.toLowerCase(),
+            title: f.url,
+          }));
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `vulnerabilities-critical=${countBy('critical')}\n` +
+              `vulnerabilities-high=${countBy('high')}\n` +
+              `vulnerabilities-items=${JSON.stringify(items)}\n`,
+          );
 
           if (all.length === 0) {
             console.log('No known vulnerable packages.');

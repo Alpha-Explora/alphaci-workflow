@@ -32,6 +32,15 @@ on:
       audit-result:
         description: "npm audit result"
         value: ${{ jobs.dependency-audit.outputs.result }}
+      vulnerabilities-critical:
+        description: "Packages with a critical advisory"
+        value: ${{ jobs.dependency-audit.outputs.vulnerabilities-critical }}
+      vulnerabilities-high:
+        description: "Packages with a high advisory"
+        value: ${{ jobs.dependency-audit.outputs.vulnerabilities-high }}
+      vulnerabilities-items:
+        description: "JSON array of {package,severity,title} for high and critical findings, capped"
+        value: ${{ jobs.dependency-audit.outputs.vulnerabilities-items }}
 
 
 permissions:
@@ -44,6 +53,9 @@ jobs:
     timeout-minutes: 30
     outputs:
       result: ${{ steps.audit.outcome }}
+      vulnerabilities-critical: ${{ steps.summary.outputs.vulnerabilities-critical }}
+      vulnerabilities-high: ${{ steps.summary.outputs.vulnerabilities-high }}
+      vulnerabilities-items: ${{ steps.summary.outputs.vulnerabilities-items }}
     defaults:
       run:
         working-directory: ./${{ inputs.working-directory }}
@@ -78,6 +90,7 @@ jobs:
           echo "No HIGH/CRITICAL vulnerabilities"
 
       - name: Summarise Audit Results
+        id: summary
         if: always()
         run: |
           if [ ! -f "audit-report.json" ]; then
@@ -105,6 +118,18 @@ jobs:
           echo "Moderate: ${MODERATE}"
           echo "Low: ${LOW}"
           echo "Info: ${INFO}"
+
+          # Publish what was already being computed, so the platform can name
+          # the vulnerable packages instead of only reporting a pass or fail.
+          # `via` carries the advisory title; severities are already lowercase
+          # in npm's output, which is the form the backend filters on.
+          ITEMS=$(jq -c '[.vulnerabilities | to_entries[] | select(.value.severity == "critical" or .value.severity == "high") | {package: .key, severity: .value.severity, title: (.value.via | if type == "array" then (map(if type == "string" then . else (.title // .url // "advisory") end) | join(", ")) else (. | tostring) end)}] | .[0:20]' audit-report.json)
+
+          {
+            echo "vulnerabilities-critical=${CRITICAL}"
+            echo "vulnerabilities-high=${HIGH}"
+            echo "vulnerabilities-items=${ITEMS}"
+          } >> "$GITHUB_OUTPUT"
 
           if [ "${CRITICAL}" -gt 0 ] || [ "${HIGH}" -gt 0 ]; then
             echo ""
