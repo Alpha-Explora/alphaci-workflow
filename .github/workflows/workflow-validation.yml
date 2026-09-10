@@ -109,6 +109,19 @@ jobs:
       - name: Assert GCP Cloud Run workflow contract
         run: node scripts/validate-gcp-cloud-run-workflow.cjs
 
+  validate-dotnet-trx-summary:
+    name: "Validate .NET Test Summariser"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      # The summariser is inline Python inside a YAML block, so nothing else
+      # can reach it and a mistake there reports wrong numbers silently.
+      - name: Assert the TRX summariser contract
+        run: node scripts/validate-dotnet-trx-summary.cjs
+
   validate-stack-catalog:
     name: "Validate Stack Catalog"
     runs-on: ubuntu-latest
