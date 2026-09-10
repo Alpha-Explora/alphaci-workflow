@@ -151,7 +151,7 @@ jobs:
 
       - name: Upload SBOM
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sbom-${{ inputs.system-name }}
           path: ${{ inputs.working-directory }}/sbom/bom.json

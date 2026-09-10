@@ -150,7 +150,7 @@ jobs:
       # after the fact. Redacted, so the artifact carries locations not values.
       - name: Upload Report
         if: ${{ always() && steps.scan.outputs.findings != '0' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gitleaks-report-${{ inputs.system-name }}
           path: ${{ inputs.working-directory }}/gitleaks-report.json

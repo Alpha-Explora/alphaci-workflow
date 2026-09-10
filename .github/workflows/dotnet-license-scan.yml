@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload Inventory
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: licenses-${{ inputs.system-name }}
           path: ${{ inputs.working-directory }}/licenses/licenses.json
