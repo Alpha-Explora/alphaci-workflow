@@ -73,12 +73,57 @@ jobs:
       - name: Install Dependencies
         run: npm ci --ignore-scripts
 
+      # Turn ESLint's own output into GitHub annotations.
+      #
+      # An annotation carries a file, a line and a message, which is what the
+      # platform reports back as the actual error. Without a matcher a lint
+      # failure is only an exit code, and the product can say no more than
+      # that the lint job failed.
+      #
+      # Written to the runner temp rather than read from this repository: a
+      # reusable workflow runs against the CALLER's checkout, so a path under
+      # the central repo does not exist here.
+      #
+      # Harmless when the lint command is not ESLint - the patterns simply do
+      # not match, and nothing is annotated.
+      - name: Register ESLint Problem Matcher
+        run: |
+          cat > "${RUNNER_TEMP}/eslint-stylish.json" <<'MATCHER'
+          {
+            "problemMatcher": [
+              {
+                "owner": "alphaci-eslint-stylish",
+                "pattern": [
+                  {
+                    "regexp": "^([^\\s].*)$",
+                    "file": 1
+                  },
+                  {
+                    "regexp": "^\\s+(\\d+):(\\d+)\\s+(error|warning)\\s+(.*?)\\s{2,}(\\S+)\\s*$",
+                    "line": 1,
+                    "column": 2,
+                    "severity": 3,
+                    "message": 4,
+                    "code": 5,
+                    "loop": true
+                  }
+                ]
+              }
+            ]
+          }
+          MATCHER
+          echo "::add-matcher::${RUNNER_TEMP}/eslint-stylish.json"
+
       - name: Run Linter
         id: lint
         run: |
           echo "Running lint checks..."
           ${{ inputs.lint-command }}
           echo "Lint checks passed"
+
+      - name: Deregister ESLint Problem Matcher
+        if: always()
+        run: echo "::remove-matcher owner=alphaci-eslint-stylish::"
 
       - name: Check Code Formatting
         if: ${{ inputs.format-check-command != '' }}
