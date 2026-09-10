@@ -36,8 +36,13 @@ on:
       tool-version:
         required: false
         type: string
-        default: "2.7.1"
-        description: "dotnet-project-licenses version. Pinned so a scan is reproducible"
+        default: "4.0.16"
+        description: "nuget-license version. Pinned so a scan is reproducible"
+      exclude-projects:
+        required: false
+        type: string
+        default: "*Test*;*Tests*;*.Spec;*.Specs"
+        description: "Project name patterns excluded from the scan. Licence obligations attach to what ships, and test projects do not"
       checkout-ref:
         required: false
         type: string
@@ -103,34 +108,59 @@ jobs:
         env:
           SOLUTION_PATH: ${{ inputs.solution-path }}
           TOOL_VERSION: ${{ inputs.tool-version }}
+          EXCLUDE_PROJECTS: ${{ inputs.exclude-projects }}
         run: |
           set -euo pipefail
 
-          dotnet tool install --global dotnet-project-licenses --version "${TOOL_VERSION}"
+          # nuget-license, not dotnet-project-licenses. Same project and same
+          # original author, but the package was renamed: the old id last
+          # shipped a stable in 2.7.1, targets .NET 7 which is out of support,
+          # and everything published since is an alpha. Installed beside a
+          # current SDK it does not launch at all.
+          dotnet tool install --global nuget-license --version "${TOOL_VERSION}"
           export PATH="${PATH}:${HOME}/.dotnet/tools"
 
           target="${SOLUTION_PATH}"
           if [ -z "${target}" ]; then
-            target="."
+            target="$(ls -1 ./*.sln 2>/dev/null | head -n 1 || true)"
           fi
-
-          mkdir -p licenses
-          # --include-transitive matters: a forbidden licence is almost never a
-          # direct reference. It arrives three levels down, which is exactly why
-          # nobody notices it by reading the csproj.
-          dotnet-project-licenses \
-            --input "${target}" \
-            --include-transitive \
-            --json \
-            --output licenses \
-            --outfile licenses/licenses.json
-
-          if [ ! -f licenses/licenses.json ]; then
-            echo "::error::The licence tool produced no inventory. Treating as a failed scan rather than a clean one."
+          if [ -z "${target}" ]; then
+            echo "::error::No solution found to scan. A licence gate that scanned nothing is not a clean scan."
             exit 1
           fi
 
-          echo "Inventoried $(jq 'length' licenses/licenses.json) package(s)."
+          mkdir -p licenses
+
+          # --include-transitive matters: a forbidden licence is almost never a
+          # direct reference. It arrives three levels down, which is exactly why
+          # nobody notices it by reading the csproj.
+          #
+          # Test projects are excluded because the obligation attaches to what
+          # is DISTRIBUTED. That is also the difference between a gate that can
+          # pass and one that cannot: NetArchTest.Rules, which the .NET scaffold
+          # ships as a test dependency, declares no licence element at all in
+          # its nuspec, so any inventory containing it never resolves.
+          #
+          # The tool exits non-zero whenever a licence is undeterminable, so its
+          # exit code cannot stand in for the policy verdict. The file is the
+          # evidence: produced means the scan ran, absent means it broke.
+          set +e
+          nuget-license \
+            --input "${target}" \
+            --include-transitive \
+            --exclude-projects "${EXCLUDE_PROJECTS}" \
+            --output JsonPretty \
+            --file-output licenses/licenses.json
+          tool_status=$?
+          set -e
+
+          if [ ! -s licenses/licenses.json ] || ! jq empty licenses/licenses.json 2>/dev/null; then
+            echo "::error::The licence tool produced no readable inventory (exit ${tool_status}). Treating as a failed scan rather than a clean one."
+            exit 1
+          fi
+
+          inventoried="$(jq 'length' licenses/licenses.json)"
+          echo "Inventoried ${inventoried} shipping package(s) (tool exit ${tool_status})."
 
       # Policy lives here, not in the tool. The tool reports what the licences
       # ARE; which of them are acceptable is the platform's decision, and
@@ -151,10 +181,10 @@ jobs:
           forbidden_json="$(printf '%s' "${FORBIDDEN}" | jq -R 'split(",") | map(ascii_downcase | ltrimstr(" ") | rtrimstr(" "))')"
 
           hits="$(jq --argjson bad "${forbidden_json}" \
-            '[.[] | select((.LicenseType // "" | ascii_downcase) as $l | $bad | index($l))]' \
+            '[.[] | select((.License // "" | ascii_downcase) as $l | $bad | index($l))]' \
             licenses/licenses.json)"
 
-          unknown="$(jq '[.[] | select((.LicenseType // "") == "")] | length' licenses/licenses.json)"
+          unknown="$(jq '[.[] | select((.License // "") == "")] | length' licenses/licenses.json)"
           count="$(printf '%s' "${hits}" | jq 'length')"
           echo "forbidden=${count}" >> "$GITHUB_OUTPUT"
 
@@ -167,7 +197,7 @@ jobs:
             exit 0
           fi
 
-          printf '%s' "${hits}" | jq -r '.[] | "  \(.LicenseType)  \(.PackageName)@\(.PackageVersion)"'
+          printf '%s' "${hits}" | jq -r '.[] | "  \(.License)  \(.PackageId)@\(.PackageVersion)"'
 
           if [ "${FAIL_ON_FORBIDDEN}" = "true" ]; then
             echo "::error::${count} package(s) under a forbidden licence in ${SYSTEM_NAME}. Replace them or obtain an exception before promoting."
