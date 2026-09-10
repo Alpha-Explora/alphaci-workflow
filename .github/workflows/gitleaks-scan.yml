@@ -1,0 +1,158 @@
+# Contract: docs/workflows/gitleaks-scan.md
+name: "Reusable: Gitleaks Secret Scan"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Directory to scan"
+      system-name:
+        required: true
+        type: string
+        description: "System name for display (e.g. StPeter-API)"
+      gitleaks-version:
+        required: false
+        type: string
+        default: "8.30.0"
+        description: "Gitleaks release to run. Pinned so a scan is reproducible"
+      fail-on-findings:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail the job when a secret is found. False reports without blocking"
+      scan-history:
+        required: false
+        type: boolean
+        default: false
+        description: "Scan every commit rather than the working tree. Slower, and finds secrets already rotated"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    outputs:
+      secrets-result:
+        description: "Secret scan pass/fail"
+        value: ${{ jobs.gitleaks-scan.outputs.result }}
+      findings-count:
+        description: "Number of secrets found, 0 when clean"
+        value: ${{ jobs.gitleaks-scan.outputs.findings }}
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks-scan:
+    name: "Secret Scan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      result: ${{ steps.scan.outcome }}
+      findings: ${{ steps.scan.outputs.findings }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      # Full history only when it is going to be scanned. A shallow clone is
+      # enough for a working-tree scan and much faster on a large repository.
+      #
+      # The depths are QUOTED because 0 is falsy in a GitHub expression: written
+      # `scan-history && 0 || 1`, a true input yields `0 || 1` — which is 1, the
+      # exact opposite of what was asked for, silently. '0' is a non-empty
+      # string and therefore truthy.
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          fetch-depth: ${{ inputs.scan-history && '0' || '1' }}
+
+      # The release binary rather than gitleaks-action, which requires a paid
+      # GITLEAKS_LICENSE for organisation-owned repositories. The scanner
+      # itself is free; only that wrapper is not.
+      - name: Install Gitleaks
+        env:
+          GITLEAKS_VERSION: ${{ inputs.gitleaks-version }}
+        run: |
+          set -euo pipefail
+
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "Installing gitleaks ${GITLEAKS_VERSION}"
+          curl -sSfL -o /tmp/gitleaks.tar.gz "${url}"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan For Secrets
+        id: scan
+        env:
+          FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+          SCAN_HISTORY: ${{ inputs.scan-history }}
+          SYSTEM_NAME: ${{ inputs.system-name }}
+        run: |
+          set -euo pipefail
+
+          mode=(--no-git)
+          if [ "${SCAN_HISTORY}" = "true" ]; then
+            # Scanning commits finds secrets that were removed but never
+            # rotated, which is the point — a deleted secret is still leaked.
+            mode=()
+          fi
+
+          # --exit-code 0 hands the pass/fail decision to this script instead of
+          # to gitleaks, so a FOUND secret and a BROKEN scanner cannot arrive as
+          # the same exit status. A tool that failed to run must never read as a
+          # repository with no secrets.
+          #
+          # --redact keeps the secret values out of the log; a scan that prints
+          # what it found has leaked it a second time, into somewhere public.
+          set +e
+          gitleaks detect "${mode[@]}" \
+            --redact \
+            --report-format json \
+            --report-path gitleaks-report.json \
+            --exit-code 0 \
+            --verbose
+          scanner_status=$?
+          set -e
+
+          if [ "${scanner_status}" -ne 0 ]; then
+            echo "::error::Gitleaks itself failed (exit ${scanner_status}). This is not a clean result."
+            exit 1
+          fi
+
+          if [ ! -f gitleaks-report.json ]; then
+            echo "::error::Gitleaks produced no report. Treating as a failed scan rather than a clean one."
+            exit 1
+          fi
+
+          findings="$(jq 'length' gitleaks-report.json)"
+          echo "findings=${findings}" >> "$GITHUB_OUTPUT"
+
+          if [ "${findings}" -eq 0 ]; then
+            echo "No secrets found in ${SYSTEM_NAME}."
+            exit 0
+          fi
+
+          # Rule and location only. The value is deliberately absent.
+          jq -r '.[] | "  \(.RuleID)  \(.File):\(.StartLine)"' gitleaks-report.json | head -n 20
+
+          if [ "${FAIL_ON_FINDINGS}" = "true" ]; then
+            echo "::error::${findings} secret(s) found in ${SYSTEM_NAME}. Rotate them, then remove them from the repository."
+            exit 1
+          fi
+
+          echo "::warning::${findings} secret(s) found in ${SYSTEM_NAME}; reporting only on this branch. Rotate them before promoting."
+
+      # Kept for the promoted branches, where someone has to act on a finding
+      # after the fact. Redacted, so the artifact carries locations not values.
+      - name: Upload Report
+        if: ${{ always() && steps.scan.outputs.findings != '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report-${{ inputs.system-name }}
+          path: ${{ inputs.working-directory }}/gitleaks-report.json
+          retention-days: 7
+          if-no-files-found: ignore

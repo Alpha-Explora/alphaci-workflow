@@ -1,0 +1,186 @@
+# Contract: docs/workflows/dotnet-license-scan.md
+name: "Reusable: .NET License Scan"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory containing the solution or projects"
+      system-name:
+        required: true
+        type: string
+        description: "System name for display (e.g. StPeter-API)"
+      dotnet-version:
+        required: false
+        type: string
+        default: "10.0.x"
+        description: ".NET SDK version"
+      solution-path:
+        required: false
+        type: string
+        default: ""
+        description: "Solution or project to scan, relative to working-directory. Empty lets the SDK discover it"
+      forbidden-licenses:
+        required: false
+        type: string
+        default: "GPL-2.0,GPL-3.0,AGPL-3.0,SSPL-1.0"
+        description: "Comma-separated SPDX ids that fail the scan. Copyleft terms that would oblige publishing the service source"
+      fail-on-forbidden:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail when a forbidden licence is found. False reports without blocking"
+      tool-version:
+        required: false
+        type: string
+        default: "2.7.1"
+        description: "dotnet-project-licenses version. Pinned so a scan is reproducible"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    outputs:
+      license-result:
+        description: "License scan pass/fail"
+        value: ${{ jobs.dotnet-license-scan.outputs.result }}
+      forbidden-count:
+        description: "Number of packages under a forbidden licence, 0 when clean"
+        value: ${{ jobs.dotnet-license-scan.outputs.forbidden }}
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-license-scan:
+    name: ".NET License Scan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      result: ${{ steps.scan.outcome }}
+      forbidden: ${{ steps.scan.outputs.forbidden }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # The licences of the resolved graph, so restore has to have run first.
+      - name: Restore Dependencies
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          dotnet restore "${target[@]}"
+
+      - name: Inventory Licenses
+        id: inventory
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+          TOOL_VERSION: ${{ inputs.tool-version }}
+        run: |
+          set -euo pipefail
+
+          dotnet tool install --global dotnet-project-licenses --version "${TOOL_VERSION}"
+          export PATH="${PATH}:${HOME}/.dotnet/tools"
+
+          target="${SOLUTION_PATH}"
+          if [ -z "${target}" ]; then
+            target="."
+          fi
+
+          mkdir -p licenses
+          # --include-transitive matters: a forbidden licence is almost never a
+          # direct reference. It arrives three levels down, which is exactly why
+          # nobody notices it by reading the csproj.
+          dotnet-project-licenses \
+            --input "${target}" \
+            --include-transitive \
+            --json \
+            --output licenses \
+            --outfile licenses/licenses.json
+
+          if [ ! -f licenses/licenses.json ]; then
+            echo "::error::The licence tool produced no inventory. Treating as a failed scan rather than a clean one."
+            exit 1
+          fi
+
+          echo "Inventoried $(jq 'length' licenses/licenses.json) package(s)."
+
+      # Policy lives here, not in the tool. The tool reports what the licences
+      # ARE; which of them are acceptable is the platform's decision, and
+      # keeping it in the workflow means it is reviewable and per-branch.
+      - name: Apply License Policy
+        id: scan
+        env:
+          FORBIDDEN: ${{ inputs.forbidden-licenses }}
+          FAIL_ON_FORBIDDEN: ${{ inputs.fail-on-forbidden }}
+          SYSTEM_NAME: ${{ inputs.system-name }}
+        run: |
+          set -euo pipefail
+
+          # Matched case-insensitively on the SPDX id. An unknown or missing
+          # licence is reported separately rather than counted as forbidden:
+          # "we could not tell" is a different problem from "this one is
+          # disallowed", and conflating them buries the real hits.
+          forbidden_json="$(printf '%s' "${FORBIDDEN}" | jq -R 'split(",") | map(ascii_downcase | ltrimstr(" ") | rtrimstr(" "))')"
+
+          hits="$(jq --argjson bad "${forbidden_json}" \
+            '[.[] | select((.LicenseType // "" | ascii_downcase) as $l | $bad | index($l))]' \
+            licenses/licenses.json)"
+
+          unknown="$(jq '[.[] | select((.LicenseType // "") == "")] | length' licenses/licenses.json)"
+          count="$(printf '%s' "${hits}" | jq 'length')"
+          echo "forbidden=${count}" >> "$GITHUB_OUTPUT"
+
+          if [ "${unknown}" -gt 0 ]; then
+            echo "::warning::${unknown} package(s) report no licence. Review them by hand; the scan cannot judge what it cannot read."
+          fi
+
+          if [ "${count}" -eq 0 ]; then
+            echo "No forbidden licences in ${SYSTEM_NAME}."
+            exit 0
+          fi
+
+          printf '%s' "${hits}" | jq -r '.[] | "  \(.LicenseType)  \(.PackageName)@\(.PackageVersion)"'
+
+          if [ "${FAIL_ON_FORBIDDEN}" = "true" ]; then
+            echo "::error::${count} package(s) under a forbidden licence in ${SYSTEM_NAME}. Replace them or obtain an exception before promoting."
+            exit 1
+          fi
+
+          echo "::warning::${count} package(s) under a forbidden licence in ${SYSTEM_NAME}; reporting only on this branch."
+
+      - name: Upload Inventory
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: licenses-${{ inputs.system-name }}
+          path: ${{ inputs.working-directory }}/licenses/licenses.json
+          retention-days: 30
+          if-no-files-found: ignore

@@ -1,0 +1,159 @@
+# Contract: docs/workflows/dotnet-sbom.md
+name: "Reusable: .NET SBOM Export"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory containing the solution or projects"
+      system-name:
+        required: true
+        type: string
+        description: "System name for display (e.g. StPeter-API)"
+      dotnet-version:
+        required: false
+        type: string
+        default: "10.0.x"
+        description: ".NET SDK version"
+      solution-path:
+        required: false
+        type: string
+        default: ""
+        description: "Solution or project to describe, relative to working-directory. Empty lets the SDK discover it"
+      require-sbom:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail when no SBOM could be produced. False reports without blocking"
+      tool-version:
+        required: false
+        type: string
+        default: "5.4.0"
+        description: "CycloneDX dotnet tool version. Pinned so an export is reproducible"
+      retention-days:
+        required: false
+        type: number
+        default: 90
+        description: "How long to keep the SBOM. It is the evidence record for a release"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    outputs:
+      sbom-result:
+        description: "SBOM export pass/fail"
+        value: ${{ jobs.dotnet-sbom.outputs.result }}
+      component-count:
+        description: "Number of components described in the SBOM"
+        value: ${{ jobs.dotnet-sbom.outputs.components }}
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-sbom:
+    name: ".NET SBOM Export"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      result: ${{ steps.export.outcome }}
+      components: ${{ steps.export.outputs.components }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # An SBOM describes the RESOLVED graph, so restore decides its contents.
+      - name: Restore Dependencies
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+        run: |
+          set -euo pipefail
+
+          target=()
+          if [ -n "${SOLUTION_PATH}" ]; then
+            target+=("${SOLUTION_PATH}")
+          fi
+
+          dotnet restore "${target[@]}"
+
+      # Unlike the other checks, this one has nothing to pass or fail on: an
+      # SBOM is a record, not a judgement. What can go wrong is producing no
+      # record at all, and on a promoted branch that is a governance failure —
+      # a release nobody can enumerate the contents of later.
+      - name: Export SBOM
+        id: export
+        env:
+          SOLUTION_PATH: ${{ inputs.solution-path }}
+          TOOL_VERSION: ${{ inputs.tool-version }}
+          REQUIRE_SBOM: ${{ inputs.require-sbom }}
+          SYSTEM_NAME: ${{ inputs.system-name }}
+        run: |
+          set -euo pipefail
+
+          dotnet tool install --global CycloneDX --version "${TOOL_VERSION}"
+          export PATH="${PATH}:${HOME}/.dotnet/tools"
+
+          target="${SOLUTION_PATH}"
+          if [ -z "${target}" ]; then
+            target="."
+          fi
+
+          mkdir -p sbom
+          set +e
+          dotnet CycloneDX "${target}" --output sbom --json
+          tool_status=$?
+          set -e
+
+          bom="sbom/bom.json"
+          if [ "${tool_status}" -ne 0 ] || [ ! -f "${bom}" ]; then
+            message="No SBOM was produced for ${SYSTEM_NAME} (tool exit ${tool_status})."
+            if [ "${REQUIRE_SBOM}" = "true" ]; then
+              echo "::error::${message} A promoted build must carry one."
+              exit 1
+            fi
+            echo "::warning::${message} Not required on this branch."
+            echo "components=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          components="$(jq '(.components // []) | length' "${bom}")"
+          echo "components=${components}" >> "$GITHUB_OUTPUT"
+          echo "SBOM describes ${components} component(s)."
+
+          # An SBOM listing nothing is worse than none: it looks like evidence
+          # and records that the build had no dependencies, which is untrue.
+          if [ "${components}" -eq 0 ] && [ "${REQUIRE_SBOM}" = "true" ]; then
+            echo "::error::The SBOM for ${SYSTEM_NAME} describes no components. That is an empty record, not a clean one."
+            exit 1
+          fi
+
+      - name: Upload SBOM
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ inputs.system-name }}
+          path: ${{ inputs.working-directory }}/sbom/bom.json
+          retention-days: ${{ inputs.retention-days }}
+          if-no-files-found: ignore
