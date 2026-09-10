@@ -109,6 +109,19 @@ jobs:
       - name: Assert GCP Cloud Run workflow contract
         run: node scripts/validate-gcp-cloud-run-workflow.cjs
 
+  validate-eslint-matcher:
+    name: "Validate ESLint Problem Matcher"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      # A matcher regex that silently matches nothing produces a lint failure
+      # with no annotations, which looks exactly like having no matcher at all.
+      - name: Assert the ESLint matcher contract
+        run: node scripts/validate-eslint-matcher.cjs
+
   validate-dotnet-trx-summary:
     name: "Validate .NET Test Summariser"
     runs-on: ubuntu-latest
