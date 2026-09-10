@@ -65,6 +65,18 @@ on:
       coverage-percent:
         description: "Code coverage percentage"
         value: ${{ jobs.dotnet-unit-tests.outputs.coverage }}
+      tests-total:
+        description: "Total tests executed, 0 when no report was produced"
+        value: ${{ jobs.dotnet-unit-tests.outputs.tests-total }}
+      tests-passed:
+        description: "Tests that passed"
+        value: ${{ jobs.dotnet-unit-tests.outputs.tests-passed }}
+      tests-failed:
+        description: "Tests that failed"
+        value: ${{ jobs.dotnet-unit-tests.outputs.tests-failed }}
+      tests-failures:
+        description: "JSON array of {name,message} for the failed tests, capped"
+        value: ${{ jobs.dotnet-unit-tests.outputs.tests-failures }}
 
 permissions:
   contents: read
@@ -76,6 +88,10 @@ jobs:
     timeout-minutes: 30
     outputs:
       result: ${{ steps.test-run.outcome }}
+      tests-total: ${{ steps.test-summary.outputs.tests-total }}
+      tests-passed: ${{ steps.test-summary.outputs.tests-passed }}
+      tests-failed: ${{ steps.test-summary.outputs.tests-failed }}
+      tests-failures: ${{ steps.test-summary.outputs.tests-failures }}
       coverage: ${{ steps.coverage-check.outputs.coverage }}
     defaults:
       run:
@@ -164,6 +180,74 @@ jobs:
             --results-directory ./TestResults \
             --collect:"XPlat Code Coverage" \
             "${extra[@]}"
+
+      # The FAILING TEST NAMES, not just a pass/fail flag.
+      #
+      # Without this the platform could only say "the quality stage failed" and
+      # leave someone to open the log and read it. dotnet test already writes a
+      # TRX for every test project, so the names and assertion messages are
+      # sitting there — they just were not being reported back.
+      #
+      # Runs on failure too, which is the only time it matters.
+      - name: Summarise Test Results
+        id: test-summary
+        if: always()
+        run: |
+          set -euo pipefail
+
+          python3 - >> "$GITHUB_OUTPUT" <<'PYEOF'
+          import glob, hashlib, json
+          import xml.etree.ElementTree as ET
+
+          total = passed = failed = 0
+          failures = []
+          seen = set()
+
+          # Recursive, because a solution puts one TRX per test project under
+          # its own directory. Deduplicated by content hash: the trx logger
+          # stages byte-identical copies, and counting those would double every
+          # number for a single-project solution.
+          for path in sorted(glob.glob("TestResults/**/*.trx", recursive=True)):
+              try:
+                  with open(path, "rb") as handle:
+                      digest = hashlib.sha256(handle.read()).hexdigest()
+              except OSError:
+                  continue
+              if digest in seen:
+                  continue
+              seen.add(digest)
+
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError:
+                  # A truncated report must not fail the summary; the job is
+                  # already reporting whatever the test step concluded.
+                  continue
+
+              # Tags carry the VSTest namespace, so match on the local name.
+              for el in root.iter():
+                  tag = el.tag.rsplit("}", 1)[-1]
+                  if tag == "Counters":
+                      total += int(el.get("total") or 0)
+                      passed += int(el.get("passed") or 0)
+                      failed += int(el.get("failed") or 0)
+                  elif tag == "UnitTestResult" and el.get("outcome") == "Failed":
+                      message = ""
+                      for child in el.iter():
+                          if child.tag.rsplit("}", 1)[-1] == "Message" and child.text:
+                              # Collapse whitespace: a newline here would break
+                              # the GITHUB_OUTPUT key=value contract.
+                              message = " ".join(child.text.split())[:300]
+                              break
+                      failures.append(
+                          {"name": el.get("testName") or "unknown", "message": message}
+                      )
+
+          print(f"tests-total={total}")
+          print(f"tests-passed={passed}")
+          print(f"tests-failed={failed}")
+          print("tests-failures=" + json.dumps(failures[:20], separators=(",", ":")))
+          PYEOF
 
       # dotnet test writes each test project's report to its own GUID-named
       # directory, so there is no fixed path to hand the coverage gate, and a
