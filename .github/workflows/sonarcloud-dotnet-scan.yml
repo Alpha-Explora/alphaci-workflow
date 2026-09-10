@@ -48,6 +48,11 @@ on:
         type: string
         default: ""
         description: "Name of coverage artifact to download (leave empty to skip)"
+      coverage-exclusions:
+        required: false
+        type: string
+        default: "tests/**"
+        description: "Value for sonar.coverage.exclusions. Test code should not count towards the product's coverage."
       quality-gate-wait:
         required: false
         type: boolean
@@ -142,6 +147,7 @@ jobs:
           SOURCES_PATH: ${{ inputs.sources-path }}
           TESTS_PATH: ${{ inputs.tests-path }}
           COVERAGE_REPORT_PATH: ${{ inputs.coverage-report-path }}
+          COVERAGE_EXCLUSIONS: ${{ inputs.coverage-exclusions }}
           QUALITY_GATE_WAIT: ${{ inputs.quality-gate-wait }}
         run: |
           set -euo pipefail
@@ -149,6 +155,24 @@ jobs:
           if [ "${SOURCES_PATH}" = "${TESTS_PATH}" ]; then
             echo "::error::sonar.sources and sonar.tests are both '${SOURCES_PATH}'. Sonar refuses to index a file as source and test, and fails the scan."
             exit 1
+          fi
+
+          # SonarScanner for .NET refuses to start when a sonar-project.properties
+          # is present, and only says so after the build has already run:
+          #
+          #   sonar-project.properties files are not understood by the
+          #   SonarScanner for .NET. Remove those files from the following
+          #   folders: ...
+          #   Post-processing failed. Exit code: 1
+          #
+          # Projects scaffolded before this was understood carry one, and it
+          # failed their quality stage every time. Removing it here repairs
+          # them without anyone editing their repository: this is the runner's
+          # own checkout, discarded when the job ends, so nothing upstream
+          # changes. Every value the file held is passed below as an argument.
+          if [ -f sonar-project.properties ]; then
+            rm -f sonar-project.properties
+            echo "::warning::Removed sonar-project.properties from the workspace checkout. SonarScanner for .NET does not support it, and every value it held is passed on the command line. Delete it from the repository to silence this warning."
           fi
 
           dotnet tool install --global dotnet-sonarscanner
@@ -170,6 +194,13 @@ jobs:
             echo "::warning::No coverage report at ${COVERAGE_REPORT_PATH}; analysing without coverage."
           fi
 
+          # Test code should not count towards the product's coverage. The
+          # scaffolded properties file used to say this; the caller does now.
+          exclusions=()
+          if [ -n "${COVERAGE_EXCLUSIONS}" ]; then
+            exclusions+=("/d:sonar.coverage.exclusions=${COVERAGE_EXCLUSIONS}")
+          fi
+
           gate=()
           if [ "${QUALITY_GATE_WAIT}" = "true" ]; then
             gate+=("/d:sonar.qualitygate.wait=true")
@@ -183,6 +214,7 @@ jobs:
             /d:sonar.sources="${SOURCES_PATH}" \
             /d:sonar.tests="${TESTS_PATH}" \
             "${coverage[@]}" \
+            "${exclusions[@]}" \
             "${gate[@]}"
 
           dotnet build "${target[@]}" --configuration "${CONFIGURATION}"
