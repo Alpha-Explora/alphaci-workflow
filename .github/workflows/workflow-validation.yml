@@ -31,37 +31,30 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      # Every workflow AND every template, found rather than listed.
+      #
+      # This step used to name each file by hand, and 13 of 38 workflows were
+      # missing from the list while workflow-templates/ was absent entirely.
+      # A hand-kept list of what to lint fails the same way every time: the
+      # file added today is the one nobody remembers to add, and it is
+      # unlinted precisely while it is newest.
+      #
+      # The templates matter as much as the workflows. Linting them for the
+      # first time found the `env` context used inside a reusable workflow's
+      # `with:` in eleven of them, where that context does not exist — so the
+      # access gate was being handed an empty URL.
       - name: Run actionlint
-        uses: docker://rhysd/actionlint:latest
-        with:
-          args: >-
-            -color
-            .github/workflows/backend-tests.yml
-            .github/workflows/branch-policy.yml
-            .github/workflows/docker-build.yml
-            .github/workflows/dotnet-analyze.yml
-            .github/workflows/dotnet-audit.yml
-            .github/workflows/dotnet-format.yml
-            .github/workflows/dotnet-test.yml
-            .github/workflows/frontend-tests.yml
-            .github/workflows/gcp-cloud-run-deploy.yml
-            .github/workflows/lint-check.yml
-            .github/workflows/mobile-tests.yml
-            .github/workflows/publish-v1-tag.yml
-            .github/workflows/reusable-javascript-quality.yml
-            .github/workflows/reusable-service-uat.yml
-            .github/workflows/reusable-web-uat.yml
-            .github/workflows/security-scan.yml
-            .github/workflows/sonarcloud-dotnet-scan.yml
-            .github/workflows/service-expo.yml
-            .github/workflows/service-nestjs.yml
-            .github/workflows/service-nextjs.yml
-            .github/workflows/service-node.yml
-            .github/workflows/service-react-native.yml
-            .github/workflows/service-react.yml
-            .github/workflows/validate-subscription.yml
-            .github/workflows/workflow-validation.yml
+        run: |
+          set -euo pipefail
 
+          mapfile -t files < <(
+            find .github/workflows workflow-templates \
+              -type f \( -name '*.yml' -o -name '*.yaml' \) | sort
+          )
+          echo "Linting ${#files[@]} workflow file(s)."
+
+          docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:latest \
+            -color "${files[@]}"
   validate-workflow-contracts:
     name: "Validate Workflow Contract Docs"
     runs-on: ubuntu-latest

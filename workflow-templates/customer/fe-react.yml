@@ -41,14 +41,12 @@ permissions:
   id-token: write
   security-events: write
 
-env:
-  CI_VALIDATE_URL: https://api.alphaci.com.ph/api/v1/ci/validate
 
 jobs:
   validate-access:
     uses: Alpha-Explora/alphaci-workflow/.github/workflows/validate-subscription.yml@v1
     with:
-      validation-api-url: ${{ env.CI_VALIDATE_URL }}
+      validation-api-url: ${{ vars.ALPHACI_VALIDATE_URL || 'https://api.alphaci.com.ph/api/v1/ci/validate' }}
     secrets:
       CI_TOKEN: ${{ secrets.CI_TOKEN }}
 
