@@ -1,0 +1,323 @@
+# Contract: docs/workflows/bruno-api-test.md
+name: "Reusable: Bruno API Test"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Directory holding the collection, relative to the repo root"
+      system-name:
+        required: true
+        type: string
+        description: "System name for display (e.g. StPeter-API)"
+      base-url:
+        required: true
+        type: string
+        description: "Root URL of the DEPLOYED api under test. The collection reads it as {{BASE_URL}}"
+      collection-path:
+        required: false
+        type: string
+        default: "tests/api"
+        description: "Collection root, the directory holding bruno.json"
+      folder:
+        required: false
+        type: string
+        default: ""
+        description: "Subfolder to run instead of the whole collection. Used to run read-only smoke requests against production"
+      min-assertions:
+        required: false
+        type: number
+        default: 1
+        description: "Fewest assertions plus tests that must actually execute. A run that asserted nothing is a failure, not a pass"
+      bruno-version:
+        required: false
+        type: string
+        default: "4.1.0"
+        description: "@usebruno/cli version. Pinned so a run is reproducible"
+      node-version:
+        required: false
+        type: string
+        default: "22.x"
+        description: "Node version used to run the Bruno CLI"
+      health-path:
+        required: false
+        type: string
+        default: "/health"
+        description: "Path polled until the deployment answers, before any test runs"
+      health-timeout-seconds:
+        required: false
+        type: number
+        default: 120
+        description: "How long to wait for the deployment to answer before giving up"
+      fail-on-failure:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail the job when the suite fails. False reports without blocking"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+    secrets:
+      API_USERNAME:
+        required: false
+        description: "Passed to the collection as {{API_USERNAME}} for auth flows"
+      API_PASSWORD:
+        required: false
+        description: "Passed to the collection as {{API_PASSWORD}} for auth flows"
+      API_TOKEN:
+        required: false
+        description: "Passed to the collection as {{API_TOKEN}} when a static token replaces a login"
+    outputs:
+      api-test-result:
+        description: "API test pass/fail"
+        value: ${{ jobs.bruno-api-test.outputs.result }}
+      total-requests:
+        description: "Requests executed"
+        value: ${{ jobs.bruno-api-test.outputs.requests }}
+      failed-requests:
+        description: "Requests that failed, 0 when clean"
+        value: ${{ jobs.bruno-api-test.outputs.failed }}
+      total-assertions:
+        description: "Assertions plus tests that executed. 0 means the suite proved nothing"
+        value: ${{ jobs.bruno-api-test.outputs.assertions }}
+
+permissions:
+  contents: read
+
+jobs:
+  bruno-api-test:
+    name: "API Test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      result: ${{ steps.verdict.outcome }}
+      requests: ${{ steps.verdict.outputs.requests }}
+      failed: ${{ steps.verdict.outputs.failed }}
+      assertions: ${{ steps.verdict.outputs.assertions }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          fetch-depth: 1
+
+      - name: Setup Node ${{ inputs.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      # A missing collection is reported, never skipped. A skipped API test
+      # reads as "nothing to worry about" on a dashboard, and that is the one
+      # thing it must never mean: the api went out untested.
+      - name: Locate Collection
+        id: locate
+        env:
+          WORKDIR: ${{ inputs.working-directory }}
+          COLLECTION_PATH: ${{ inputs.collection-path }}
+        run: |
+          set -euo pipefail
+
+          root="${WORKDIR%/}/${COLLECTION_PATH#/}"
+          root="${root#./}"
+
+          if [ ! -f "${root}/bruno.json" ]; then
+            echo "::error::No Bruno collection at ${root} (expected ${root}/bruno.json). The API was not tested."
+            exit 1
+          fi
+
+          count="$(find "${root}" -name '*.bru' -type f | wc -l)"
+          if [ "${count}" -eq 0 ]; then
+            echo "::error::The collection at ${root} holds no .bru requests. An empty suite cannot pass."
+            exit 1
+          fi
+
+          echo "root=${root}" >> "$GITHUB_OUTPUT"
+          echo "Found ${count} request file(s) under ${root}."
+
+      - name: Install Bruno CLI
+        env:
+          BRUNO_VERSION: ${{ inputs.bruno-version }}
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "@usebruno/cli@${BRUNO_VERSION}"
+          echo "$(pwd)/node_modules/.bin" >> "$GITHUB_PATH"
+
+      # The deploy job returns as soon as the platform accepts the release; the
+      # container may still be starting. Testing through that window produces
+      # connection errors that read like api defects, so wait for a real answer
+      # first and fail with a clear reason if it never comes.
+      - name: Wait For Deployment
+        env:
+          BASE_URL: ${{ inputs.base-url }}
+          HEALTH_PATH: ${{ inputs.health-path }}
+          TIMEOUT: ${{ inputs.health-timeout-seconds }}
+        run: |
+          set -euo pipefail
+
+          url="${BASE_URL%/}${HEALTH_PATH}"
+          deadline=$(( SECONDS + TIMEOUT ))
+
+          while [ "${SECONDS}" -lt "${deadline}" ]; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${url}" || true)"
+            if [ "${code}" = "200" ]; then
+              echo "${url} answered 200 after ${SECONDS}s."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "::error::${url} never answered 200 within ${TIMEOUT}s. The deployment is not serving, so an API result would mean nothing."
+          exit 1
+
+      # Never fails the job on its own. The verdict step owns that, because a
+      # zero exit from bru is not the same as a suite that proved something.
+      - name: Run Collection
+        id: run
+        continue-on-error: true
+        env:
+          COLLECTION_ROOT: ${{ steps.locate.outputs.root }}
+          FOLDER: ${{ inputs.folder }}
+          BASE_URL: ${{ inputs.base-url }}
+          API_USERNAME: ${{ secrets.API_USERNAME }}
+          API_PASSWORD: ${{ secrets.API_PASSWORD }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          # bru resolves paths from the collection root and exits 4 if it is
+          # started anywhere else, so the run happens from inside it.
+          cd "${COLLECTION_ROOT}"
+
+          args=(run)
+          if [ -n "${FOLDER}" ]; then
+            if [ ! -e "${FOLDER}" ]; then
+              echo "::error::Requested folder ${FOLDER} does not exist in the collection."
+              exit 1
+            fi
+            args+=("${FOLDER}")
+          fi
+
+          # Credentials arrive as --env-var rather than committed .bru env
+          # files, so nothing secret is written into the repository.
+          args+=(--env-var "BASE_URL=${BASE_URL}")
+          if [ -n "${API_USERNAME}" ]; then args+=(--env-var "API_USERNAME=${API_USERNAME}"); fi
+          if [ -n "${API_PASSWORD}" ]; then args+=(--env-var "API_PASSWORD=${API_PASSWORD}"); fi
+          if [ -n "${API_TOKEN}" ]; then args+=(--env-var "API_TOKEN=${API_TOKEN}"); fi
+          args+=(--reporter-json results.json)
+
+          bru "${args[@]}"
+          status=$?
+          echo "bru exited ${status}"
+          exit "${status}"
+
+      # Why this exists, and why it is not `if: steps.run.outcome == 'success'`:
+      #
+      # bru reports PASS and exits 0 for a collection that executed requests and
+      # asserted NOTHING. Observed directly — one request, no assert block:
+      #   Status PASS | Requests 1 (1 Passed) | Tests 0/0 | Assertions 0/0
+      # So a suite whose assertions were deleted, or a folder filter that
+      # matched only unasserted requests, reports green while proving nothing.
+      #
+      # The exit code is therefore necessary but not sufficient. A pass has to
+      # clear three bars: bru exited clean, no request failed, and the run
+      # actually executed assertions.
+      - name: Verdict
+        id: verdict
+        if: always() && steps.locate.outcome == 'success'
+        env:
+          RESULTS: ${{ steps.locate.outputs.root }}/results.json
+          MIN_ASSERTIONS: ${{ inputs.min-assertions }}
+          FAIL_ON_FAILURE: ${{ inputs.fail-on-failure }}
+          SYSTEM_NAME: ${{ inputs.system-name }}
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import os
+          import sys
+
+          results = os.environ["RESULTS"]
+          minimum = int(os.environ["MIN_ASSERTIONS"])
+          blocking = os.environ["FAIL_ON_FAILURE"] == "true"
+          system = os.environ["SYSTEM_NAME"]
+          run_outcome = os.environ["RUN_OUTCOME"]
+
+          def emit(name, value):
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+                  handle.write(f"{name}={value}\n")
+
+          def fail(message):
+              print(f"::error::{message}")
+              sys.exit(1 if blocking else 0)
+
+          try:
+              with open(results, encoding="utf-8") as handle:
+                  report = json.load(handle)
+          except (OSError, json.JSONDecodeError) as error:
+              emit("requests", 0)
+              emit("failed", 0)
+              emit("assertions", 0)
+              fail(
+                  f"Bruno produced no readable report for {system} ({error}). "
+                  "Treating as a failed run rather than a clean one."
+              )
+              sys.exit(0)
+
+          # The reporter writes one entry per iteration, each carrying its own
+          # summary. A single run is one entry; --iteration-count is several.
+          totals = {}
+          for iteration in report:
+              for key, value in (iteration.get("summary") or {}).items():
+                  if isinstance(value, int):
+                      totals[key] = totals.get(key, 0) + value
+
+          requests = totals.get("totalRequests", 0)
+          failed_requests = totals.get("failedRequests", 0) + totals.get("errorRequests", 0)
+          executed = totals.get("totalAssertions", 0) + totals.get("totalTests", 0)
+          broken = totals.get("failedAssertions", 0) + totals.get("failedTests", 0)
+
+          emit("requests", requests)
+          emit("failed", failed_requests)
+          emit("assertions", executed)
+
+          print(
+              f"{system}: {requests} request(s), {failed_requests} failed; "
+              f"{executed} assertion(s)/test(s) executed, {broken} failed."
+          )
+
+          if requests == 0:
+              fail(f"No request ran against {system}. The api was not tested.")
+          elif executed < minimum:
+              fail(
+                  f"{system} ran {requests} request(s) but executed only {executed} "
+                  f"assertion(s), fewer than the {minimum} required. Bruno reports a "
+                  "request with no assertions as passed, so this run proved nothing."
+              )
+          elif failed_requests or broken:
+              fail(
+                  f"{system} API tests failed: {failed_requests} request(s) and "
+                  f"{broken} assertion(s). See the uploaded results.json."
+              )
+          elif run_outcome != "success":
+              fail(
+                  f"Bruno exited non-zero for {system} while every counter reads clean. "
+                  "Refusing to call that a pass."
+              )
+          else:
+              print(f"{system} API tests passed.")
+          PY
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: bruno-results-${{ inputs.system-name }}
+          path: ${{ steps.locate.outputs.root }}/results.json
+          if-no-files-found: warn
+          retention-days: 14
