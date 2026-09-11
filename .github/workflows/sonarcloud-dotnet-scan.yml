@@ -42,7 +42,12 @@ on:
         required: false
         type: string
         default: "coverage/coverage.cobertura.xml"
-        description: "Cobertura coverage report, relative to working-directory"
+        description: "Cobertura report, relative to working-directory. Read only to tell a coverage-less run apart from one whose report is in a format no .NET importer can read"
+      generic-coverage-report-path:
+        required: false
+        type: string
+        default: "coverage/SonarQube.xml"
+        description: "Coverage in SonarQube generic format, relative to working-directory. This is the one actually imported: SonarScanner for .NET has no Cobertura importer"
       coverage-artifact-name:
         required: false
         type: string
@@ -163,6 +168,7 @@ jobs:
           SOURCES_PATH: ${{ inputs.sources-path }}
           TESTS_PATH: ${{ inputs.tests-path }}
           COVERAGE_REPORT_PATH: ${{ inputs.coverage-report-path }}
+          GENERIC_COVERAGE_REPORT_PATH: ${{ inputs.generic-coverage-report-path }}
           COVERAGE_EXCLUSIONS: ${{ inputs.coverage-exclusions }}
           QUALITY_GATE_WAIT: ${{ inputs.quality-gate-wait }}
         run: |
@@ -201,13 +207,34 @@ jobs:
 
           # Coverage is optional: a repository whose tests produced no report
           # should still get code analysis rather than no analysis at all.
+          # The format matters more than the path.
+          #
+          # SonarScanner for .NET has no Cobertura importer. This used to point
+          # BOTH of these at the Cobertura file, and neither one can read it:
+          # vscoveragexml expects a Visual Studio .coveragexml, and
+          # sonar.coverageReportPaths is the GENERIC importer, which expects
+          # SonarQube's own <coverage><file><lineToCover> schema. The generic
+          # one does not degrade quietly - it fails the entire analysis:
+          #
+          #   ERROR: Error during parsing of the generic coverage report
+          #   'coverage/coverage.cobertura.xml'. Look at SonarQube
+          #   documentation to know the expected XML format.
+          #
+          # dotnet-test.yml now emits that generic schema alongside the
+          # Cobertura one, from the same ReportGenerator merge, so the number
+          # Sonar imports and the number the coverage gate enforces come from
+          # one source and cannot drift.
           coverage=()
-          if [ -f "${COVERAGE_REPORT_PATH}" ]; then
-            coverage+=("/d:sonar.cs.vscoveragexml.reportsPaths=${COVERAGE_REPORT_PATH}")
-            coverage+=("/d:sonar.coverageReportPaths=${COVERAGE_REPORT_PATH}")
-            echo "Coverage report found at ${COVERAGE_REPORT_PATH}"
+          if [ -f "${GENERIC_COVERAGE_REPORT_PATH}" ]; then
+            coverage+=("/d:sonar.coverageReportPaths=${GENERIC_COVERAGE_REPORT_PATH}")
+            echo "Coverage report found at ${GENERIC_COVERAGE_REPORT_PATH}"
+          elif [ -f "${COVERAGE_REPORT_PATH}" ]; then
+            # Reported rather than passed. Handing this file to an importer that
+            # cannot read it is what broke the analysis in the first place, and
+            # losing coverage is better than losing the scan.
+            echo "::warning::Only ${COVERAGE_REPORT_PATH} is present and no .NET importer can read Cobertura. Analysing without coverage. The test job publishes ${GENERIC_COVERAGE_REPORT_PATH} for this; a caller pinned to an older central ref will not have it."
           else
-            echo "::warning::No coverage report at ${COVERAGE_REPORT_PATH}; analysing without coverage."
+            echo "::warning::No coverage report at ${GENERIC_COVERAGE_REPORT_PATH}; analysing without coverage."
           fi
 
           # Test code should not count towards the product's coverage. The
