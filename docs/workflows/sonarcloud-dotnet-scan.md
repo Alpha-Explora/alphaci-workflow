@@ -41,3 +41,13 @@ with a warning, rather than no analysis at all.
 ## Java
 The scanner is a .NET global tool but the analysis engine runs on Java, which
 some SDK images do not ship. The workflow installs a JRE for that reason.
+
+## Automatic Analysis has to be off, per project
+SonarCloud refuses to run a CI analysis on a project that also has Automatic Analysis enabled, and says so only as `Post-processing failed. Exit code: 1` with the reason forty lines up the log. This workflow pulls that reason out and names the fix.
+
+It is documented behaviour rather than a defect: *"Automatic analysis is not intended to be used in conjunction with CI-based analysis. If you enable automatic analysis, you must ensure that you do not have any CI-based analyses configured. If you do then these CI-based analyses will fail and cause a failure in your build process."*
+
+It bites **every new project**, not once per organisation. Automatic analysis is on by default for new projects, and the organisation-level switch that would turn it off for all of them is an Enterprise-plan feature — on any lower plan it must be turned off per project, at *the project → Administration → Analysis Method → unselect "Enabled for this project"*. There is no supported Web API for it.
+
+CI-based analysis is the one to keep. Automatic analysis states plainly that *"code coverage information is not supported"*, and a pipeline whose quality gate is coverage has given up the thing it exists to measure the moment coverage stops arriving.
+

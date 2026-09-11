@@ -37,6 +37,10 @@ Customer catalog files live under `catalog/customer/`:
 | [dotnet-format.yml](dotnet-format.md) | quality | Verify C# formatting and style with dotnet format. |
 | [dotnet-audit.yml](dotnet-audit.md) | security | Audit NuGet dependencies against known advisories. |
 | [sonarcloud-dotnet-scan.yml](sonarcloud-dotnet-scan.md) | quality | Analyse C# with SonarScanner for .NET. |
+| [gitleaks-scan.yml](gitleaks-scan.md) | security | Scan for committed secrets with Gitleaks, redacted. |
+| [dotnet-license-scan.yml](dotnet-license-scan.md) | governance | Inventory NuGet licences and fail on forbidden terms. |
+| [dotnet-sbom.yml](dotnet-sbom.md) | governance | Export a CycloneDX SBOM as the release record. |
+| [bruno-api-test.yml](bruno-api-test.md) | verify | Exercise a deployed API with a Bruno collection and fail a run that asserted nothing. |
 | [mobile-tests.yml](mobile-tests.md) | quality | Run mobile unit tests with coverage. |
 | [security-scan.yml](security-scan.md) | security | Run dependency and source security scans. |
 | [docker-build.yml](docker-build.md) | build | Build, optionally push, and scan Docker images. |
