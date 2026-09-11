@@ -96,7 +96,30 @@ jobs:
           echo "Unit tests folder found: ${UNIT_TESTS_DIRECTORY}"
 
       - name: Install Dependencies
-        run: npm ci --ignore-scripts
+        run: |
+          # `npm ci` is the right command and a hard requirement on it is not.
+          #
+          # It refuses to run without a lockfile:
+          #
+          #   npm error `npm ci` can only install with an existing
+          #   package-lock.json or npm-shrinkwrap.json
+          #
+          # A freshly scaffolded project has no lockfile - it is produced by
+          # the first `npm install` the developer runs - so every job that
+          # installed this way died on its first step before touching the
+          # code. Three of them did, on every run, for a project whose tests
+          # were fine.
+          #
+          # Falling back keeps the pipeline usable on day one, and the warning
+          # keeps the fallback from becoming the norm: an install without a
+          # lockfile resolves whatever is newest that morning, so two runs of
+          # the same commit can test different dependency trees.
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci --ignore-scripts
+          else
+            echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+            npm install --no-audit --no-fund --ignore-scripts
+          fi
 
       - name: Run Unit Tests with Coverage
         id: test-run
