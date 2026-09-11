@@ -67,6 +67,15 @@ on:
       status:
         description: "Analysis pass/fail"
         value: ${{ jobs.sonarcloud-dotnet.outputs.status }}
+      gate-status:
+        description: "SonarCloud quality gate: OK, ERROR, or UNKNOWN when it could not be read"
+        value: ${{ jobs.sonarcloud-dotnet.outputs.gate-status }}
+      failed-conditions:
+        description: "Quality-gate conditions that failed, each with its actual value and threshold"
+        value: ${{ jobs.sonarcloud-dotnet.outputs.failed-conditions }}
+      measures:
+        description: "Bugs, vulnerabilities, code smells, hotspots, coverage and duplication as reported by SonarCloud"
+        value: ${{ jobs.sonarcloud-dotnet.outputs.measures }}
     secrets:
       SONAR_TOKEN:
         required: false
@@ -85,6 +94,9 @@ jobs:
     timeout-minutes: 30
     outputs:
       status: ${{ steps.scan.outcome }}
+      gate-status: ${{ steps.findings.outputs.gate-status }}
+      failed-conditions: ${{ steps.findings.outputs.failed-conditions }}
+      measures: ${{ steps.findings.outputs.measures }}
     defaults:
       run:
         working-directory: ./${{ inputs.working-directory }}
@@ -248,3 +260,65 @@ jobs:
           fi
 
           exit "${scanner_status}"
+
+      # Bring the findings back, so nobody has to open SonarCloud to learn what
+      # it said.
+      #
+      # The scan itself reports only pass or fail. Everything that makes the
+      # verdict actionable — which quality-gate condition failed, at what value,
+      # against what threshold, and how many issues of each kind — lives in
+      # SonarCloud and was reachable only by leaving the product.
+      #
+      # Both endpoints are documented Web API v1 and take the same token the
+      # scan already holds. Read-only, and never allowed to fail the job: this
+      # step reports what the analysis found, it does not decide anything.
+      - name: Collect Findings
+        id: findings
+        if: always() && steps.scan.conclusion != 'skipped'
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${SONAR_TOKEN}" ] || [ -z "${SONAR_PROJECT_KEY}" ]; then
+            echo "No SonarCloud credentials; nothing to collect."
+            exit 0
+          fi
+
+          api() {
+            curl -sf --max-time 20 \
+              -H "Authorization: Bearer ${SONAR_TOKEN}" \
+              "https://sonarcloud.io/api/$1" 2>/dev/null
+          }
+
+          # The gate, and the conditions behind it. `project_status` names each
+          # condition with its actual value and its threshold, which is the
+          # difference between "quality gate failed" and "coverage 61.2% is
+          # below the required 80%".
+          gate_json="$(api "qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}")"
+          gate_status="$(printf '%s' "${gate_json}" | jq -r '.projectStatus.status // "UNKNOWN"' 2>/dev/null || echo UNKNOWN)"
+
+          conditions="$(printf '%s' "${gate_json}" | jq -c '
+            [.projectStatus.conditions[]?
+             | select(.status == "ERROR" or .status == "WARN")
+             | {metric: .metricKey, status: .status, actual: .actualValue, threshold: .errorThreshold}]
+          ' 2>/dev/null || printf '[]')"
+
+          # The counts a reader wants first. Requested in one call; a metric the
+          # plan does not expose simply comes back absent rather than failing.
+          measures_json="$(api "measures/component?component=${SONAR_PROJECT_KEY}&metricKeys=bugs,vulnerabilities,code_smells,security_hotspots,coverage,duplicated_lines_density")"
+          measures="$(printf '%s' "${measures_json}" | jq -c '
+            [.component.measures[]? | {(.metric): .value}] | add // {}
+          ' 2>/dev/null || printf '{}')"
+
+          {
+            echo "gate-status=${gate_status}"
+            echo "failed-conditions=${conditions:-[]}"
+            echo "measures=${measures:-{\}}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Quality gate: ${gate_status}"
+          printf '%s' "${conditions}" | jq -r '.[]? | "  \(.metric): \(.actual) (threshold \(.threshold))"' 2>/dev/null || true
+          printf '%s' "${measures}" | jq -r 'to_entries[]? | "  \(.key): \(.value)"' 2>/dev/null || true
