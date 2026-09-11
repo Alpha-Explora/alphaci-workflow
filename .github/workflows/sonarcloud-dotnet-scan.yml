@@ -67,6 +67,9 @@ on:
       status:
         description: "Analysis pass/fail"
         value: ${{ jobs.sonarcloud-dotnet.outputs.status }}
+      blocked-by:
+        description: "Why the analysis could not run, when the cause is a setting rather than the code"
+        value: ${{ jobs.sonarcloud-dotnet.outputs.blocked-by }}
       gate-status:
         description: "SonarCloud quality gate: OK, ERROR, or UNKNOWN when it could not be read"
         value: ${{ jobs.sonarcloud-dotnet.outputs.gate-status }}
@@ -94,6 +97,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       status: ${{ steps.scan.outcome }}
+      blocked-by: ${{ steps.scan.outputs.blocked-by }}
       gate-status: ${{ steps.findings.outputs.gate-status }}
       failed-conditions: ${{ steps.findings.outputs.failed-conditions }}
       measures: ${{ steps.findings.outputs.measures }}
@@ -256,6 +260,16 @@ jobs:
             # plainly that "code coverage information is not supported", and a
             # coverage-gated pipeline that cannot report coverage has given up
             # the thing it exists to measure.
+            # Published as a fact, not left in an annotation.
+            #
+            # A workflow-level ::error:: is attributed to `.github`, and the
+            # platform drops annotations with that path — deliberately, because
+            # the runner's own "Process completed with exit code 1" arrives the
+            # same way and says nothing. Verified against a real failed run: the
+            # only two `.github` annotations were that notice and this
+            # workflow's own warning. So the reason has to travel as an output
+            # or it does not travel at all.
+            echo "blocked-by=automatic-analysis" >> "$GITHUB_OUTPUT"
             echo "::error title=SonarCloud Automatic Analysis is on::This project has Automatic Analysis enabled, which SonarCloud refuses to run alongside a CI analysis. Turn it off for THIS project: SonarCloud -> the project -> Administration -> Analysis Method -> unselect 'Enabled for this project'. Keep the CI analysis: automatic analysis cannot read a coverage report, so the coverage gate would stop meaning anything."
           fi
 
