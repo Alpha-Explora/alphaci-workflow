@@ -30,6 +30,11 @@ on:
         type: string
         default: "preview"
         description: "Deployment environment (preview|production)"
+      branch-alias:
+        required: false
+        type: string
+        default: ""
+        description: "Stable hostname to point at this preview deploy, so a later stage can find it. Ignored for production, which already has one"
       checkout-ref:
         required: false
         type: string
@@ -45,6 +50,9 @@ on:
       GH_PR_TOKEN:
         required: false
     outputs:
+      deployment_alias:
+        description: "The stable hostname, when one was requested and set"
+        value: ${{ jobs.vercel-deploy.outputs.deployment_alias }}
       deployment_url:
         description: "Vercel deployment URL"
         value: ${{ jobs.vercel-deploy.outputs.url }}
@@ -70,6 +78,7 @@ jobs:
     outputs:
       url: ${{ steps.deploy.outputs.url }}
       id: ${{ steps.deploy.outputs.id }}
+      deployment_alias: ${{ steps.deploy.outputs.alias }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -173,6 +182,28 @@ jobs:
 
           echo "url=$URL" >> $GITHUB_OUTPUT
           echo "🚀 Deployed to: $URL"
+
+          # Give a preview deploy a STABLE hostname.
+          #
+          # `vercel deploy` returns a URL unique to the deployment, and nothing
+          # downstream can predict it. A later stage triggered by workflow_run
+          # cannot read this job's outputs either, so without an alias a UI
+          # suite has no address to point at — production works only because
+          # --prod already lands on a fixed domain.
+          #
+          # Never fails the deploy. The release succeeded; not being able to
+          # nickname it is a problem for the stage that wanted the nickname,
+          # and that stage reports it rather than retroactively failing a
+          # deployment that is live and serving.
+          ALIAS="${{ inputs.branch-alias }}"
+          if [ -n "${ALIAS}" ] && [ "${{ inputs.environment }}" != "production" ]; then
+            if vercel alias set "${URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" 2>&1; then
+              echo "alias=https://${ALIAS}" >> $GITHUB_OUTPUT
+              echo "🔗 Aliased to: https://${ALIAS}"
+            else
+              echo "::warning::Could not alias ${URL} to ${ALIAS}. The deploy is live; anything addressing it by the stable name will not find it."
+            fi
+          fi
 
           # Fetch deployment ID from Vercel API using the deployment URL
           HOSTNAME="${URL#https://}"

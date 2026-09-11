@@ -41,6 +41,7 @@ Customer catalog files live under `catalog/customer/`:
 | [dotnet-license-scan.yml](dotnet-license-scan.md) | governance | Inventory NuGet licences and fail on forbidden terms. |
 | [dotnet-sbom.yml](dotnet-sbom.md) | governance | Export a CycloneDX SBOM as the release record. |
 | [bruno-api-test.yml](bruno-api-test.md) | verify | Exercise a deployed API with a Bruno collection and fail a run that asserted nothing. |
+| [schemathesis-scan.yml](schemathesis-scan.md) | verify | Generate contract tests from the OpenAPI document and fail a run that exercised nothing. |
 | [mobile-tests.yml](mobile-tests.md) | quality | Run mobile unit tests with coverage. |
 | [security-scan.yml](security-scan.md) | security | Run dependency and source security scans. |
 | [docker-build.yml](docker-build.md) | build | Build, optionally push, and scan Docker images. |
