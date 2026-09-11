@@ -152,6 +152,7 @@ jobs:
       # connection errors that read like api defects, so wait for a real answer
       # first and fail with a clear reason if it never comes.
       - name: Wait For Deployment
+        id: target
         env:
           BASE_URL: ${{ inputs.base-url }}
           HEALTH_PATH: ${{ inputs.health-path }}
@@ -159,7 +160,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          url="${BASE_URL%/}${HEALTH_PATH}"
+          # The caller may hand over a base URL or a URL that already ends in
+          # the health path — render-deploy.yml accepts either, and the same
+          # secret feeds both. Appending blindly turns a working /health into
+          # /health/health and reports a healthy deployment as unreachable.
+          base="${BASE_URL%/}"
+          case "${base}" in
+            *"${HEALTH_PATH}") base="${base%${HEALTH_PATH}}" ;;
+          esac
+          base="${base%/}"
+
+          # Published so the collection is handed the SAME root this step
+          # probed. Normalising here and passing the raw input to bru would
+          # send {{BASE_URL}}/health requests to /health/health — the bug this
+          # normalisation exists to prevent, reintroduced one step later.
+          echo "base-url=${base}" >> "$GITHUB_OUTPUT"
+
+          url="${base}${HEALTH_PATH}"
+          echo "Probing ${url}"
           deadline=$(( SECONDS + TIMEOUT ))
 
           while [ "${SECONDS}" -lt "${deadline}" ]; do
@@ -182,7 +200,7 @@ jobs:
         env:
           COLLECTION_ROOT: ${{ steps.locate.outputs.root }}
           FOLDER: ${{ inputs.folder }}
-          BASE_URL: ${{ inputs.base-url }}
+          BASE_URL: ${{ steps.target.outputs.base-url }}
           API_USERNAME: ${{ secrets.API_USERNAME }}
           API_PASSWORD: ${{ secrets.API_PASSWORD }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
