@@ -219,4 +219,32 @@ jobs:
 
           dotnet build "${target[@]}" --configuration "${CONFIGURATION}"
 
-          dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
+          # The post-processing step is where SonarCloud rejects the analysis,
+          # and its own summary is only "Post-processing failed. Exit code: 1".
+          # The reason sits forty lines up the log, so it is pulled out here.
+          set +e
+          dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}" 2>&1 | tee sonar-end.log
+          scanner_status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "${scanner_status}" -ne 0 ] && grep -q "Automatic Analysis is enabled" sonar-end.log; then
+            # Documented behaviour, not a bug: "Automatic analysis is not
+            # intended to be used in conjunction with CI-based analysis. If you
+            # enable automatic analysis, you must ensure that you do not have
+            # any CI-based analyses configured. If you do then these CI-based
+            # analyses will fail and cause a failure in your build process."
+            #
+            # It bites every new project rather than once per organisation:
+            # automatic analysis is ON by default for new projects, and the
+            # organisation-level switch that would turn it off for all of them
+            # is an Enterprise-plan feature. On any lower plan it has to be
+            # turned off per project, and there is no supported Web API for it.
+            #
+            # CI-based analysis is the one to keep. Automatic analysis states
+            # plainly that "code coverage information is not supported", and a
+            # coverage-gated pipeline that cannot report coverage has given up
+            # the thing it exists to measure.
+            echo "::error title=SonarCloud Automatic Analysis is on::This project has Automatic Analysis enabled, which SonarCloud refuses to run alongside a CI analysis. Turn it off for THIS project: SonarCloud -> the project -> Administration -> Analysis Method -> unselect 'Enabled for this project'. Keep the CI analysis: automatic analysis cannot read a coverage report, so the coverage gate would stop meaning anything."
+          fi
+
+          exit "${scanner_status}"
