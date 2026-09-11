@@ -55,6 +55,12 @@ on:
       forbidden-count:
         description: "Number of packages under a forbidden licence, 0 when clean"
         value: ${{ jobs.dotnet-license-scan.outputs.forbidden }}
+      forbidden-items:
+        description: "Each offending package with its version and licence"
+        value: ${{ jobs.dotnet-license-scan.outputs.items }}
+      unknown-count:
+        description: "Packages whose licence could not be determined. Not forbidden, but not cleared either"
+        value: ${{ jobs.dotnet-license-scan.outputs.unknown }}
 
 permissions:
   contents: read
@@ -67,6 +73,8 @@ jobs:
     outputs:
       result: ${{ steps.scan.outcome }}
       forbidden: ${{ steps.scan.outputs.forbidden }}
+      items: ${{ steps.scan.outputs.items }}
+      unknown: ${{ steps.scan.outputs.unknown }}
     defaults:
       run:
         working-directory: ./${{ inputs.working-directory }}
@@ -187,6 +195,16 @@ jobs:
           unknown="$(jq '[.[] | select((.License // "") == "")] | length' licenses/licenses.json)"
           count="$(printf '%s' "${hits}" | jq 'length')"
           echo "forbidden=${count}" >> "$GITHUB_OUTPUT"
+          echo "unknown=${unknown}" >> "$GITHUB_OUTPUT"
+
+          # A count cannot be acted on. "3 forbidden licences" sends someone to
+          # read an artifact; naming the packages lets them replace one.
+          items="$(printf '%s' "${hits}" | jq -c '[.[] | {
+            package: .PackageId,
+            version: .PackageVersion,
+            license: .License
+          }] | .[0:20]' || printf '[]')"
+          echo "items=${items}" >> "$GITHUB_OUTPUT"
 
           if [ "${unknown}" -gt 0 ]; then
             echo "::warning::${unknown} package(s) report no licence. Review them by hand; the scan cannot judge what it cannot read."
