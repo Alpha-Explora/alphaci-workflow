@@ -304,9 +304,21 @@ jobs:
 
           # Cobertura for the gate, lcov for SonarCloud, both from one merge so
           # the two can never disagree about what was covered.
+          #
+          # obj/ is excluded because it holds SOURCE-GENERATED code, and no
+          # hand-written source ever lives there. Grading a team on generated
+          # code is not a stricter gate, it is a broken one: a .NET 10 service
+          # referencing Microsoft.AspNetCore.OpenApi gets ~770 lines of XML
+          # comment support emitted into obj/, none of it reachable from a
+          # test, which measured 6.55% on a freshly scaffolded project and
+          # 96.77% once excluded. The generator cannot be turned off - the
+          # package ships it with no opt-out property - so the exclusion has to
+          # happen here. This is not specific to OpenAPI: EF compiled models,
+          # regex and DI generators all emit to the same place.
           reportgenerator \
             "-reports:${joined}" \
             "-targetdir:coverage" \
+            "-filefilters:-**/obj/**" \
             "-reporttypes:Cobertura;lcov"
 
           # ReportGenerator names its Cobertura output Cobertura.xml; the gate is

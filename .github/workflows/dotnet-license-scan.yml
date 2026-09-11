@@ -41,8 +41,8 @@ on:
       exclude-projects:
         required: false
         type: string
-        default: "*Test*;*Tests*;*.Spec;*.Specs"
-        description: "Project name patterns excluded from the scan. Licence obligations attach to what ships, and test projects do not"
+        default: "*.Tests.csproj;*.Test.csproj;*.IntegrationTests.csproj;*.Spec.csproj;*.Specs.csproj"
+        description: "Project FILE patterns excluded from the scan, matched case-insensitively against the project path. Licence obligations attach to what ships, and test projects do not"
       checkout-ref:
         required: false
         type: string
@@ -149,6 +149,15 @@ jobs:
           # ships as a test dependency, declares no licence element at all in
           # its nuspec, so any inventory containing it never resolves.
           #
+          # The patterns are matched case-insensitively against the project
+          # PATH, not its name, which is why each one ends in .csproj. A bare
+          # name pattern behaves two ways and both are wrong: `*.Tests` matches
+          # no path at all, so nothing is excluded, while `*Test*` matches every
+          # path under a repository whose own name contains "test" - excluding
+          # the shipping project along with the test one and inventorying
+          # nothing. The guard below is there because that second failure looks
+          # exactly like a clean scan.
+          #
           # The tool exits non-zero whenever a licence is undeterminable, so its
           # exit code cannot stand in for the policy verdict. The file is the
           # evidence: produced means the scan ran, absent means it broke.
@@ -156,7 +165,7 @@ jobs:
           nuget-license \
             --input "${target}" \
             --include-transitive \
-            --exclude-projects "${EXCLUDE_PROJECTS}" \
+            --exclude-projects-matching "${EXCLUDE_PROJECTS}" \
             --output JsonPretty \
             --file-output licenses/licenses.json
           tool_status=$?
@@ -168,6 +177,21 @@ jobs:
           fi
 
           inventoried="$(jq 'length' licenses/licenses.json)"
+
+          # An empty inventory is not a clean scan.
+          #
+          # A valid, readable, EMPTY array passes every check above: the file
+          # exists, it is JSON, and the policy step then finds zero forbidden
+          # licences in zero packages and reports success. Every real .NET
+          # service references at least one package, so nothing to inventory
+          # means the scan scoped itself out of existence - an exclusion
+          # pattern that swallowed the shipping project, or an input pointing
+          # at a solution with no projects in it.
+          if [ "${inventoried}" -eq 0 ]; then
+            echo "::error::The licence scan inventoried no packages, which cannot be right for a service that builds. Check exclude-projects (${EXCLUDE_PROJECTS}) - a pattern matching the shipping project leaves nothing to scan, and an empty inventory would otherwise be reported as a clean one."
+            exit 1
+          fi
+
           echo "Inventoried ${inventoried} shipping package(s) (tool exit ${tool_status})."
 
       # Policy lives here, not in the tool. The tool reports what the licences
