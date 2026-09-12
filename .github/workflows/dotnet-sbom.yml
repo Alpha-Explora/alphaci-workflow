@@ -115,10 +115,37 @@ jobs:
           dotnet tool install --global CycloneDX --version "${TOOL_VERSION}"
           export PATH="${PATH}:${HOME}/.dotnet/tools"
 
+          # CycloneDX needs a SOLUTION or PROJECT, never a directory.
+          #
+          # Handed ".", it reports "Found 0 packages" and writes a valid BOM
+          # with an empty components array - exit code 0, no warning, nothing
+          # in the log that looks wrong unless you read the package count. On
+          # dev, where an SBOM is not required, that was accepted silently for
+          # every build. Measured on a scaffolded project: "." finds 0,
+          # the .sln finds 52.
+          #
+          # Same resolution order as dotnet-license-scan.yml, so the two gates
+          # cannot end up describing different sets of packages. The single
+          # project fallback is for a repository with no solution file at all,
+          # where scanning one project still beats scanning nothing.
           target="${SOLUTION_PATH}"
           if [ -z "${target}" ]; then
-            target="."
+            target="$(ls -1 ./*.sln ./*.slnx 2>/dev/null | head -n 1 || true)"
           fi
+          if [ -z "${target}" ]; then
+            target="$(find . -name "*.csproj" -not -path "*/obj/*" -not -path "*/bin/*" 2>/dev/null | sort | head -n 1 || true)"
+          fi
+          if [ -z "${target}" ]; then
+            message="No solution or project found to inventory for ${SYSTEM_NAME}."
+            if [ "${REQUIRE_SBOM}" = "true" ]; then
+              echo "::error::${message} A promoted build must carry an SBOM, and an SBOM of nothing is not one."
+              exit 1
+            fi
+            echo "::warning::${message} Not required on this branch."
+            echo "components=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Inventorying ${target}"
 
           mkdir -p sbom
           set +e

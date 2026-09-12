@@ -302,8 +302,15 @@ jobs:
 
           joined="$(IFS=';'; printf '%s' "${reports[*]}")"
 
-          # Cobertura for the gate, lcov for SonarCloud, both from one merge so
-          # the two can never disagree about what was covered.
+          # Three formats from one merge, so no two of them can disagree about
+          # what was covered: Cobertura for the coverage gate, lcov for the
+          # JavaScript-side Sonar importer, and SonarQube.xml for the .NET one.
+          #
+          # SonarQube.xml is not a nicety. SonarScanner for .NET has no Cobertura
+          # importer, so the Cobertura file was being handed to the GENERIC
+          # importer, which expects a completely different schema and failed the
+          # whole analysis with "Error during parsing of the generic coverage
+          # report". ReportGenerator writes that generic schema directly.
           #
           # obj/ is excluded because it holds SOURCE-GENERATED code, and no
           # hand-written source ever lives there. Grading a team on generated
@@ -319,7 +326,7 @@ jobs:
             "-reports:${joined}" \
             "-targetdir:coverage" \
             "-filefilters:-**/obj/**" \
-            "-reporttypes:Cobertura;lcov"
+            "-reporttypes:Cobertura;lcov;SonarQube"
 
           # ReportGenerator names its Cobertura output Cobertura.xml; the gate is
           # pointed at the lower-case name used by every other stack.
