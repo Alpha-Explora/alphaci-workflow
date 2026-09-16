@@ -1,0 +1,407 @@
+# Contract: docs/workflows/release.md
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  REUSABLE: Release an already-built artifact                     ║
+# ║                                                                  ║
+# ║  Host-neutral. The pipeline asks AlphaCI to release; AlphaCI      ║
+# ║  owns the hosting credentials and knows which service this        ║
+# ║  project uses for this slot and branch.                          ║
+# ╚══════════════════════════════════════════════════════════════════╝
+name: "Reusable: Release"
+
+on:
+  workflow_call:
+    inputs:
+      system-name:
+        required: false
+        type: string
+        default: ""
+        description: "System name, used for concurrency and the run summary"
+      slot:
+        required: true
+        type: string
+        description: "Deployment slot this release belongs to (backend|frontend|standalone)"
+      branch:
+        required: true
+        type: string
+        description: "Pipeline branch being released (dev|uat|main). Taken from pipeline-context, never from github.ref"
+      commit-sha:
+        required: true
+        type: string
+        description: "Commit being released. A workflow_run chain reports the default branch in github.sha, so this must be passed explicitly"
+      artifact:
+        required: false
+        type: string
+        default: ""
+        description: "Artifact reference that was built and pushed, e.g. an image ref. Omit when the host builds from source"
+      api-url:
+        required: false
+        type: string
+        default: ""
+        description: "AlphaCI base URL. Falls back to the ALPHACI_API_URL secret; one of the two is required"
+      healthcheck-path:
+        required: false
+        type: string
+        default: "/health"
+        description: "Path appended when AlphaCI returns a base URL rather than a health URL"
+      healthcheck-expected-statuses:
+        required: false
+        type: string
+        default: "200"
+        description: "Comma-separated HTTP statuses that count as healthy"
+      healthcheck-timeout-seconds:
+        required: false
+        type: number
+        default: 420
+        description: "How long to wait for the released service to answer"
+      healthcheck-interval-seconds:
+        required: false
+        type: number
+        default: 10
+        description: "Seconds between health attempts"
+      release-timeout-seconds:
+        required: false
+        type: number
+        default: 900
+        description: "How long to wait for the host to finish the release"
+      release-poll-interval-seconds:
+        required: false
+        type: number
+        default: 10
+        description: "Seconds between release status checks"
+    secrets:
+      ALPHACI_TOKEN:
+        required: true
+        description: "The project's AlphaCI token, installed when the repository was provisioned"
+      ALPHACI_API_URL:
+        required: false
+        description: "AlphaCI base URL, when it is not passed as the api-url input"
+    outputs:
+      release_id:
+        description: "AlphaCI release identifier"
+        value: ${{ jobs.release.outputs.release_id }}
+      release_status:
+        description: "Terminal release status reported by AlphaCI"
+        value: ${{ jobs.release.outputs.release_status }}
+      service_url:
+        description: "Public URL of the released service"
+        value: ${{ jobs.release.outputs.service_url }}
+      health_url:
+        description: "URL the health check used"
+        value: ${{ jobs.release.outputs.health_url }}
+      health_status:
+        description: "success when the service answered as expected"
+        value: ${{ jobs.release.outputs.health_status }}
+      health_http_code:
+        description: "Last HTTP status returned by the health check"
+        value: ${{ jobs.release.outputs.health_http_code }}
+
+permissions:
+  contents: read
+
+# One release at a time per system, slot and branch. Releases are not
+# cancel-in-progress: cancelling half way through leaves the host mid-rollout
+# with nothing watching it.
+concurrency:
+  group: alphaci-release-${{ inputs.system-name || github.repository }}-${{ inputs.slot }}-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: "Release ${{ inputs.slot }} (${{ inputs.branch }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      release_id: ${{ steps.request.outputs.release_id }}
+      release_status: ${{ steps.wait.outputs.release_status }}
+      service_url: ${{ steps.wait.outputs.service_url }}
+      health_url: ${{ steps.health.outputs.health_url }}
+      health_status: ${{ steps.health.outputs.health_status }}
+      health_http_code: ${{ steps.health.outputs.health_http_code }}
+    steps:
+      - name: Resolve AlphaCI endpoint
+        id: endpoint
+        env:
+          API_URL_INPUT: ${{ inputs.api-url }}
+          API_URL_SECRET: ${{ secrets.ALPHACI_API_URL }}
+        run: |
+          set -euo pipefail
+
+          base="${API_URL_INPUT:-}"
+          if [ -z "${base}" ]; then
+            base="${API_URL_SECRET:-}"
+          fi
+
+          if [ -z "${base}" ]; then
+            echo "::error::No AlphaCI URL. Pass the api-url input or set the ALPHACI_API_URL secret."
+            exit 1
+          fi
+
+          # Accept a base URL or one that already carries the API prefix, so a
+          # deployment that reuses its report URL setting does not end up
+          # requesting /api/v1/api/v1/ci/releases.
+          base="${base%/}"
+          base="${base%/api/v1}"
+          base="${base%/}"
+
+          case "${base}" in
+            https://*) ;;
+            http://localhost*|http://127.0.0.1*)
+              echo "::warning::Releasing through an unencrypted local URL."
+              ;;
+            *)
+              echo "::error::AlphaCI URL must be https (got a non-https, non-local URL)."
+              exit 1
+              ;;
+          esac
+
+          echo "base=${base}" >> "$GITHUB_OUTPUT"
+
+      - name: Request release
+        id: request
+        env:
+          BASE: ${{ steps.endpoint.outputs.base }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          REPO: ${{ github.repository }}
+          SLOT: ${{ inputs.slot }}
+          BRANCH: ${{ inputs.branch }}
+          COMMIT_SHA: ${{ inputs.commit-sha }}
+          ARTIFACT: ${{ inputs.artifact }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ALPHACI_TOKEN:-}" ]; then
+            echo "::error::ALPHACI_TOKEN is empty. It is installed when AlphaCI provisions the repository; regenerate the pipeline from the Workflow tab if it is missing."
+            exit 1
+          fi
+
+          body=$(jq -nc \
+            --arg repoFullName "${REPO}" \
+            --arg slot "${SLOT}" \
+            --arg branch "${BRANCH}" \
+            --arg commitSha "${COMMIT_SHA}" \
+            --arg artifact "${ARTIFACT}" \
+            --arg runUrl "${RUN_URL}" \
+            '{repoFullName: $repoFullName, slot: $slot, branch: $branch, commitSha: $commitSha, runUrl: $runUrl}
+             + (if $artifact == "" then {} else {artifact: $artifact} end)')
+
+          response=$(mktemp)
+          code=$(curl -sS -o "${response}" -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${ALPHACI_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${body}" \
+            "${BASE}/api/v1/ci/releases" || echo "000")
+
+          # The message is the operator-facing half of this workflow: a release
+          # refused for an expired token, a project with no target for this
+          # branch, or a deployment too old to have the endpoint all arrive
+          # here, and each needs a different fix.
+          if [ "${code}" = "404" ]; then
+            echo "::error::This AlphaCI deployment has no release endpoint (404). It needs the backend release support, or the pipeline should be regenerated."
+            cat "${response}" || true
+            exit 1
+          fi
+
+          case "${code}" in
+            2*) ;;
+            *)
+              echo "::error::AlphaCI refused the release (HTTP ${code})."
+              jq -r '.message // .error // .' "${response}" 2>/dev/null || cat "${response}" || true
+              exit 1
+              ;;
+          esac
+
+          release_id=$(jq -r '.releaseId // .id // empty' "${response}")
+          if [ -z "${release_id}" ]; then
+            echo "::error::AlphaCI accepted the release but returned no release id."
+            cat "${response}"
+            exit 1
+          fi
+
+          {
+            echo "release_id=${release_id}"
+            echo "status=$(jq -r '.status // "pending"' "${response}")"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Release ${release_id} requested for ${SLOT}/${BRANCH} at ${COMMIT_SHA}"
+          rm -f "${response}"
+
+      - name: Wait for the host to finish
+        id: wait
+        env:
+          BASE: ${{ steps.endpoint.outputs.base }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          RELEASE_ID: ${{ steps.request.outputs.release_id }}
+          TIMEOUT_SECONDS: ${{ inputs.release-timeout-seconds }}
+          INTERVAL_SECONDS: ${{ inputs.release-poll-interval-seconds }}
+        run: |
+          set -euo pipefail
+
+          start=$(date +%s)
+          status="unknown"
+          service_url=""
+          health_url=""
+          detail=""
+
+          while true; do
+            response=$(mktemp)
+            code=$(curl -sS -o "${response}" -w "%{http_code}" \
+              -H "Authorization: Bearer ${ALPHACI_TOKEN}" \
+              "${BASE}/api/v1/ci/releases/${RELEASE_ID}" || echo "000")
+
+            if [ "${code}" = "200" ]; then
+              status=$(jq -r '.status // "unknown"' "${response}")
+              service_url=$(jq -r '.serviceUrl // empty' "${response}")
+              health_url=$(jq -r '.healthcheckUrl // empty' "${response}")
+              detail=$(jq -r '.message // empty' "${response}")
+            else
+              # A single unreadable poll is not a failed release - the platform
+              # may be restarting. Only the timeout below ends the wait.
+              echo "::warning::Could not read release status (HTTP ${code}); retrying."
+            fi
+            rm -f "${response}"
+
+            case "${status}" in
+              live|succeeded|success)
+                echo "Release ${RELEASE_ID} is live."
+                break
+                ;;
+              failed|error|canceled|cancelled)
+                echo "::error::Release ${RELEASE_ID} ended as '${status}'. ${detail}"
+                {
+                  echo "release_status=${status}"
+                  echo "service_url=${service_url}"
+                  echo "health_url=${health_url}"
+                } >> "$GITHUB_OUTPUT"
+                exit 1
+                ;;
+            esac
+
+            now=$(date +%s)
+            if [ $((now - start)) -ge "${TIMEOUT_SECONDS}" ]; then
+              echo "::error::Release ${RELEASE_ID} was still '${status}' after ${TIMEOUT_SECONDS}s. Check the host's own dashboard; the release may still complete."
+              {
+                echo "release_status=${status}"
+                echo "service_url=${service_url}"
+                echo "health_url=${health_url}"
+              } >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+
+            sleep "${INTERVAL_SECONDS}"
+          done
+
+          {
+            echo "release_status=${status}"
+            echo "service_url=${service_url}"
+            echo "health_url=${health_url}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify the service answers
+        id: health
+        env:
+          SERVICE_URL: ${{ steps.wait.outputs.service_url }}
+          HEALTH_URL_FROM_API: ${{ steps.wait.outputs.health_url }}
+          HEALTHCHECK_PATH: ${{ inputs.healthcheck-path }}
+          EXPECTED_STATUSES: ${{ inputs.healthcheck-expected-statuses }}
+          TIMEOUT_SECONDS: ${{ inputs.healthcheck-timeout-seconds }}
+          INTERVAL_SECONDS: ${{ inputs.healthcheck-interval-seconds }}
+        run: |
+          set -euo pipefail
+
+          health_url="${HEALTH_URL_FROM_API}"
+          if [ -z "${health_url}" ]; then
+            health_url="${SERVICE_URL}"
+          fi
+
+          if [ -z "${health_url}" ]; then
+            # The release succeeded; there is simply no address to test. Saying
+            # nothing here would report a verified deployment that was never
+            # reached.
+            echo "::warning::AlphaCI returned no URL for this service, so nothing was health-checked."
+            {
+              echo "health_url="
+              echo "health_status=skipped"
+              echo "health_http_code=000"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Only a bare origin gets the path appended; a full URL from AlphaCI
+          # is used exactly as given.
+          if echo "${health_url}" | grep -Eq '^https?://[^/]+/?$'; then
+            path="${HEALTHCHECK_PATH}"
+            case "${path}" in
+              "") path="/health" ;;
+              /*) ;;
+              *) path="/${path}" ;;
+            esac
+            health_url="${health_url%/}${path}"
+          fi
+
+          IFS=',' read -r -a codes <<< "$(echo "${EXPECTED_STATUSES}" | tr -d ' ')"
+          start=$(date +%s)
+          last="000"
+
+          while true; do
+            last=$(curl -sS -o /dev/null -w "%{http_code}" "${health_url}" || echo "000")
+
+            for code in "${codes[@]}"; do
+              if [ -n "${code}" ] && [ "${last}" = "${code}" ]; then
+                echo "${health_url} answered ${last}"
+                {
+                  echo "health_url=${health_url}"
+                  echo "health_status=success"
+                  echo "health_http_code=${last}"
+                } >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            done
+
+            now=$(date +%s)
+            if [ $((now - start)) -ge "${TIMEOUT_SECONDS}" ]; then
+              echo "::error::${health_url} did not answer ${EXPECTED_STATUSES} within ${TIMEOUT_SECONDS}s (last ${last}). The release finished, so the service started and then failed to serve."
+              {
+                echo "health_url=${health_url}"
+                echo "health_status=failure"
+                echo "health_http_code=${last}"
+              } >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+
+            sleep "${INTERVAL_SECONDS}"
+          done
+
+      - name: Summary
+        if: ${{ always() }}
+        env:
+          SLOT: ${{ inputs.slot }}
+          BRANCH: ${{ inputs.branch }}
+          COMMIT_SHA: ${{ inputs.commit-sha }}
+          ARTIFACT: ${{ inputs.artifact }}
+          RELEASE_ID: ${{ steps.request.outputs.release_id }}
+          RELEASE_STATUS: ${{ steps.wait.outputs.release_status }}
+          SERVICE_URL: ${{ steps.wait.outputs.service_url }}
+          HEALTH_URL: ${{ steps.health.outputs.health_url }}
+          HEALTH_STATUS: ${{ steps.health.outputs.health_status }}
+          HEALTH_CODE: ${{ steps.health.outputs.health_http_code }}
+        # `if` rather than `[ -n ... ] && echo ...`: Actions runs this with -e,
+        # and a bare test that is false both fails the step and, as the last
+        # line, sets the exit status. A release with no artifact or no URL is a
+        # normal outcome, and it must not be reported as a failed summary.
+        run: |
+          {
+            echo "### Release: ${SLOT} (${BRANCH})"
+            echo ""
+            echo "- Commit: \`${COMMIT_SHA}\`"
+            if [ -n "${ARTIFACT}" ]; then
+              echo "- Artifact: \`${ARTIFACT}\`"
+            fi
+            echo "- Release: \`${RELEASE_ID:-not requested}\` (${RELEASE_STATUS:-not started})"
+            if [ -n "${SERVICE_URL}" ]; then
+              echo "- Service: ${SERVICE_URL}"
+            fi
+            if [ -n "${HEALTH_URL}" ]; then
+              echo "- Health: ${HEALTH_URL} -> ${HEALTH_STATUS:-unknown} (${HEALTH_CODE:-000})"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

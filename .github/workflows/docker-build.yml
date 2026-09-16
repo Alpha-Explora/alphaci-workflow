@@ -57,6 +57,11 @@ on:
         type: string
         default: ""
         description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+      pipeline-branch:
+        required: false
+        type: string
+        default: ""
+        description: "The pipeline branch this image belongs to (dev|uat|main), from pipeline-context. When set, the image is tagged with that branch and the built commit instead of the git context, and no `latest` is written"
     outputs:
       image-tag:
         description: "Full image tag that was built"
@@ -119,18 +124,57 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # A workflow_run chain reports the DEFAULT branch in the git context, not
+      # the branch that was pushed: `type=ref,event=branch` then writes `main`
+      # and `latest` onto a uat build, and `type=sha` stamps the default
+      # branch's head rather than the commit that was actually checked out and
+      # built. Nothing downstream can then ask for "the uat image".
+      #
+      # Callers that pass pipeline-branch get tags derived from the values they
+      # were given. Callers that do not are untouched, which keeps the existing
+      # push-triggered templates and every generated pipeline on their current
+      # tags.
+      - name: Resolve tag policy
+        id: tags
+        env:
+          PIPELINE_BRANCH: ${{ inputs.pipeline-branch }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          CHECKOUT_REF: ${{ inputs.checkout-ref }}
+          CONTEXT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # checkout-ref may be a branch name or a tag; only a full SHA names
+          # the commit this image actually contains.
+          built_sha="${CHECKOUT_REF}"
+          if ! printf '%s' "${built_sha}" | grep -Eq '^[0-9a-f]{40}$'; then
+            built_sha="${CONTEXT_SHA}"
+          fi
+
+          {
+            echo "rules<<TAG_RULES"
+            if [ -n "${PIPELINE_BRANCH}" ]; then
+              echo "type=raw,value=${PIPELINE_BRANCH}"
+              echo "type=raw,value=sha-${built_sha}"
+            else
+              echo "type=sha,format=long,prefix=sha-"
+              echo "type=ref,event=branch"
+              echo "type=ref,event=pr"
+              echo "type=semver,pattern={{version}}"
+              echo "type=raw,value=latest,enable={{is_default_branch}}"
+            fi
+            if [ -n "${RELEASE_TAG}" ]; then
+              echo "type=raw,value=${RELEASE_TAG}"
+            fi
+            echo "TAG_RULES"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.coords.outputs.image_repo }}
-          tags: |
-            type=sha,format=long,prefix=sha-
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=raw,value=${{ inputs.release-tag }},enable=${{ inputs.release-tag != '' }}
-            type=raw,value=latest,enable={{is_default_branch}}
+          tags: ${{ steps.tags.outputs.rules }}
 
       - name: Build and Push
         id: build-push
@@ -143,7 +187,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ steps.coords.outputs.cache_scope }}
-          cache-to: type=gha,mode=max,scope=${{ steps.coords.outputs.cache_scope }}
+          # ignore-error: the build cache is an optimisation, and failing to
+          # SAVE it must not fail a build whose image already pushed. Observed
+          # on real runs as `error writing layer blob: failed to reserve cache`
+          # after every layer had been pushed to GHCR: the image was published
+          # and usable, the job went red, and the deploy that needed it was
+          # skipped. A cache that cannot be written only costs time next run.
+          cache-to: type=gha,mode=max,scope=${{ steps.coords.outputs.cache_scope }},ignore-error=true
           build-args: ${{ inputs.build-args }}
           sbom: ${{ inputs.push-image && inputs.generate-sbom }}
           provenance: ${{ inputs.push-image && inputs.generate-provenance }}

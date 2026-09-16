@@ -45,6 +45,7 @@ Customer catalog files live under `catalog/customer/`:
 | [mobile-tests.yml](mobile-tests.md) | quality | Run mobile unit tests with coverage. |
 | [security-scan.yml](security-scan.md) | security | Run dependency and source security scans. |
 | [docker-build.yml](docker-build.md) | build | Build, optionally push, and scan Docker images. |
+| [release.yml](release.md) | deploy | Ask AlphaCI to release an already-built artifact, then verify the service answers. |
 | [gcp-cloud-run-deploy.yml](gcp-cloud-run-deploy.md) | deploy | Build, push, deploy, and probe a GCP Cloud Run service through WIF. |
 | [workflow-validation.yml](workflow-validation.md) | maintenance | Validate workflow shape, contracts, catalogs, and templates. |
 

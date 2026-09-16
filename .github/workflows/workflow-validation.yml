@@ -48,6 +48,7 @@ jobs:
             .github/workflows/lint-check.yml
             .github/workflows/mobile-tests.yml
             .github/workflows/publish-v1-tag.yml
+            .github/workflows/release.yml
             .github/workflows/reusable-javascript-quality.yml
             .github/workflows/reusable-service-uat.yml
             .github/workflows/reusable-web-uat.yml
@@ -756,6 +757,7 @@ jobs:
             promotion.yml
             gcp-cloud-run-deploy.yml
             render-deploy.yml
+            release.yml
             vercel-deploy.yml
           )
 
