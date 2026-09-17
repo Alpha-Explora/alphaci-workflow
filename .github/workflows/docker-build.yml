@@ -72,6 +72,9 @@ on:
       scan-result:
         description: "Vulnerability scan result"
         value: ${{ jobs.vulnerability-scan.outputs.result || jobs.docker-build.outputs.local-scan-result }}
+      image-repo:
+        description: "Registry repository the image was pushed to, without a tag. A caller that must name this exact build appends its own tag or digest"
+        value: ${{ jobs.docker-build.outputs.image-repo }}
 
 permissions:
   contents: read
