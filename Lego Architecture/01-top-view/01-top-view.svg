@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="720" viewBox="0 0 1500 720" role="img" aria-labelledby="title desc">
+  <title id="title">AlphaCI Lego Architecture Top View</title>
+  <desc id="desc">Executive view of the AlphaCI CI/CD platform: a repository request enters the platform, passes five phases, and produces a governed release.</desc>
+  <defs><marker id="a" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 Z" fill="#475569"/></marker><style>
+    .t{font:700 30px 'Segoe UI',sans-serif;fill:#172033}.s{font:400 16px 'Segoe UI',sans-serif;fill:#475569}.h{font:700 17px 'Segoe UI',sans-serif;fill:#172033}.b{font:700 15px 'Segoe UI',sans-serif;fill:#0f172a}.x{font:400 13px 'Segoe UI',sans-serif;fill:#334155}.p{fill:#e0f2fe;stroke:#0284c7;stroke-width:2}.g{fill:#dcfce7;stroke:#15803d;stroke-width:2}.y{fill:#fff7d6;stroke:#c58a00;stroke-width:2}.l{fill:none;stroke:#475569;stroke-width:2.5;marker-end:url(#a)}
+  </style></defs>
+  <rect width="1500" height="720" fill="#fff"/>
+  <text x="60" y="60" class="t">AlphaCI Lego Architecture</text>
+  <text x="60" y="96" class="s">One CI/CD platform. Fixed lifecycle blocks. Compatible tools and providers selected by contract.</text>
+  <rect x="60" y="145" width="260" height="150" rx="12" class="y"/><text x="85" y="180" class="h">Product repository</text><text x="85" y="211" class="x">project type</text><text x="85" y="234" class="x">plan and capabilities</text><text x="85" y="257" class="x">application change</text>
+  <rect x="390" y="145" width="260" height="150" rx="12" class="p"/><text x="415" y="180" class="h">AlphaCI platform</text><text x="415" y="211" class="x">catalog selects parts</text><text x="415" y="234" class="x">reusable workflows run gates</text><text x="415" y="257" class="x">evidence controls release</text>
+  <path d="M320 220 H390" class="l"/>
+  <rect x="720" y="145" width="650" height="150" rx="12" class="p"/><text x="745" y="180" class="h">Five phase lifecycle</text><text x="745" y="218" class="b">1 Access</text><text x="875" y="218" class="b">2 Environment</text><text x="1035" y="218" class="b">3 Quality</text><text x="1160" y="218" class="b">4 Verify</text><text x="1270" y="218" class="b">5 Package</text><text x="745" y="257" class="x">Every enabled stack follows the same release discipline.</text>
+  <path d="M650 220 H720" class="l"/>
+  <rect x="190" y="395" width="310" height="150" rx="12" class="y"/><text x="215" y="430" class="h">Interchangeable parts</text><text x="215" y="462" class="x">React | Next.js | NestJS | Node.js</text><text x="215" y="485" class="x">tests | security | quality tools</text><text x="215" y="508" class="x">provider adapters</text>
+  <rect x="595" y="395" width="310" height="150" rx="12" class="g"/><text x="620" y="430" class="h">Governed decision</text><text x="620" y="462" class="x">all required checks pass</text><text x="620" y="485" class="x">artifact is immutable</text><text x="620" y="508" class="x">approval policy is satisfied</text>
+  <rect x="1000" y="395" width="310" height="150" rx="12" class="g"/><text x="1025" y="430" class="h">Safe release</text><text x="1025" y="462" class="x">preview / UAT / production</text><text x="1025" y="485" class="x">candidate verification</text><text x="1025" y="508" class="x">traffic or artifact promotion</text>
+  <path d="M850 295 V350 H345 V395" class="l"/><path d="M500 470 H595" class="l"/><path d="M905 470 H1000" class="l"/>
+  <text x="60" y="650" class="s">Top view: leadership sees the promise and control model, not individual YAML steps.</text>
+</svg>

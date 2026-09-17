@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="760" viewBox="0 0 1600 760" role="img" aria-labelledby="title desc">
+  <title id="title">AlphaCI Lego Architecture Execution View</title>
+  <desc id="desc">Execution view showing catalog resolution, generated caller, reusable orchestration, stack lanes, evidence convergence and deployment adapter.</desc>
+  <defs><marker id="a" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 Z" fill="#2563eb"/></marker><style>
+    .t{font:700 29px 'Segoe UI',sans-serif;fill:#172033}.s{font:400 15px 'Segoe UI',sans-serif;fill:#475569}.h{font:700 16px 'Segoe UI',sans-serif;fill:#172033}.x{font:400 12px 'Segoe UI',sans-serif;fill:#334155}.c{fill:#fff7d6;stroke:#c58a00;stroke-width:2}.o{fill:#dbeafe;stroke:#2563eb;stroke-width:2}.r{fill:#fce7f3;stroke:#be185d;stroke-width:2}.g{fill:#dcfce7;stroke:#15803d;stroke-width:2}.l{fill:none;stroke:#2563eb;stroke-width:2.3;marker-end:url(#a)}
+  </style></defs>
+  <rect width="1600" height="760" fill="#fff"/><text x="60" y="60" class="t">Layer 2 · Workflow Execution</text><text x="60" y="90" class="s">The platform composes lanes from catalog choices, then converges all results at one release decision.</text>
+  <rect x="60" y="150" width="220" height="130" rx="10" class="c"/><text x="82" y="185" class="h">Catalog</text><text x="82" y="211" class="x">project type</text><text x="82" y="232" class="x">recipe + plan</text><text x="82" y="253" class="x">enabled options</text>
+  <rect x="350" y="150" width="230" height="130" rx="10" class="o"/><text x="372" y="185" class="h">Thin caller</text><text x="372" y="211" class="x">generated YAML</text><text x="372" y="232" class="x">cicd.config.json</text><text x="372" y="253" class="x">stable workflow ref</text>
+  <rect x="650" y="150" width="270" height="130" rx="10" class="o"/><text x="672" y="185" class="h">Orchestrator</text><text x="672" y="211" class="x">workflow_call inputs</text><text x="672" y="232" class="x">conditions + needs</text><text x="672" y="253" class="x">outputs + gates</text>
+  <path d="M280 215 H350" class="l"/><path d="M580 215 H650" class="l"/>
+  <rect x="990" y="120" width="220" height="105" rx="10" class="r"/><text x="1012" y="155" class="h">Frontend lane</text><text x="1012" y="181" class="x">Next.js / React</text><text x="1012" y="202" class="x">quality + verify</text>
+  <rect x="990" y="260" width="220" height="105" rx="10" class="r"/><text x="1012" y="295" class="h">Backend lane</text><text x="1012" y="321" class="x">NestJS / Node.js</text><text x="1012" y="342" class="x">quality + verify</text>
+  <rect x="990" y="400" width="220" height="105" rx="10" class="r"/><text x="1012" y="435" class="h">Extension lane</text><text x="1012" y="461" class="x">mobile / future stack</text><text x="1012" y="482" class="x">after contract proof</text>
+  <path d="M920 215 H950 V172 H990" class="l"/><path d="M920 215 H950 V312 H990" class="l"/><path d="M920 215 H950 V452 H990" class="l"/>
+  <rect x="1270" y="245" width="250" height="135" rx="10" class="g"/><text x="1292" y="280" class="h">Unified release gate</text><text x="1292" y="306" class="x">all enabled lanes pass</text><text x="1292" y="327" class="x">evidence + artifact digest</text><text x="1292" y="348" class="x">branch + environment policy</text>
+  <path d="M1210 172 H1240 V280 H1270" class="l"/><path d="M1210 312 H1270" class="l"/><path d="M1210 452 H1240 V348 H1270" class="l"/>
+  <rect x="580" y="480" width="290" height="135" rx="10" class="c"/><text x="605" y="515" class="h">Tool adapters</text><text x="605" y="541" class="x">lint | unit | E2E | security</text><text x="605" y="562" class="x">health | performance | package</text><text x="605" y="583" class="x">selected by profile inputs</text>
+  <path d="M785 280 V380 H725 V480" class="l"/>
+  <rect x="1270" y="480" width="250" height="135" rx="10" class="g"/><text x="1292" y="515" class="h">Provider adapter</text><text x="1292" y="541" class="x">Cloud Run today</text><text x="1292" y="562" class="x">candidate then promote</text><text x="1292" y="583" class="x">future providers by contract</text>
+  <path d="M1395 380 V480" class="l"/>
+  <text x="60" y="700" class="s">Execution view: platform teams see composition, lanes, adapters and convergence.</text>
+</svg>

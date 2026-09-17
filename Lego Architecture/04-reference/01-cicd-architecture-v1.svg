@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200" role="img" aria-labelledby="title desc">
+  <title id="title">AlphaCI CI/CD Architecture v1.0 Final</title>
+  <desc id="desc">Final plug-and-play GitHub Actions architecture with five phases: access gate, environment guard, quality, verify, and package/deploy assembly. Includes catalog selection, language switching, frontend/backend routing, and multi-language orchestration.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#475569"/>
+    </marker>
+    <marker id="red-arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#dc2626"/>
+    </marker>
+    <style>
+      .title { font: 700 30px 'Segoe UI', sans-serif; fill: #172033; }
+      .subtitle { font: 400 15px 'Segoe UI', sans-serif; fill: #475569; }
+      .header { font: 700 17px 'Segoe UI', sans-serif; fill: #1e293b; }
+      .small { font: 600 12px 'Segoe UI', sans-serif; fill: #475569; }
+      .box-text { font: 600 14px 'Segoe UI', sans-serif; fill: #0f172a; }
+      .small-text { font: 400 12px 'Segoe UI', sans-serif; fill: #334155; }
+      .phase { fill: #e2e8f0; stroke: #64748b; stroke-width: 2; }
+      .catalog { fill: #fef3c7; stroke: #d97706; stroke-width: 2; }
+      .frontend { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .backend { fill: #dcfce7; stroke: #16a34a; stroke-width: 2; }
+      .guard { fill: #fee2e2; stroke: #dc2626; stroke-width: 2; }
+      .deploy { fill: #dcfce7; stroke: #15803d; stroke-width: 2; }
+      .matrix { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2; }
+      .arrow { fill: none; stroke: #475569; stroke-width: 2.5; marker-end: url(#arrow); }
+      .fail { fill: none; stroke: #dc2626; stroke-width: 2.5; marker-end: url(#red-arrow); }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1200" fill="#ffffff"/>
+  <text x="800" y="42" text-anchor="middle" class="title">AlphaCI CI/CD Architecture v1.0 Final</text>
+  <text x="800" y="68" text-anchor="middle" class="subtitle">Final plug-and-play workflow model for reusable GitHub Actions across frontend, backend, and multi-language stacks</text>
+
+  <!-- Layer 0: Catalog and switch variables -->
+  <rect x="60" y="100" width="1480" height="120" class="catalog"/>
+  <text x="80" y="128" class="header">LAYER 0 · CATALOG + SWITCH VARIABLES</text>
+  <rect x="110" y="140" width="260" height="52" class="matrix"/>
+  <text x="240" y="170" text-anchor="middle" class="box-text">Project type</text>
+  <text x="240" y="186" text-anchor="middle" class="small-text">Next.js, React, NestJS, NodeJS, Kotlin, Expo</text>
+  <rect x="400" y="140" width="260" height="52" class="matrix"/>
+  <text x="530" y="170" text-anchor="middle" class="box-text">Recipe &amp; options</text>
+  <text x="530" y="186" text-anchor="middle" class="small-text">frontend-standard-ci / backend-api-ci / multi-stack</text>
+  <rect x="690" y="140" width="260" height="52" class="matrix"/>
+  <text x="820" y="170" text-anchor="middle" class="box-text">Language switch</text>
+  <text x="820" y="186" text-anchor="middle" class="small-text">TypeScript / JavaScript / .NET / mixed</text>
+  <rect x="980" y="140" width="260" height="52" class="matrix"/>
+  <text x="1110" y="170" text-anchor="middle" class="box-text">Runtime target</text>
+  <text x="1110" y="186" text-anchor="middle" class="small-text">preview / uat / prod / cloud run</text>
+  <rect x="1270" y="140" width="220" height="52" class="matrix"/>
+  <text x="1380" y="170" text-anchor="middle" class="box-text">Deploy mode</text>
+  <text x="1380" y="186" text-anchor="middle" class="small-text">candidate / promote / release</text>
+
+  <!-- Top row: 5 phases -->
+  <rect x="60" y="260" width="260" height="200" class="phase"/>
+  <text x="190" y="295" text-anchor="middle" class="header">PHASE 1</text>
+  <text x="190" y="322" text-anchor="middle" class="box-text">Access Gate</text>
+  <text x="190" y="346" text-anchor="middle" class="small-text">The Inspector</text>
+  <rect x="90" y="365" width="200" height="56" class="guard"/>
+  <text x="190" y="398" text-anchor="middle" class="box-text">Gitleaks</text>
+  <text x="190" y="415" text-anchor="middle" class="small-text">credentials / secret exposure</text>
+
+  <rect x="350" y="260" width="260" height="200" class="phase"/>
+  <text x="480" y="295" text-anchor="middle" class="header">PHASE 2</text>
+  <text x="480" y="322" text-anchor="middle" class="box-text">Env Guard</text>
+  <text x="480" y="346" text-anchor="middle" class="small-text">The Bouncer</text>
+  <rect x="380" y="365" width="200" height="56" class="guard"/>
+  <text x="480" y="398" text-anchor="middle" class="box-text">npm audit / NuGet Audit</text>
+  <text x="480" y="415" text-anchor="middle" class="small-text">vulnerabilities &amp; dependency checks</text>
+
+  <rect x="640" y="260" width="260" height="200" class="phase"/>
+  <text x="770" y="295" text-anchor="middle" class="header">PHASE 3</text>
+  <text x="770" y="322" text-anchor="middle" class="box-text">Quality</text>
+  <text x="770" y="346" text-anchor="middle" class="small-text">The Editor</text>
+  <rect x="670" y="365" width="200" height="56" class="phase"/>
+  <text x="770" y="398" text-anchor="middle" class="box-text">Prettier / ESLint</text>
+  <text x="770" y="415" text-anchor="middle" class="small-text">Architecture &amp; style enforcement</text>
+  <rect x="670" y="430" width="200" height="56" class="phase"/>
+  <text x="770" y="463" text-anchor="middle" class="box-text">Roslyn / NetArchTest</text>
+  <text x="770" y="480" text-anchor="middle" class="small-text">backend rule validation</text>
+
+  <rect x="930" y="260" width="260" height="200" class="phase"/>
+  <text x="1060" y="295" text-anchor="middle" class="header">PHASE 4</text>
+  <text x="1060" y="322" text-anchor="middle" class="box-text">Verify</text>
+  <text x="1060" y="346" text-anchor="middle" class="small-text">The Rehearsal</text>
+  <rect x="960" y="365" width="200" height="56" class="phase"/>
+  <text x="1060" y="398" text-anchor="middle" class="box-text">Vitest / RTL / Playwright</text>
+  <text x="1060" y="415" text-anchor="middle" class="small-text">frontend proof</text>
+  <rect x="960" y="430" width="200" height="56" class="phase"/>
+  <text x="1060" y="463" text-anchor="middle" class="box-text">xUnit / NUnit / Bruno</text>
+  <text x="1060" y="480" text-anchor="middle" class="small-text">backend proof and API smoke</text>
+
+  <rect x="1220" y="260" width="260" height="200" class="phase"/>
+  <text x="1350" y="295" text-anchor="middle" class="header">PHASE 5</text>
+  <text x="1350" y="322" text-anchor="middle" class="box-text">Packages</text>
+  <text x="1350" y="346" text-anchor="middle" class="small-text">The Assembly</text>
+  <rect x="1250" y="365" width="200" height="56" class="deploy"/>
+  <text x="1350" y="398" text-anchor="middle" class="box-text">tsc --noEmit / build</text>
+  <text x="1350" y="415" text-anchor="middle" class="small-text">immutable package generation</text>
+  <rect x="1250" y="430" width="200" height="56" class="deploy"/>
+  <text x="1350" y="463" text-anchor="middle" class="box-text">Docker / Artifact Registry</text>
+  <text x="1350" y="480" text-anchor="middle" class="small-text">release candidate ready</text>
+
+  <!-- Main orchestration row -->
+  <rect x="60" y="520" width="1480" height="290" class="matrix"/>
+  <text x="80" y="550" class="header">LAYER 1 · ORCHESTRATION AND STACK SWITCHING</text>
+
+  <rect x="100" y="575" width="320" height="170" class="frontend"/>
+  <text x="260" y="610" text-anchor="middle" class="header">Frontend lane</text>
+  <text x="260" y="640" text-anchor="middle" class="box-text">React / Next.js / TypeScript</text>
+  <text x="260" y="665" text-anchor="middle" class="small-text">npm run lint</text>
+  <text x="260" y="685" text-anchor="middle" class="small-text">npm run test</text>
+  <text x="260" y="705" text-anchor="middle" class="small-text">npm run build</text>
+  <text x="260" y="725" text-anchor="middle" class="small-text">Playwright / Vitest / RTL</text>
+
+  <rect x="470" y="575" width="320" height="170" class="backend"/>
+  <text x="630" y="610" text-anchor="middle" class="header">Backend lane</text>
+  <text x="630" y="640" text-anchor="middle" class="box-text">NestJS / Node.js / .NET</text>
+  <text x="630" y="665" text-anchor="middle" class="small-text">lint / typecheck / unit tests</text>
+  <text x="630" y="685" text-anchor="middle" class="small-text">xUnit / NUnit / NSubstitute</text>
+  <text x="630" y="705" text-anchor="middle" class="small-text">dependency + policy validation</text>
+  <text x="630" y="725" text-anchor="middle" class="small-text">Bruno API smoke</text>
+
+  <rect x="840" y="575" width="320" height="170" class="phase"/>
+  <text x="1000" y="610" text-anchor="middle" class="header">Shared gate</text>
+  <text x="1000" y="640" text-anchor="middle" class="box-text">all required phases must pass</text>
+  <text x="1000" y="665" text-anchor="middle" class="small-text">Access → Guard → Quality → Verify → Package</text>
+  <text x="1000" y="685" text-anchor="middle" class="small-text">branch policy, env approvals, audit trail</text>
+  <text x="1000" y="705" text-anchor="middle" class="small-text">promotion only after healthy artifact</text>
+  <text x="1000" y="725" text-anchor="middle" class="small-text">release target selected by variables</text>
+
+  <rect x="1210" y="575" width="290" height="170" class="deploy"/>
+  <text x="1355" y="610" text-anchor="middle" class="header">Release target</text>
+  <text x="1355" y="640" text-anchor="middle" class="box-text">preview / uat / prod</text>
+  <text x="1355" y="665" text-anchor="middle" class="small-text">GCP Cloud Run</text>
+  <text x="1355" y="685" text-anchor="middle" class="small-text">Artifact Registry</text>
+  <text x="1355" y="705" text-anchor="middle" class="small-text">OIDC / WIF auth</text>
+  <text x="1355" y="725" text-anchor="middle" class="small-text">protected by environment approval</text>
+
+  <!-- Multi-language flow -->
+  <rect x="60" y="850" width="1480" height="220" class="matrix"/>
+  <text x="80" y="878" class="header">LAYER 2 · MULTI-LANGUAGE / MULTI-SIDE FLOW</text>
+
+  <rect x="120" y="905" width="300" height="120" class="frontend"/>
+  <text x="270" y="938" text-anchor="middle" class="header">Front-end stack A</text>
+  <text x="270" y="968" text-anchor="middle" class="small-text">React / Next.js</text>
+  <text x="270" y="992" text-anchor="middle" class="small-text">TypeScript profile</text>
+  <text x="270" y="1014" text-anchor="middle" class="small-text">Runs same 5 phases</text>
+
+  <rect x="480" y="905" width="300" height="120" class="backend"/>
+  <text x="630" y="938" text-anchor="middle" class="header">Back-end stack A</text>
+  <text x="630" y="968" text-anchor="middle" class="small-text">Node.js / NestJS</text>
+  <text x="630" y="992" text-anchor="middle" class="small-text">TypeScript profile</text>
+  <text x="630" y="1014" text-anchor="middle" class="small-text">Runs same 5 phases</text>
+
+  <rect x="840" y="905" width="300" height="120" class="frontend"/>
+  <text x="990" y="938" text-anchor="middle" class="header">Front-end stack B</text>
+  <text x="990" y="968" text-anchor="middle" class="small-text">React Native / Expo</text>
+  <text x="990" y="992" text-anchor="middle" class="small-text">Mobile profile</text>
+  <text x="990" y="1014" text-anchor="middle" class="small-text">Same gates, different test commands</text>
+
+  <rect x="1200" y="905" width="300" height="120" class="backend"/>
+  <text x="1350" y="938" text-anchor="middle" class="header">Back-end stack B</text>
+  <text x="1350" y="968" text-anchor="middle" class="small-text">.NET / ASP.NET Core</text>
+  <text x="1350" y="992" text-anchor="middle" class="small-text">API verification profile</text>
+  <text x="1350" y="1014" text-anchor="middle" class="small-text">Independent or combined release gate</text>
+
+  <path d="M420 965 H480 M780 965 H840 M1140 965 H1200" class="arrow"/>
+  <path d="M800 460 H930 M1170 460 H1220" class="arrow"/>
+  <path d="M320 760 L320 905 M630 760 L630 905 M990 760 L990 905 M1350 760 L1350 905" class="arrow"/>
+
+  <!-- failure routes -->
+  <path d="M190 460 L190 520" class="fail"/>
+  <path d="M480 460 L480 520" class="fail"/>
+  <path d="M770 460 L770 520" class="fail"/>
+  <path d="M1060 460 L1060 520" class="fail"/>
+  <path d="M1350 460 L1350 520" class="fail"/>
+
+  <text x="800" y="1092" text-anchor="middle" class="small-text">Final model: a catalog-driven, variable-switched, five-phase workflow contract where every enabled frontend/backend stack runs the same quality lifecycle before any promotion occurs.</text>
+</svg>
