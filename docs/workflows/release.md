@@ -31,7 +31,8 @@ This workflow depends on two AlphaCI endpoints, both authenticated with the proj
 
 - `POST /api/v1/ci/releases` with `{repoFullName, slot, branch, commitSha, runUrl, artifact?}`.
   Returns `{releaseId, status}`. A `404` means the deployment predates release support.
-- `GET /api/v1/ci/releases/{releaseId}`. Returns `{status, serviceUrl?, healthcheckUrl?, message?}`.
+- `GET /api/v1/ci/releases/{releaseId}?repo=<owner/repo>`. Returns `{status, serviceUrl?, healthcheckUrl?, message?}`.
+  The repository is sent on the poll as well, because the token is authorised against it.
 
 Status values: `pending` and `in_progress` continue polling; `live`, `succeeded` and `success` are
 success; `failed`, `error`, `canceled` and `cancelled` fail the job. An unreadable poll is retried

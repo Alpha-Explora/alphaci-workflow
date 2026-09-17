@@ -232,6 +232,10 @@ jobs:
           BASE: ${{ steps.endpoint.outputs.base }}
           ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
           RELEASE_ID: ${{ steps.request.outputs.release_id }}
+          # AlphaCI checks the token against the repository on every call, so
+          # the poll carries it too rather than having a second, weaker rule
+          # for reads.
+          REPO: ${{ github.repository }}
           TIMEOUT_SECONDS: ${{ inputs.release-timeout-seconds }}
           INTERVAL_SECONDS: ${{ inputs.release-poll-interval-seconds }}
         run: |
@@ -247,7 +251,7 @@ jobs:
             response=$(mktemp)
             code=$(curl -sS -o "${response}" -w "%{http_code}" \
               -H "Authorization: Bearer ${ALPHACI_TOKEN}" \
-              "${BASE}/api/v1/ci/releases/${RELEASE_ID}" || echo "000")
+              "${BASE}/api/v1/ci/releases/${RELEASE_ID}?repo=${REPO}" || echo "000")
 
             if [ "${code}" = "200" ]; then
               status=$(jq -r '.status // "unknown"' "${response}")
