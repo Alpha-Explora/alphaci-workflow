@@ -77,6 +77,11 @@ on:
         type: boolean
         default: false
         description: "Stop remaining browser jobs when one browser fails"
+      checkout-ref:
+        required: false
+        type: string
+        default: ""
+        description: "Optional git ref/SHA to checkout, used by workflow_run chains"
     outputs:
       e2e-result:
         description: "E2E test pass/fail result"
@@ -164,6 +169,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
 
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
@@ -174,7 +181,15 @@ jobs:
             **/package-lock.json
 
       - name: Install Dependencies
-        run: ${{ inputs.install-command }}
+        run: |
+          if [ "${{ inputs.install-command }}" != "npm ci" ]; then
+            ${{ inputs.install-command }}
+          elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci
+          else
+            echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+            npm install --no-audit --no-fund
+          fi
 
       - name: Validate E2E tests folder exists
         env:
