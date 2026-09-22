@@ -40,6 +40,11 @@ on:
         type: string
         default: ""
         description: "Git ref to check out (workflow_run chains pass head_sha)"
+      git-branch:
+        required: false
+        type: string
+        default: ""
+        description: "Branch whose preview Environment Variables the build pulls. Ignored for production, whose variables are not branch-scoped"
     secrets:
       VERCEL_TOKEN:
         required: true
@@ -109,7 +114,15 @@ jobs:
 
             pushd "$dir" > /dev/null
 
-            vercel pull --yes --environment=${{ inputs.environment }} --token="${VERCEL_TOKEN}"
+            # A preview variable scoped to one branch is only included when
+            # the pull names that branch. Without it the uat build never saw
+            # the API URL the platform wrote for uat, and shipped without one.
+            local pull_args=(--yes --environment="${{ inputs.environment }}" --token="${VERCEL_TOKEN}")
+            if [ "${{ inputs.environment }}" != "production" ] && [ -n "${PREVIEW_GIT_BRANCH}" ]; then
+              pull_args+=(--git-branch="${PREVIEW_GIT_BRANCH}")
+            fi
+
+            vercel pull "${pull_args[@]}"
             local pull_status=$?
             if [ $pull_status -ne 0 ]; then
               echo "❌ vercel pull failed in $dir"
@@ -154,6 +167,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          PREVIEW_GIT_BRANCH: ${{ inputs.git-branch }}
 
       - name: Deploy to Vercel
         id: deploy
