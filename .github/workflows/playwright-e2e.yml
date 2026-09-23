@@ -82,10 +82,32 @@ on:
         type: string
         default: ""
         description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+      json-report:
+        required: false
+        type: string
+        default: "test-results/alphaci-e2e.json"
+        description: "Where the Playwright JSON reporter writes, relative to working-directory"
     outputs:
       e2e-result:
         description: "E2E test pass/fail result"
         value: ${{ jobs.finalize.outputs.result }}
+      # The same four a unit-test workflow publishes, so a browser suite reports
+      # through the product's existing `results.tests` rather than as a bare
+      # pass/fail word. Empty when the suite wrote no JSON report, which is what
+      # keeps a project that has not opted into the reporter reporting exactly
+      # as it did before.
+      tests-total:
+        description: "Total browser tests executed, across every browser"
+        value: ${{ jobs.finalize.outputs.tests-total }}
+      tests-passed:
+        description: "Browser tests that passed"
+        value: ${{ jobs.finalize.outputs.tests-passed }}
+      tests-failed:
+        description: "Browser tests that failed"
+        value: ${{ jobs.finalize.outputs.tests-failed }}
+      tests-failures:
+        description: "JSON array of {name,message} for the failed tests, capped"
+        value: ${{ jobs.finalize.outputs.tests-failures }}
 
 permissions:
   contents: read
@@ -214,12 +236,32 @@ jobs:
           E2E_BASE_URL: ${{ inputs.e2e-base-url }}
           E2E_TEST_CMD: ${{ inputs.test-command }}
           E2E_BROWSER: ${{ matrix.browser }}
+          # Playwright's json reporter honours this over its configured
+          # outputFile, so one path is agreed here and read back in finalize.
+          # A project whose config does not enable the json reporter simply
+          # writes nothing, and the counts are omitted rather than invented.
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ inputs.json-report }}
         run: |
           # Substitute {browser} placeholder using env var â€” avoids eval on raw input
           CMD="${E2E_TEST_CMD//\{browser\}/${E2E_BROWSER}}"
           echo "Running browser: ${E2E_BROWSER}"
           echo "Using Playwright local browser execution"
           bash -c "${CMD}"
+
+      # Carried as an artifact because a matrix job's `outputs` are overwritten
+      # by whichever leg finishes last — a three-browser run would otherwise
+      # report one browser's counts as though they were the whole suite.
+      # Always uploaded, independent of upload-artifacts: that input governs
+      # the human-facing report, and turning it off must not silently stop the
+      # product reporting its numbers.
+      - name: Upload E2E JSON report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: alphaci-e2e-json-${{ matrix.browser }}
+          path: ${{ inputs.working-directory }}/${{ inputs.json-report }}
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Upload E2E Artifacts
         if: ${{ inputs.upload-artifacts && always() }}
@@ -240,7 +282,110 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       result: ${{ steps.finalize.outputs.result }}
+      tests-total: ${{ steps.summary.outputs.tests-total }}
+      tests-passed: ${{ steps.summary.outputs.tests-passed }}
+      tests-failed: ${{ steps.summary.outputs.tests-failed }}
+      tests-failures: ${{ steps.summary.outputs.tests-failures }}
     steps:
+      - name: Download E2E JSON reports
+        if: ${{ always() }}
+        uses: actions/download-artifact@v6
+        with:
+          pattern: alphaci-e2e-json-*
+          path: e2e-json
+          merge-multiple: false
+
+      # Counts and failing test NAMES, so the product can say "2 test(s)
+      # failed: checkout keeps the basket" instead of handing over a log.
+      #
+      # Every failure here is swallowed deliberately: the suite's own verdict
+      # is already decided by `finalize` below, and a summary that cannot be
+      # produced must not turn a passing run red. Absent numbers are omitted,
+      # never defaulted to zero — "0 tests failed" and "we could not tell" are
+      # different claims, and the second must not be able to read as the first.
+      - name: Summarize Playwright results
+        id: summary
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+
+          python3 - >> "$GITHUB_OUTPUT" <<'PYEOF'
+          import glob, json, os
+
+          total = passed = failed = 0
+          failures = []
+          found = False
+
+          def walk(suite, trail):
+              """Collect failed specs, depth-first, keeping the suite path."""
+              global failed
+              title = suite.get("title") or ""
+              here = trail + [title] if title else trail
+
+              for spec in suite.get("specs") or []:
+                  if spec.get("ok") is True:
+                      continue
+                  name = " > ".join(here + [spec.get("title") or "unknown"])
+                  message = ""
+                  for test in spec.get("tests") or []:
+                      for result in test.get("results") or []:
+                          error = result.get("error") or {}
+                          raw = error.get("message") or ""
+                          if raw:
+                              # Collapse whitespace: a newline would break the
+                              # GITHUB_OUTPUT key=value contract. Playwright
+                              # also colours its messages, and the escapes are
+                              # noise in a web page.
+                              message = " ".join(raw.split())[:300]
+                              break
+                      if message:
+                          break
+                  failures.append({"name": name, "message": message})
+
+              for child in suite.get("suites") or []:
+                  walk(child, here)
+
+          for path in sorted(glob.glob("e2e-json/**/*.json", recursive=True)):
+              try:
+                  with open(path, encoding="utf-8") as handle:
+                      report = json.load(handle)
+              except (OSError, ValueError):
+                  # A truncated or half-written report is skipped rather than
+                  # failing the summary for the browsers that did report.
+                  continue
+
+              stats = report.get("stats") or {}
+              if not isinstance(stats, dict):
+                  continue
+              found = True
+
+              # Playwright's own vocabulary: `expected` passed, `unexpected`
+              # failed, `flaky` passed on a retry. Flaky counts as passed
+              # because the suite concluded green on it — it is surfaced as a
+              # retry in the report, not as a failure of the deployment.
+              expected = int(stats.get("expected") or 0)
+              unexpected = int(stats.get("unexpected") or 0)
+              flaky = int(stats.get("flaky") or 0)
+              skipped = int(stats.get("skipped") or 0)
+
+              passed += expected + flaky
+              failed += unexpected
+              total += expected + flaky + unexpected + skipped
+
+              for suite in report.get("suites") or []:
+                  walk(suite, [])
+
+          if found:
+              print(f"tests-total={total}")
+              print(f"tests-passed={passed}")
+              print(f"tests-failed={failed}")
+              print("tests-failures=" + json.dumps(failures[:20], separators=(",", ":")))
+          else:
+              print("::notice::No Playwright JSON report was produced, so the "
+                    "run reports pass/fail only. Add ['json'] to the reporter "
+                    "list in playwright.config.ts to report per-test results.")
+          PYEOF
+
       - name: Resolve final e2e result
         id: finalize
         env:
