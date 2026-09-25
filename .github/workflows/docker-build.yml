@@ -210,9 +210,10 @@ jobs:
         env:
           IMAGE_REPO: ${{ steps.coords.outputs.image_repo }}
           DIGEST: ${{ steps.build-push.outputs.digest }}
+          PUSH_IMAGE: ${{ inputs.push-image }}
         run: |
           set -euo pipefail
-          if [ -n "${DIGEST}" ]; then
+          if [ "${PUSH_IMAGE}" = "true" ] && [ -n "${DIGEST}" ]; then
             echo "image_ref=${IMAGE_REPO}@${DIGEST}" >> "$GITHUB_OUTPUT"
           else
             echo "image_ref=" >> "$GITHUB_OUTPUT"

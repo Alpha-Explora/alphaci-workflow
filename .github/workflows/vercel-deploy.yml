@@ -216,7 +216,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          PREVIEW_GIT_BRANCH: ${{ inputs.environment-id == '' && inputs.git-branch || '' }}
+          PREVIEW_GIT_BRANCH: ${{ inputs.environment != 'production' && inputs.git-branch || '' }}
 
       - name: Deploy to Vercel
         id: deploy
@@ -282,6 +282,10 @@ jobs:
             echo "id=${DEP_ID}" >> "$GITHUB_OUTPUT"
             echo "🆔 Deployment ID: ${DEP_ID}"
           else
+            if [ -n "${ENVIRONMENT_ID}" ]; then
+              echo "::error::Could not resolve the Vercel deployment ID for a targeted deployment."
+              exit 1
+            fi
             echo "⚠️ Could not resolve deployment ID from Vercel API — id output will be empty."
             echo "id=" >> "$GITHUB_OUTPUT"
           fi
