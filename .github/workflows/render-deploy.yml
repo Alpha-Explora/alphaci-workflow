@@ -20,6 +20,31 @@ on:
         required: true
         type: string
         description: "Branch to deploy (test|uat|main)"
+      environment-id:
+        required: false
+        type: string
+        default: ""
+        description: "Stable environment ID; when set, environment-name and target-id are also required"
+      environment-name:
+        required: false
+        type: string
+        default: ""
+        description: "Caller-validated protected GitHub Environment name"
+      target-id:
+        required: false
+        type: string
+        default: ""
+        description: "Stable Render deployment target ID; never inferred from branch"
+      commit-sha:
+        required: false
+        type: string
+        default: ""
+        description: "Full source commit SHA for a targeted deployment"
+      artifact:
+        required: false
+        type: string
+        default: ""
+        description: "Immutable image@sha256:digest reference for a targeted container deployment"
       deploy-mode:
         required: false
         type: string
@@ -109,7 +134,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: render-deploy-${{ inputs.environment }}-${{ inputs.system-name }}
+  group: render-deploy-${{ inputs.target-id || inputs.environment }}-${{ inputs.system-name }}
   cancel-in-progress: false
 
 jobs:
@@ -117,6 +142,7 @@ jobs:
     name: "Deploy to Render (${{ inputs.environment }})"
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    environment: ${{ inputs.environment-id != '' && inputs.environment-name || null }}
     outputs:
       deployment_url: ${{ steps.summarize.outputs.deployment_url }}
       mode_used: ${{ steps.summarize.outputs.mode_used }}
@@ -133,6 +159,11 @@ jobs:
         env:
           DEPLOY_MODE: ${{ inputs.deploy-mode }}
           BRANCH: ${{ inputs.branch }}
+          ENVIRONMENT_ID: ${{ inputs.environment-id }}
+          ENVIRONMENT_NAME: ${{ inputs.environment-name }}
+          TARGET_ID: ${{ inputs.target-id }}
+          COMMIT_SHA: ${{ inputs.commit-sha }}
+          ARTIFACT: ${{ inputs.artifact }}
           HEALTHCHECK_URL: ${{ inputs.healthcheck-url }}
           HEALTHCHECK_TIMEOUT_SECONDS: ${{ inputs.healthcheck-timeout-seconds }}
           HEALTHCHECK_INTERVAL_SECONDS: ${{ inputs.healthcheck-interval-seconds }}
@@ -149,6 +180,34 @@ jobs:
         run: |
           set -euo pipefail
 
+          any_id=false
+          for value in "${ENVIRONMENT_ID}" "${ENVIRONMENT_NAME}" "${TARGET_ID}"; do
+            if [ -n "${value}" ]; then any_id=true; fi
+          done
+          if [ "${any_id}" = "true" ]; then
+            if [ -z "${ENVIRONMENT_ID}" ] || [ -z "${ENVIRONMENT_NAME}" ] || [ -z "${TARGET_ID}" ]; then
+              echo "::error::environment-id, environment-name, and target-id must be supplied together."
+              exit 1
+            fi
+            for value in "${ENVIRONMENT_ID}" "${ENVIRONMENT_NAME}" "${TARGET_ID}"; do
+              case "${value}" in *$'\n'*|*$'\r'*)
+                echo "::error::Environment and target identifiers must be single-line values."
+                exit 1
+                ;;
+              esac
+            done
+            if ! printf '%s' "${COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "::error::Targeted Render deployments require a full 40-character commit-sha."
+              exit 1
+            fi
+            if [[ "${ARTIFACT}" == *$'\n'* || "${ARTIFACT}" == *$'\r'* ]] ||
+              ! printf '%s' "${ARTIFACT}" | grep -Eq '^[a-z0-9./:_-]+@sha256:[0-9a-f]{64}$'; then
+              echo "::error::Targeted Render deployments require an immutable image@sha256:digest artifact."
+              exit 1
+            fi
+          fi
+          targeted="${any_id}"
+
           mode_raw="$(echo "${DEPLOY_MODE}" | tr '[:upper:]' '[:lower:]')"
           case "${mode_raw}" in
             auto|webhook|verify-only) ;;
@@ -161,7 +220,11 @@ jobs:
           branch_name="$(echo "${BRANCH}" | tr '[:upper:]' '[:lower:]')"
           deploy_hook_url="${DEPLOY_HOOK_URL_INPUT}"
 
-          if [ -z "${deploy_hook_url}" ]; then
+          if [ "${targeted}" = "true" ]; then
+            # In target mode, only an explicitly supplied hook or the generic
+            # secret scoped to the caller-selected GitHub Environment applies.
+            deploy_hook_url="${deploy_hook_url:-${RENDER_DEPLOY_HOOK_URL:-}}"
+          elif [ -z "${deploy_hook_url}" ]; then
             case "${branch_name}" in
               dev)
                 deploy_hook_url="${RENDER_DEPLOY_HOOK_URL_DEV:-${RENDER_DEPLOY_HOOK_URL:-}}"
@@ -187,12 +250,20 @@ jobs:
             fi
           fi
 
+          if [ "${targeted}" = "true" ] && [ "${mode_used}" != "webhook" ]; then
+            echo "::error::Targeted Render deployments require deploy-mode=webhook and an exact target deploy hook."
+            exit 1
+          fi
+
           if [ "${mode_used}" = "webhook" ] && [ -z "${deploy_hook_url}" ]; then
             echo "❌ deploy-mode=webhook requires a Render deploy hook URL."
             exit 1
           fi
 
-          if [ "${branch_name}" = "test" ]; then
+          if [ "${targeted}" = "true" ]; then
+            default_expected="200"
+            default_timeout=420
+          elif [ "${branch_name}" = "test" ]; then
             default_expected="200,401,403"
             default_timeout=180
           elif [ "${branch_name}" = "main" ]; then
@@ -221,6 +292,8 @@ jobs:
           health_seed_url=""
           if [ -n "${HEALTHCHECK_URL}" ]; then
             health_seed_url="${HEALTHCHECK_URL}"
+          elif [ "${targeted}" = "true" ]; then
+            health_seed_url="${RENDER_HEALTHCHECK_URL:-}"
           else
             case "${branch_name}" in
               dev)
@@ -244,12 +317,15 @@ jobs:
           echo "expected_statuses=${expected_statuses}" >> "$GITHUB_OUTPUT"
           echo "timeout_seconds=${timeout_seconds}" >> "$GITHUB_OUTPUT"
           echo "interval_seconds=${interval_seconds}" >> "$GITHUB_OUTPUT"
+          echo "targeted=${targeted}" >> "$GITHUB_OUTPUT"
 
       - name: Trigger Render deploy hook
         id: webhook
         if: ${{ steps.resolve.outputs.mode_used == 'webhook' }}
         env:
           DEPLOY_HOOK_URL: ${{ steps.resolve.outputs.deploy_hook_url }}
+          ARTIFACT: ${{ inputs.artifact }}
+          TARGETED: ${{ steps.resolve.outputs.targeted }}
         run: |
           set -euo pipefail
 
@@ -257,8 +333,16 @@ jobs:
           http_code="000"
           body=""
 
+          hook_url="${DEPLOY_HOOK_URL}"
+          if [ "${TARGETED}" = "true" ]; then
+            encoded_image=$(jq -rn --arg value "${ARTIFACT}" '$value | @uri')
+            separator='?'
+            if [[ "${hook_url}" == *\?* ]]; then separator='&'; fi
+            hook_url="${hook_url}${separator}imgURL=${encoded_image}"
+          fi
+
           for attempt in 1 2 3; do
-            response=$(curl -sS -w "\n%{http_code}" -X POST "${DEPLOY_HOOK_URL}" 2>&1 || true)
+            response=$(curl -sS -w "\n%{http_code}" -X POST "${hook_url}" 2>&1 || true)
             http_code=$(echo "${response}" | tail -n 1)
             body=$(echo "${response}" | sed '$d')
 
@@ -387,6 +471,8 @@ jobs:
           EXPECTED_STATUSES: ${{ steps.resolve.outputs.expected_statuses }}
           TIMEOUT_SECONDS: ${{ steps.resolve.outputs.timeout_seconds }}
           INTERVAL_SECONDS: ${{ steps.resolve.outputs.interval_seconds }}
+          ENVIRONMENT_ID: ${{ inputs.environment-id }}
+          TARGET_ID: ${{ inputs.target-id }}
         run: |
           set -euo pipefail
 
@@ -424,6 +510,12 @@ jobs:
           echo "- System: ${{ inputs.system-name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Environment: ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Branch: ${{ inputs.branch }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${ENVIRONMENT_ID}" ]; then
+            echo "- Environment ID: ${ENVIRONMENT_ID}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Target ID: ${TARGET_ID}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Commit: ${{ inputs.commit-sha }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Artifact: ${{ inputs.artifact }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "- Mode: ${MODE_USED}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Health URL: ${RESOLVED_HEALTHCHECK_URL}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Health Status: ${final_health_status}" >> "$GITHUB_STEP_SUMMARY"
