@@ -49,6 +49,7 @@ jobs:
             .github/workflows/mobile-tests.yml
             .github/workflows/publish-v1-tag.yml
             .github/workflows/release.yml
+            .github/workflows/render-deploy.yml
             .github/workflows/reusable-javascript-quality.yml
             .github/workflows/reusable-service-uat.yml
             .github/workflows/reusable-web-uat.yml
@@ -61,6 +62,7 @@ jobs:
             .github/workflows/service-react-native.yml
             .github/workflows/service-react.yml
             .github/workflows/validate-subscription.yml
+            .github/workflows/vercel-deploy.yml
             .github/workflows/workflow-validation.yml
 
   validate-workflow-contracts:

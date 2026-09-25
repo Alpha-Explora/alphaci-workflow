@@ -69,6 +69,9 @@ on:
       image-digest:
         description: "Image digest"
         value: ${{ jobs.docker-build.outputs.digest }}
+      image-ref:
+        description: "Canonical immutable image reference (repository@sha256:digest)"
+        value: ${{ jobs.docker-build.outputs.image-ref }}
       scan-result:
         description: "Vulnerability scan result"
         value: ${{ jobs.vulnerability-scan.outputs.result || jobs.docker-build.outputs.local-scan-result }}
@@ -90,6 +93,7 @@ jobs:
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
       digest: ${{ steps.build-push.outputs.digest }}
+      image-ref: ${{ steps.image-reference.outputs.image_ref }}
       image-repo: ${{ steps.coords.outputs.image_repo }}
       local-scan-result: ${{ steps.local-scan.outcome }}
     steps:
@@ -200,6 +204,20 @@ jobs:
           build-args: ${{ inputs.build-args }}
           sbom: ${{ inputs.push-image && inputs.generate-sbom }}
           provenance: ${{ inputs.push-image && inputs.generate-provenance }}
+
+      - name: Resolve canonical image reference
+        id: image-reference
+        env:
+          IMAGE_REPO: ${{ steps.coords.outputs.image_repo }}
+          DIGEST: ${{ steps.build-push.outputs.digest }}
+          PUSH_IMAGE: ${{ inputs.push-image }}
+        run: |
+          set -euo pipefail
+          if [ "${PUSH_IMAGE}" = "true" ] && [ -n "${DIGEST}" ]; then
+            echo "image_ref=${IMAGE_REPO}@${DIGEST}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_ref=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Image Summary
         run: |

@@ -45,6 +45,21 @@ on:
         type: string
         default: ""
         description: "Branch whose preview Environment Variables the build pulls. Ignored for production, whose variables are not branch-scoped"
+      environment-id:
+        required: false
+        type: string
+        default: ""
+        description: "Stable environment ID; when set, environment-name and target-id are also required"
+      environment-name:
+        required: false
+        type: string
+        default: ""
+        description: "Caller-validated protected GitHub Environment name"
+      target-id:
+        required: false
+        type: string
+        default: ""
+        description: "Stable Vercel deployment target ID; never inferred from branch"
     secrets:
       VERCEL_TOKEN:
         required: true
@@ -69,7 +84,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vercel-deploy-${{ inputs.environment }}-${{ inputs.system-name || inputs.working-directory }}
+  group: vercel-deploy-${{ inputs.target-id || inputs.environment }}-${{ inputs.system-name || inputs.working-directory }}
   cancel-in-progress: false
 
 jobs:
@@ -78,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     environment:
-      name: ${{ inputs.environment }}
+      name: ${{ inputs.environment-id != '' && inputs.environment-name || inputs.environment }}
       url: ${{ steps.deploy.outputs.url }}
     outputs:
       url: ${{ steps.deploy.outputs.url }}
@@ -89,6 +104,40 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.checkout-ref }}
+
+      - name: Validate deployment identity
+        id: target
+        env:
+          ENVIRONMENT_ID: ${{ inputs.environment-id }}
+          ENVIRONMENT_NAME: ${{ inputs.environment-name }}
+          TARGET_ID: ${{ inputs.target-id }}
+          CHECKOUT_REF: ${{ inputs.checkout-ref }}
+        run: |
+          set -euo pipefail
+          any_id=false
+          for value in "${ENVIRONMENT_ID}" "${ENVIRONMENT_NAME}" "${TARGET_ID}"; do
+            if [ -n "${value}" ]; then any_id=true; fi
+          done
+          if [ "${any_id}" = "true" ]; then
+            if [ -z "${ENVIRONMENT_ID}" ] || [ -z "${ENVIRONMENT_NAME}" ] || [ -z "${TARGET_ID}" ]; then
+              echo "::error::environment-id, environment-name, and target-id must be supplied together."
+              exit 1
+            fi
+            for value in "${ENVIRONMENT_ID}" "${ENVIRONMENT_NAME}" "${TARGET_ID}"; do
+              case "${value}" in *$'\n'*|*$'\r'*)
+                echo "::error::Environment and target identifiers must be single-line values."
+                exit 1
+                ;;
+              esac
+            done
+            if ! printf '%s' "${CHECKOUT_REF}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "::error::Targeted Vercel deployments require checkout-ref to be the full pinned commit SHA."
+              exit 1
+            fi
+            echo "targeted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "targeted=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Validate Project Directory
         run: |
@@ -167,7 +216,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          PREVIEW_GIT_BRANCH: ${{ inputs.git-branch }}
+          PREVIEW_GIT_BRANCH: ${{ inputs.environment != 'production' && inputs.git-branch || '' }}
 
       - name: Deploy to Vercel
         id: deploy
@@ -175,7 +224,10 @@ jobs:
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           SYSTEM_NAME="${{ inputs.system-name }}"
 
-          META_ARGS=(--meta githubCommitRef="${BRANCH_NAME}" --meta githubCommitSha="${GITHUB_SHA}")
+          META_ARGS=(--meta githubCommitRef="${BRANCH_NAME}" --meta githubCommitSha="${PINNED_SHA}")
+          if [ -n "${ENVIRONMENT_ID}" ]; then
+            META_ARGS+=(--meta alphaCiEnvironmentId="${ENVIRONMENT_ID}" --meta alphaCiTargetId="${TARGET_ID}")
+          fi
           if [ -n "${SYSTEM_NAME}" ]; then
             META_ARGS+=(--meta systemName="${SYSTEM_NAME}")
           fi
@@ -194,7 +246,7 @@ jobs:
             exit 1
           fi
 
-          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "🚀 Deployed to: $URL"
 
           # Give a preview deploy a STABLE hostname.
@@ -212,7 +264,7 @@ jobs:
           ALIAS="${{ inputs.branch-alias }}"
           if [ -n "${ALIAS}" ] && [ "${{ inputs.environment }}" != "production" ]; then
             if vercel alias set "${URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" 2>&1; then
-              echo "alias=https://${ALIAS}" >> $GITHUB_OUTPUT
+              echo "alias=https://${ALIAS}" >> "$GITHUB_OUTPUT"
               echo "🔗 Aliased to: https://${ALIAS}"
             else
               echo "::warning::Could not alias ${URL} to ${ALIAS}. The deploy is live; anything addressing it by the stable name will not find it."
@@ -227,20 +279,27 @@ jobs:
             | jq -r '.deployments[0].uid // ""' 2>/dev/null || true)
 
           if [ -n "${DEP_ID}" ]; then
-            echo "id=${DEP_ID}" >> $GITHUB_OUTPUT
+            echo "id=${DEP_ID}" >> "$GITHUB_OUTPUT"
             echo "🆔 Deployment ID: ${DEP_ID}"
           else
+            if [ -n "${ENVIRONMENT_ID}" ]; then
+              echo "::error::Could not resolve the Vercel deployment ID for a targeted deployment."
+              exit 1
+            fi
             echo "⚠️ Could not resolve deployment ID from Vercel API — id output will be empty."
-            echo "id=" >> $GITHUB_OUTPUT
+            echo "id=" >> "$GITHUB_OUTPUT"
           fi
         working-directory: ${{ steps.prepare.outputs.deploy_dir }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          PINNED_SHA: ${{ inputs.environment-id != '' && inputs.checkout-ref || github.sha }}
+          ENVIRONMENT_ID: ${{ inputs.environment-id }}
+          TARGET_ID: ${{ inputs.target-id }}
 
       - name: Cleanup previous branch preview deployments
-        if: ${{ inputs.environment == 'preview' }}
+        if: ${{ inputs.environment == 'preview' && inputs.environment-id == '' }}
         run: |
           set -euo pipefail
 
