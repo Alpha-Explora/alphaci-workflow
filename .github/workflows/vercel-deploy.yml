@@ -246,7 +246,7 @@ jobs:
             exit 1
           fi
 
-          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "🚀 Deployed to: $URL"
 
           # Give a preview deploy a STABLE hostname.
@@ -264,7 +264,7 @@ jobs:
           ALIAS="${{ inputs.branch-alias }}"
           if [ -n "${ALIAS}" ] && [ "${{ inputs.environment }}" != "production" ]; then
             if vercel alias set "${URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" 2>&1; then
-              echo "alias=https://${ALIAS}" >> $GITHUB_OUTPUT
+              echo "alias=https://${ALIAS}" >> "$GITHUB_OUTPUT"
               echo "🔗 Aliased to: https://${ALIAS}"
             else
               echo "::warning::Could not alias ${URL} to ${ALIAS}. The deploy is live; anything addressing it by the stable name will not find it."
@@ -279,11 +279,11 @@ jobs:
             | jq -r '.deployments[0].uid // ""' 2>/dev/null || true)
 
           if [ -n "${DEP_ID}" ]; then
-            echo "id=${DEP_ID}" >> $GITHUB_OUTPUT
+            echo "id=${DEP_ID}" >> "$GITHUB_OUTPUT"
             echo "🆔 Deployment ID: ${DEP_ID}"
           else
             echo "⚠️ Could not resolve deployment ID from Vercel API — id output will be empty."
-            echo "id=" >> $GITHUB_OUTPUT
+            echo "id=" >> "$GITHUB_OUTPUT"
           fi
         working-directory: ${{ steps.prepare.outputs.deploy_dir }}
         env:
