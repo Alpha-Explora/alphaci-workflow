@@ -21,5 +21,10 @@ supplied.
 Environment Variables scoped to that branch — the platform writes each branch's API URL there. It is
 optional: a caller that omits it pulls only the branch-independent preview variables, as before.
 
+`branch-alias` and the cleanup of older previews use `vercel alias` and `vercel remove`, which are
+account-level commands. When `VERCEL_ORG_ID` is a team id (`team_…`) they run with `--scope` set to
+it; without that they ran against the token owner's personal account, and a team project's alias
+was refused, leaving the stable UAT hostname (`uat-<alias>.vercel.app`) unset.
+
 Vercel serves the `frontend` slot. It coexists with Render (`backend`) and GCP Cloud Run
 (`backend`, `frontend`, `standalone`) — the provider is chosen per deployment target, not globally.
