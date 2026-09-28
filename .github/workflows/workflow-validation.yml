@@ -50,6 +50,7 @@ jobs:
             .github/workflows/publish-v1-tag.yml
             .github/workflows/release.yml
             .github/workflows/render-deploy.yml
+            .github/workflows/sign-release.yml
             .github/workflows/reusable-javascript-quality.yml
             .github/workflows/reusable-service-uat.yml
             .github/workflows/reusable-web-uat.yml
@@ -137,6 +138,20 @@ jobs:
       # can reach it and a mistake there reports wrong numbers silently.
       - name: Assert the TRX summariser contract
         run: node scripts/validate-dotnet-trx-summary.cjs
+
+  validate-release-manifest-canonical:
+    name: "Validate Release Manifest Canonical Form"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      # A host rejects every signature if these bytes drift from the ones
+      # AlphaCI recomputes, so the workflow's jq command is checked against
+      # the backend's canonical test vector.
+      - name: Assert sign-release canonicalizes like the backend
+        run: node scripts/validate-release-manifest-canonical.cjs
 
   validate-stack-catalog:
     name: "Validate Stack Catalog"
@@ -760,6 +775,7 @@ jobs:
             gcp-cloud-run-deploy.yml
             render-deploy.yml
             release.yml
+            sign-release.yml
             vercel-deploy.yml
           )
 
