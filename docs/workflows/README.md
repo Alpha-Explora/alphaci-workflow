@@ -48,6 +48,7 @@ Customer catalog files live under `catalog/customer/`:
 | [release.yml](release.md) | deploy | Ask AlphaCI to release an already-built artifact, then verify the service answers. |
 | [render-deploy.yml](render-deploy.md) | deploy | Deploy an existing digest to Render or verify service health. |
 | [vercel-deploy.yml](vercel-deploy.md) | deploy | Build and deploy a pinned source revision to Vercel. |
+| [sign-release.yml](sign-release.md) | deploy | Sign a registered release manifest with Cloud KMS for on-prem hosts. |
 | [gcp-cloud-run-deploy.yml](gcp-cloud-run-deploy.md) | deploy | Build, push, deploy, and probe a GCP Cloud Run service through WIF. |
 | [workflow-validation.yml](workflow-validation.md) | maintenance | Validate workflow shape, contracts, catalogs, and templates. |
 

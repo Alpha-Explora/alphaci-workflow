@@ -1,0 +1,146 @@
+# Contract: docs/workflows/sign-release.md
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  REUSABLE: Sign Release                                         ║
+# ║  Build, sign with Cloud KMS, and attach a release manifest      ║
+# ╚══════════════════════════════════════════════════════════════════╝
+name: "Reusable: Sign Release"
+
+on:
+  workflow_call:
+    inputs:
+      release-id:
+        required: true
+        type: string
+        description: "AlphaCI release ID (UUID) registered by the caller"
+      api-url:
+        required: false
+        type: string
+        default: ""
+        description: "AlphaCI base URL; falls back to secrets.ALPHACI_API_URL"
+      kms-key-version:
+        required: false
+        type: string
+        default: ""
+        description: "Cloud KMS cryptoKeyVersion resource name; falls back to vars.ALPHACI_RELEASE_KMS_KEY_VERSION"
+      workload-identity-provider:
+        required: false
+        type: string
+        default: ""
+        description: "GCP workload identity provider; falls back to vars.ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER"
+      service-account:
+        required: false
+        type: string
+        default: ""
+        description: "Signer service account; falls back to vars.ALPHACI_RELEASE_SIGNER_SERVICE_ACCOUNT"
+    secrets:
+      ALPHACI_TOKEN:
+        required: true
+        description: "Project CI token"
+      ALPHACI_API_URL:
+        required: false
+        description: "AlphaCI base URL when api-url is unset"
+    outputs:
+      manifest-sha256:
+        description: "Lowercase hex SHA-256 of the canonical manifest that was signed"
+        value: ${{ jobs.sign.outputs.manifest-sha256 }}
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    name: Sign release manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      manifest-sha256: ${{ steps.manifest.outputs.sha256 }}
+    env:
+      RELEASE_ID: ${{ inputs.release-id }}
+      ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+      KMS_KEY_VERSION: ${{ inputs.kms-key-version || vars.ALPHACI_RELEASE_KMS_KEY_VERSION }}
+    steps:
+      - name: Resolve inputs
+        id: resolve
+        env:
+          API_URL_INPUT: ${{ inputs.api-url }}
+          API_URL_SECRET: ${{ secrets.ALPHACI_API_URL }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "::error::release-id must be a UUID"
+            exit 1
+          fi
+          API_URL="${API_URL_INPUT:-$API_URL_SECRET}"
+          API_URL="${API_URL%/}"
+          API_URL="${API_URL%/api/v1}"
+          if [ -z "$API_URL" ]; then
+            echo "::error::Set api-url or the ALPHACI_API_URL secret"
+            exit 1
+          fi
+          if [[ ! "$KMS_KEY_VERSION" =~ ^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+/cryptoKeyVersions/[0-9]+$ ]]; then
+            echo "::error::kms-key-version must be a Cloud KMS cryptoKeyVersion resource name"
+            exit 1
+          fi
+          echo "api-url=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Build the canonical manifest
+        id: manifest
+        env:
+          API_URL: ${{ steps.resolve.outputs.api-url }}
+        run: |
+          set -euo pipefail
+          RELEASE=$(curl -sf --max-time 30 -G "$API_URL/api/v1/ci/releases/$RELEASE_ID" \
+            --data-urlencode "repo=$GITHUB_REPOSITORY" \
+            -H "Authorization: Bearer $ALPHACI_TOKEN")
+          if ! printf '%s' "$RELEASE" | jq -e --arg id "$RELEASE_ID" \
+            '.releaseId == $id and (.commitSha | test("^[0-9a-f]{40}$")) and all(.artifacts[]; .digest | test("^sha256:[0-9a-f]{64}$"))' > /dev/null; then
+            echo "::error::Release $RELEASE_ID is not pinned to a full commit and image digests"
+            exit 1
+          fi
+          printf '%s' "$RELEASE" | jq '{
+            schemaVersion: 1,
+            releaseId, projectId, sourceEnvironmentId, sourceBranch, commitSha, createdAt,
+            artifacts: [.artifacts[] | {slot, image, digest}],
+            workflowRun: {provider: .workflowRun.provider, repo: .workflowRun.repo, runId: .workflowRun.runId, url: .workflowRun.url}
+          }' > manifest.json
+          # RFC 8785 for this manifest shape: sorted ASCII keys, no whitespace,
+          # UTF-8 strings, integers only, no trailing newline.
+          jq -cSj . manifest.json > canonical.json
+          echo "sha256=$(sha256sum canonical.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.workload-identity-provider || vars.ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ inputs.service-account || vars.ALPHACI_RELEASE_SIGNER_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Sign with Cloud KMS
+        id: sign
+        run: |
+          set -euo pipefail
+          IFS=/ read -r _ PROJECT _ LOCATION _ KEYRING _ KEY _ VERSION <<< "$KMS_KEY_VERSION"
+          gcloud kms asymmetric-sign \
+            --project "$PROJECT" --location "$LOCATION" --keyring "$KEYRING" \
+            --key "$KEY" --version "$VERSION" --digest-algorithm sha256 \
+            --input-file canonical.json --signature-file signature.der
+          echo "value=$(base64 -w0 signature.der)" >> "$GITHUB_OUTPUT"
+
+      - name: Attach the signed manifest
+        env:
+          API_URL: ${{ steps.resolve.outputs.api-url }}
+          MANIFEST_SHA256: ${{ steps.manifest.outputs.sha256 }}
+          SIGNATURE: ${{ steps.sign.outputs.value }}
+        run: |
+          set -euo pipefail
+          BODY=$(jq -n --arg repo "$GITHUB_REPOSITORY" --slurpfile manifest manifest.json \
+            --arg sha "$MANIFEST_SHA256" --arg key "$KMS_KEY_VERSION" --arg value "$SIGNATURE" \
+            '{repoFullName: $repo, manifest: $manifest[0], manifestSha256: $sha,
+              signature: {algorithm: "ecdsa-p256-sha256", keyId: $key, value: $value}}')
+          curl -sf --max-time 30 -X PUT "$API_URL/api/v1/ci/releases/$RELEASE_ID/manifest" \
+            -H "Authorization: Bearer $ALPHACI_TOKEN" -H "Content-Type: application/json" \
+            -d "$BODY" > /dev/null
