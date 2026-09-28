@@ -10,7 +10,11 @@ Builds Docker images, optionally pushes them, and optionally scans them.
 - Source workflow: `.github/workflows/docker-build.yml`
 - Inputs: `working-directory`, `image-name`, `dockerfile-path`, `push-image`, `scan-vulnerabilities`, `fail-on-vulnerabilities`, `build-args`, `generate-sbom`, `generate-provenance`, `release-tag`, `checkout-ref`, `pipeline-branch`
 - Secrets: none
-- Outputs: `image-tag`, `image-digest`, `scan-result`, `image-repo`
+- Outputs: `image-tag`, `image-digest`, `image-ref`, `scan-result`, `image-repo`
+
+`image-ref` is the canonical immutable `image-repo@sha256:<digest>` value when the image was pushed.
+It is empty for local-only builds. Managed container deployment callers should pass this exact value
+through release and promotion so each environment reuses the same image bytes.
 
 ## Usage
 Call after tests, lint, and security with `needs`. Only set `push-image: true` on trusted branches. Use

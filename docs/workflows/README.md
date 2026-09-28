@@ -46,6 +46,8 @@ Customer catalog files live under `catalog/customer/`:
 | [security-scan.yml](security-scan.md) | security | Run dependency and source security scans. |
 | [docker-build.yml](docker-build.md) | build | Build, optionally push, and scan Docker images. |
 | [release.yml](release.md) | deploy | Ask AlphaCI to release an already-built artifact, then verify the service answers. |
+| [render-deploy.yml](render-deploy.md) | deploy | Deploy an existing digest to Render or verify service health. |
+| [vercel-deploy.yml](vercel-deploy.md) | deploy | Build and deploy a pinned source revision to Vercel. |
 | [gcp-cloud-run-deploy.yml](gcp-cloud-run-deploy.md) | deploy | Build, push, deploy, and probe a GCP Cloud Run service through WIF. |
 | [workflow-validation.yml](workflow-validation.md) | maintenance | Validate workflow shape, contracts, catalogs, and templates. |
 
@@ -67,5 +69,8 @@ checkout. Neither mode fetches workflow definitions during project creation.
 - Keep job ordering explicit with `needs`.
 - Keep quality, typecheck, tests, coverage, security, and CodeQL gates required;
   only credential-dependent deployment hooks may be optional.
+- Target-aware deploy workflows consume caller-supplied environment and target IDs;
+  generated callers own GitHub Environment protection and promotion gating. Branch pushes to later
+  environments may run quality gates but must not invoke deploy jobs without explicit promotion.
 - Do not add one template per option combination. Add catalog options and let
   the backend render the selected recipe.
