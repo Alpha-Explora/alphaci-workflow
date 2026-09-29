@@ -14,10 +14,13 @@ signed manifest back to the release. No host credential is involved; a host hold
 - Inputs: `release-id` (required UUID), `api-url`, `kms-key-version`,
   `workload-identity-provider`, `service-account`
 - Secrets: `ALPHACI_TOKEN` (required), `ALPHACI_API_URL` (optional; required when `api-url` is unset)
+- Lab-only secret: `ALPHACI_RELEASE_SIGNING_KEY`, a PEM EC P-256 private key. It is used only when
+  no KMS key version is set, and the job warns when it is. Client releases use Cloud KMS, whose
+  private key never leaves Google Cloud.
 - Variables used when the matching input is empty: `ALPHACI_RELEASE_KMS_KEY_VERSION`,
   `ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER`, `ALPHACI_RELEASE_SIGNER_SERVICE_ACCOUNT`
 - Outputs: `manifest-sha256`
-- The calling job must grant `id-token: write`.
+- The calling job must grant `id-token: write` for Cloud KMS signing.
 
 ## Usage
 Generated package stages call it right after registering a release for the project's first
@@ -42,6 +45,8 @@ integers, UTF-8 strings) and is checked against the backend's canonicalization b
 `scripts/validate-release-manifest-canonical.cjs` using a shared test vector. The KMS key must be an
 `EC_SIGN_P256_SHA256` key; the signature is the DER ECDSA value, base64 encoded, sent as algorithm
 `ecdsa-p256-sha256` with the key version resource name as `keyId`.
+With the lab key, the signature has the same format and `keyId` is `sha256:` followed by the
+hex SHA-256 of the DER public key.
 
 A host verifies with the pinned public key before pulling:
 

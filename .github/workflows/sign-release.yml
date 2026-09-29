@@ -39,6 +39,9 @@ on:
       ALPHACI_API_URL:
         required: false
         description: "AlphaCI base URL when api-url is unset"
+      ALPHACI_RELEASE_SIGNING_KEY:
+        required: false
+        description: "Lab only: PEM EC P-256 private key, used when no Cloud KMS key version is set"
     outputs:
       manifest-sha256:
         description: "Lowercase hex SHA-256 of the canonical manifest that was signed"
@@ -66,6 +69,7 @@ jobs:
         env:
           API_URL_INPUT: ${{ inputs.api-url }}
           API_URL_SECRET: ${{ secrets.ALPHACI_API_URL }}
+          HAS_SIGNING_KEY: ${{ secrets.ALPHACI_RELEASE_SIGNING_KEY != '' }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
@@ -79,8 +83,17 @@ jobs:
             echo "::error::Set api-url or the ALPHACI_API_URL secret"
             exit 1
           fi
-          if [[ ! "$KMS_KEY_VERSION" =~ ^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+/cryptoKeyVersions/[0-9]+$ ]]; then
-            echo "::error::kms-key-version must be a Cloud KMS cryptoKeyVersion resource name"
+          if [ -n "$KMS_KEY_VERSION" ]; then
+            if [[ ! "$KMS_KEY_VERSION" =~ ^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+/cryptoKeyVersions/[0-9]+$ ]]; then
+              echo "::error::kms-key-version must be a Cloud KMS cryptoKeyVersion resource name"
+              exit 1
+            fi
+            echo "mode=kms" >> "$GITHUB_OUTPUT"
+          elif [ "$HAS_SIGNING_KEY" = "true" ]; then
+            echo "::warning::Signing with the ALPHACI_RELEASE_SIGNING_KEY secret. Use Cloud KMS for client releases."
+            echo "mode=key" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Set a Cloud KMS key version (vars.ALPHACI_RELEASE_KMS_KEY_VERSION) or, for a lab, the ALPHACI_RELEASE_SIGNING_KEY secret"
             exit 1
           fi
           echo "api-url=$API_URL" >> "$GITHUB_OUTPUT"
@@ -111,16 +124,19 @@ jobs:
           echo "sha256=$(sha256sum canonical.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Authenticate to Google Cloud
+        if: steps.resolve.outputs.mode == 'kms'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ inputs.workload-identity-provider || vars.ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ inputs.service-account || vars.ALPHACI_RELEASE_SIGNER_SERVICE_ACCOUNT }}
 
       - name: Set up gcloud
+        if: steps.resolve.outputs.mode == 'kms'
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Sign with Cloud KMS
-        id: sign
+        id: kms
+        if: steps.resolve.outputs.mode == 'kms'
         run: |
           set -euo pipefail
           IFS=/ read -r _ PROJECT _ LOCATION _ KEYRING _ KEY _ VERSION <<< "$KMS_KEY_VERSION"
@@ -129,16 +145,38 @@ jobs:
             --key "$KEY" --version "$VERSION" --digest-algorithm sha256 \
             --input-file canonical.json --signature-file signature.der
           echo "value=$(base64 -w0 signature.der)" >> "$GITHUB_OUTPUT"
+          echo "key-id=$KMS_KEY_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Sign with the lab key
+        id: key
+        if: steps.resolve.outputs.mode == 'key'
+        env:
+          SIGNING_KEY: ${{ secrets.ALPHACI_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          KEY_FILE="$RUNNER_TEMP/release-signing.key"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$SIGNING_KEY" > "$KEY_FILE"
+          if ! openssl pkey -in "$KEY_FILE" -noout -text 2>/dev/null | grep -q 'prime256v1'; then
+            echo "::error::ALPHACI_RELEASE_SIGNING_KEY must be a PEM EC P-256 private key"
+            exit 1
+          fi
+          openssl dgst -sha256 -sign "$KEY_FILE" -out signature.der canonical.json
+          FINGERPRINT=$(openssl pkey -in "$KEY_FILE" -pubout -outform DER | sha256sum | cut -d' ' -f1)
+          echo "value=$(base64 -w0 signature.der)" >> "$GITHUB_OUTPUT"
+          echo "key-id=sha256:$FINGERPRINT" >> "$GITHUB_OUTPUT"
 
       - name: Attach the signed manifest
         env:
           API_URL: ${{ steps.resolve.outputs.api-url }}
           MANIFEST_SHA256: ${{ steps.manifest.outputs.sha256 }}
-          SIGNATURE: ${{ steps.sign.outputs.value }}
+          SIGNATURE: ${{ steps.kms.outputs.value || steps.key.outputs.value }}
+          KEY_ID: ${{ steps.kms.outputs.key-id || steps.key.outputs.key-id }}
         run: |
           set -euo pipefail
           BODY=$(jq -n --arg repo "$GITHUB_REPOSITORY" --slurpfile manifest manifest.json \
-            --arg sha "$MANIFEST_SHA256" --arg key "$KMS_KEY_VERSION" --arg value "$SIGNATURE" \
+            --arg sha "$MANIFEST_SHA256" --arg key "$KEY_ID" --arg value "$SIGNATURE" \
             '{repoFullName: $repo, manifest: $manifest[0], manifestSha256: $sha,
               signature: {algorithm: "ecdsa-p256-sha256", keyId: $key, value: $value}}')
           curl -sf --max-time 30 -X PUT "$API_URL/api/v1/ci/releases/$RELEASE_ID/manifest" \
