@@ -308,6 +308,11 @@ jobs:
 
       - name: Upload Trivy Scan Results
         if: always() && steps.sarif-check.outputs.exists == 'true'
+        # Code scanning refuses the upload on a private repository without
+        # Advanced Security, and needs actions: read that callers do not grant.
+        # The Trivy step above is the gate; the SARIF file is also kept as an
+        # artifact below, so a refused upload must not block the release.
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: "trivy-results.sarif"

@@ -28,3 +28,7 @@ it keep the previous tags.
 
 A failure to write the build cache no longer fails the job: the image has already been pushed by then,
 and a cache that cannot be saved only costs time on the next run.
+
+The vulnerability scan fails the job on fixable HIGH or CRITICAL findings. Uploading its SARIF file to
+code scanning is best effort: a private repository without Advanced Security refuses it, and the file
+is always kept as the `<image-name>-security-scan` artifact.
