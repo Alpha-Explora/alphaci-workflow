@@ -459,6 +459,8 @@ jobs:
             if [ -z "${SYSTEM_NAME}" ]; then
               continue
             fi
+            # CHECKLIST_TEMPLATE is a deliberate format string with a %s slot.
+            # shellcheck disable=SC2059
             CHECKLIST+=$'\n'"- [ ] $(printf "${CHECKLIST_TEMPLATE}" "${SYSTEM_NAME}")"
           done < <(echo "${SYSTEMS_JSON}" | jq -r '.[].name')
           if [ "${DIRECTION}" = "dev-to-uat" ]; then
