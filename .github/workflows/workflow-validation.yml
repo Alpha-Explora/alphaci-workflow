@@ -47,6 +47,7 @@ jobs:
             .github/workflows/gcp-cloud-run-deploy.yml
             .github/workflows/lint-check.yml
             .github/workflows/mobile-tests.yml
+            .github/workflows/promotion.yml
             .github/workflows/publish-v1-tag.yml
             .github/workflows/release.yml
             .github/workflows/reusable-javascript-quality.yml

@@ -75,6 +75,11 @@ on:
         required: false
         type: boolean
         default: false
+      sibling-repo:
+        required: false
+        type: string
+        default: ""
+        description: "owner/repo of the paired frontend/backend repository (multi-repo projects only). When set, this promotion PR is cross-linked with the sibling repository's matching promotion PR for the same source/target branches. Leave empty for single-repo callers — omitting it reproduces today's behavior exactly."
       system1-result:
         required: false
         type: string
@@ -166,6 +171,7 @@ jobs:
           VERSION_TAG_INPUT: ${{ inputs.version-tag }}
           VERSIONS_JSON_INPUT: ${{ inputs.versions-json }}
           DRY_RUN: ${{ inputs.dry-run }}
+          SIBLING_REPO_INPUT: ${{ inputs.sibling-repo }}
           TESTS_STATUS_INPUT: ${{ inputs.tests-status }}
           LINT_STATUS_INPUT: ${{ inputs.lint-status }}
           SECURITY_STATUS_INPUT: ${{ inputs.security-status }}
@@ -192,6 +198,13 @@ jobs:
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
           VERSION_TAG="${VERSION_TAG_INPUT}"
+          SIBLING_REPO="${SIBLING_REPO_INPUT}"
+          # Only a plain owner/repo reaches gh and the PR bodies; anything else
+          # is dropped with a warning and the promotion runs unpaired.
+          if [ -n "${SIBLING_REPO}" ] && ! [[ "${SIBLING_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::warning::Ignoring sibling-repo '${SIBLING_REPO}': expected owner/repo."
+            SIBLING_REPO=""
+          fi
 
           if [ "${DIRECTION}" = "dev-to-uat" ]; then
             SOURCE_BRANCH="dev"
@@ -510,6 +523,38 @@ jobs:
           HOW_TO_REVIEW+=$'\n'"3. Review the [code diff between branches](${COMPARE_URL})"
           HOW_TO_REVIEW+=$'\n'"4. Complete all items in the **Pre-merge Checklist** above"
 
+          # ── Sibling repository cross-link (multi-repo FE/BE pairing) ──
+          #
+          # Read-only lookup, attempted only when the caller sets sibling-repo
+          # (currently: multi-repo BE generated pipelines). PR_TOKEN may fall
+          # back to github.token, which GitHub scopes to THIS repository only
+          # and cannot read the sibling repo at all - so a failed lookup
+          # degrades to a static link instead of failing the job. Empty
+          # SIBLING_SECTION (the default, when sibling-repo is not set) leaves
+          # PR_BODY byte-for-byte unchanged below.
+          SIBLING_SECTION=""
+          SIBLING_PR_NUMBER=""
+          if [ -n "${SIBLING_REPO}" ]; then
+            SIBLING_LOOKUP_OK="false"
+            if SIBLING_PR_JSON=$(gh pr list --repo "${SIBLING_REPO}" --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --state open --json number,url 2>/dev/null); then
+              SIBLING_LOOKUP_OK="true"
+              SIBLING_PR_NUMBER=$(echo "${SIBLING_PR_JSON}" | jq -r '.[0].number // empty')
+              SIBLING_PR_URL=$(echo "${SIBLING_PR_JSON}" | jq -r '.[0].url // empty')
+            fi
+
+            if [ -n "${SIBLING_PR_NUMBER}" ]; then
+              SIBLING_LINE="Sibling promotion PR: [${SIBLING_REPO}#${SIBLING_PR_NUMBER}](${SIBLING_PR_URL}) — merge both together to keep frontend and backend in lockstep."
+            elif [ "${SIBLING_LOOKUP_OK}" = "true" ]; then
+              SIBLING_COMPARE_URL="https://github.com/${SIBLING_REPO}/compare/${TARGET_BRANCH}...${SOURCE_BRANCH}"
+              SIBLING_LINE="No open promotion PR on **${SIBLING_REPO}** yet. [View its ${SOURCE_BRANCH} → ${TARGET_BRANCH} changes](${SIBLING_COMPARE_URL}) — merge both together once it opens."
+            else
+              SIBLING_PULLS_URL="https://github.com/${SIBLING_REPO}/pulls"
+              SIBLING_LINE="Could not look up **${SIBLING_REPO}**'s promotion PR with this workflow's token. [Check its open pull requests](${SIBLING_PULLS_URL}) and merge both together."
+            fi
+
+            SIBLING_SECTION=$(printf '\n\n<!-- alphaci:sibling-promotion:start -->\n### 🔗 Paired Promotion\n%s\n<!-- alphaci:sibling-promotion:end -->' "${SIBLING_LINE}")
+          fi
+
           # ── Assemble PR body ──
           PR_BODY=$(cat <<ENDOFBODY
           ${HEADER}
@@ -560,28 +605,71 @@ jobs:
           ENDOFBODY
           )
 
+          # Appended, not interpolated into the heredoc above: when
+          # SIBLING_SECTION is empty (sibling-repo not set - every existing
+          # single-repo caller) this is a no-op and PR_BODY is exactly what it
+          # was before this feature existed.
+          if [ -n "${SIBLING_SECTION}" ]; then
+            PR_BODY="${PR_BODY}${SIBLING_SECTION}"
+          fi
+
           if [ "${DRY_RUN}" = "true" ]; then
             echo "🧪 Dry run enabled. PR body preview:"
             echo "${PR_BODY}"
             exit 0
           fi
 
+          OWN_PR_NUMBER=""
           if [ -n "${EXISTING_PR}" ]; then
             retry 3 3 gh pr edit "${EXISTING_PR}" --title "${TITLE}" --body "${PR_BODY}"
             echo "✅ Updated PR #${EXISTING_PR}: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
-            exit 0
+            OWN_PR_NUMBER="${EXISTING_PR}"
+          else
+            # Skip no-op promotions when source has no commits ahead of target.
+            if ! git rev-parse --verify "origin/${SOURCE_BRANCH}" >/dev/null 2>&1 || ! git rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+              git fetch --no-tags origin "${SOURCE_BRANCH}" "${TARGET_BRANCH}" >/dev/null 2>&1 || true
+            fi
+
+            AHEAD_COUNT=$(git rev-list --count "origin/${TARGET_BRANCH}..origin/${SOURCE_BRANCH}" 2>/dev/null || git rev-list --count "${TARGET_BRANCH}..${SOURCE_BRANCH}" 2>/dev/null || echo "0")
+            if [ "${AHEAD_COUNT}" = "0" ]; then
+              echo "ℹ️ No commits between ${TARGET_BRANCH} and ${SOURCE_BRANCH}; skipping PR creation."
+              exit 0
+            fi
+
+            CREATED_PR_URL=$(retry 3 3 gh pr create --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --title "${TITLE}" --body "${PR_BODY}")
+            echo "✅ Created PR: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
+            OWN_PR_NUMBER="${CREATED_PR_URL##*/}"
           fi
 
-          # Skip no-op promotions when source has no commits ahead of target.
-          if ! git rev-parse --verify "origin/${SOURCE_BRANCH}" >/dev/null 2>&1 || ! git rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
-            git fetch --no-tags origin "${SOURCE_BRANCH}" "${TARGET_BRANCH}" >/dev/null 2>&1 || true
-          fi
+          # ── Cross-link back: update the sibling's PR body too ──
+          #
+          # Best-effort and skipped entirely when sibling-repo is unset, no
+          # sibling PR was found, or we have no PR of our own to point at.
+          # Idempotent: strips any block this workflow previously inserted
+          # (marked by the HTML comments) before appending the current one,
+          # so repeated runs replace the old cross-link instead of stacking
+          # copies. A write failure (the PAT may not have access to the
+          # sibling repo) only warns - our own PR already links to the
+          # sibling above, so the pairing is still visible from at least one side.
+          if [ -n "${SIBLING_REPO}" ] && [ -n "${SIBLING_PR_NUMBER}" ] && [ -n "${OWN_PR_NUMBER}" ]; then
+            OWN_PR_URL="https://github.com/${{ github.repository }}/pull/${OWN_PR_NUMBER}"
+            SIBLING_BACK_LINE="Sibling promotion PR: [${{ github.repository }}#${OWN_PR_NUMBER}](${OWN_PR_URL}) — merge both together to keep frontend and backend in lockstep."
+            SIBLING_BACK_BLOCK=$(printf '<!-- alphaci:sibling-promotion:start -->\n### 🔗 Paired Promotion\n%s\n<!-- alphaci:sibling-promotion:end -->' "${SIBLING_BACK_LINE}")
 
-          AHEAD_COUNT=$(git rev-list --count "origin/${TARGET_BRANCH}..origin/${SOURCE_BRANCH}" 2>/dev/null || git rev-list --count "${TARGET_BRANCH}..${SOURCE_BRANCH}" 2>/dev/null || echo "0")
-          if [ "${AHEAD_COUNT}" = "0" ]; then
-            echo "ℹ️ No commits between ${TARGET_BRANCH} and ${SOURCE_BRANCH}; skipping PR creation."
-            exit 0
-          fi
+            if CURRENT_SIBLING_BODY=$(gh pr view "${SIBLING_PR_NUMBER}" --repo "${SIBLING_REPO}" --json body -q .body 2>/dev/null); then
+              NEW_SIBLING_BODY=$(printf '%s' "${CURRENT_SIBLING_BODY}" | awk '
+                /<!-- alphaci:sibling-promotion:start -->/ { skip=1 }
+                !skip { print }
+                /<!-- alphaci:sibling-promotion:end -->/ { skip=0; next }
+              ')
+              NEW_SIBLING_BODY=$(printf '%s\n\n%s\n' "${NEW_SIBLING_BODY}" "${SIBLING_BACK_BLOCK}")
 
-          retry 3 3 gh pr create --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --title "${TITLE}" --body "${PR_BODY}"
-          echo "✅ Created PR: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
+              if gh pr edit "${SIBLING_PR_NUMBER}" --repo "${SIBLING_REPO}" --body "${NEW_SIBLING_BODY}" 2>/dev/null; then
+                echo "✅ Cross-linked sibling PR ${SIBLING_REPO}#${SIBLING_PR_NUMBER}"
+              else
+                echo "::warning::Found sibling PR ${SIBLING_REPO}#${SIBLING_PR_NUMBER} but could not update its body (this workflow's token may lack write access there). This repo's own PR still links to it."
+              fi
+            else
+              echo "::warning::Could not read sibling PR ${SIBLING_REPO}#${SIBLING_PR_NUMBER} to cross-link it (this workflow's token may lack read access there). This repo's own PR still links to it."
+            fi
+          fi
