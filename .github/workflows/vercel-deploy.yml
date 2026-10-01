@@ -209,9 +209,20 @@ jobs:
           # nickname it is a problem for the stage that wanted the nickname,
           # and that stage reports it rather than retroactively failing a
           # deployment that is live and serving.
+          #
+          # `vercel alias` is an account-level command: unlike deploy, it does
+          # not read the linked project, so without --scope it runs against the
+          # token owner's personal account and a team project's alias is
+          # refused ("Not authorized: Trying to access resource under scope").
+          # A personal-account project's org id is a user id, which --scope
+          # does not take, so only a team id is passed.
+          SCOPE_ARGS=()
+          if [[ "${VERCEL_ORG_ID:-}" == team_* ]]; then
+            SCOPE_ARGS=(--scope "${VERCEL_ORG_ID}")
+          fi
           ALIAS="${{ inputs.branch-alias }}"
           if [ -n "${ALIAS}" ] && [ "${{ inputs.environment }}" != "production" ]; then
-            if vercel alias set "${URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" 2>&1; then
+            if vercel alias set "${URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" "${SCOPE_ARGS[@]}" 2>&1; then
               echo "alias=https://${ALIAS}" >> $GITHUB_OUTPUT
               echo "🔗 Aliased to: https://${ALIAS}"
             else
@@ -274,15 +285,22 @@ jobs:
             exit 0
           fi
 
+          # Same scope rule as the alias above: `vercel remove` is account-level.
+          SCOPE_ARGS=()
+          if [[ "${VERCEL_ORG_ID:-}" == team_* ]]; then
+            SCOPE_ARGS=(--scope "${VERCEL_ORG_ID}")
+          fi
+
           echo "🧹 Removing previous preview deployments for branch '${BRANCH_NAME}'..."
           while IFS= read -r OLD_URL; do
             if [ -n "${OLD_URL}" ]; then
               echo "- Removing ${OLD_URL}"
-              vercel remove "${OLD_URL}" --yes --token="${VERCEL_TOKEN}" || echo "⚠️ Failed to remove ${OLD_URL}; continuing."
+              vercel remove "${OLD_URL}" --yes --token="${VERCEL_TOKEN}" "${SCOPE_ARGS[@]}" || echo "⚠️ Failed to remove ${OLD_URL}; continuing."
             fi
           done <<< "${OLD_URLS}"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Comment Deployment URL on PR
