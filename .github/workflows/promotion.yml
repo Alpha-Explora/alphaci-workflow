@@ -179,6 +179,11 @@ jobs:
           PLAYWRIGHT_STATUS_INPUT: ${{ inputs.playwright-status }}
           GRAFANA_STATUS_INPUT: ${{ inputs.grafana-status }}
           PIPELINE_RESULT_INPUT: ${{ inputs.pipeline-result }}
+        # Keep expression syntax out of this script; pass values through env
+        # above or use the runner's GITHUB_* variables. GitHub caps any string
+        # that contains an expression at 21,000 characters, and this script is
+        # longer than that: one expression here makes the whole workflow
+        # invalid for every caller ("workflow file issue").
         run: |
           retry() {
             local attempts=$1
@@ -260,7 +265,7 @@ jobs:
             CHECKLIST_TEMPLATE="Verified **%s** deployment on ${CONTEXT_LABEL}"
           fi
 
-          COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${TARGET_BRANCH}...${SOURCE_BRANCH}"
+          COMPARE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${TARGET_BRANCH}...${SOURCE_BRANCH}"
 
           EXISTING_PR=$(gh pr list --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --state open --json number --jq '.[0].number' 2>/dev/null || true)
 
@@ -298,7 +303,7 @@ jobs:
               '{($n1):$u1, ($n2):$u2, ($n3):$u3}')
 
             if [ "$(echo "${DEPLOYMENT_URLS_JSON}" | jq '[to_entries[] | select(.key != "" and .value != "")] | length')" -eq 0 ]; then
-              RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
               DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
             fi
           fi
@@ -347,7 +352,7 @@ jobs:
               SYSTEMS_JSON=$(jq -nc --arg n1 "${SYSTEM1_NAME}" '[{name:$n1}]')
             fi
 
-            RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             DEFAULT_RESULT="${SYSTEM1_RESULT}"
             if [ -z "${DEFAULT_RESULT}" ]; then
               DEFAULT_RESULT="success"
@@ -502,7 +507,7 @@ jobs:
             RELEASE_VERSION_VALUE="Per-system (see Version Tags)"
           fi
           PIPELINE_ICON=$(status_icon "${PIPELINE_RESULT}")
-          RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Pipeline Result | %s ${BT}%s${BT} |\n| Version Tag | ${BT}%s${BT} |\n| Short SHA | [${BT}%s${BT}](https://github.com/${{ github.repository }}/commit/%s) |\n| Compare | [View changes ↗](%s) |" \
+          RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Pipeline Result | %s ${BT}%s${BT} |\n| Version Tag | ${BT}%s${BT} |\n| Short SHA | [${BT}%s${BT}](https://github.com/${GITHUB_REPOSITORY}/commit/%s) |\n| Compare | [View changes ↗](%s) |" \
             "${PIPELINE_ICON}" "${PIPELINE_RESULT}" \
             "${RELEASE_VERSION_VALUE}" \
             "${SHORT_SHA}" "${GITHUB_SHA}" \
@@ -517,7 +522,7 @@ jobs:
             DETAILS=$(printf "%s\n- **Version tag:** ${BT}%s${BT}" "${DETAILS}" "${VERSION_TAG:-N/A}")
           fi
           TRIGGERED_BY="${GITHUB_TRIGGERING_ACTOR:-${GITHUB_ACTOR}}"
-          DETAILS=$(printf "%s\n- **Commit:** [\`%s\`](https://github.com/${{ github.repository }}/commit/%s)\n- **Compare:** [View changes ↗](%s)\n- **Triggered by:** @%s\n- **Triggered at:** %s\n- **Pipeline run:** [View workflow run ↗](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" "${DETAILS}" "${SHORT_SHA}" "${GITHUB_SHA}" "${COMPARE_URL}" "${TRIGGERED_BY}" "${TIMESTAMP}")
+          DETAILS=$(printf "%s\n- **Commit:** [\`%s\`](https://github.com/${GITHUB_REPOSITORY}/commit/%s)\n- **Compare:** [View changes ↗](%s)\n- **Triggered by:** @%s\n- **Triggered at:** %s\n- **Pipeline run:** [View workflow run ↗](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})" "${DETAILS}" "${SHORT_SHA}" "${GITHUB_SHA}" "${COMPARE_URL}" "${TRIGGERED_BY}" "${TIMESTAMP}")
 
           # ── How to review section ──
           HOW_TO_REVIEW="1. Check the **Quality Gates** table — all gates should show ✅"
@@ -654,8 +659,8 @@ jobs:
           # sibling repo) only warns - our own PR already links to the
           # sibling above, so the pairing is still visible from at least one side.
           if [ -n "${SIBLING_REPO}" ] && [ -n "${SIBLING_PR_NUMBER}" ] && [ -n "${OWN_PR_NUMBER}" ]; then
-            OWN_PR_URL="https://github.com/${{ github.repository }}/pull/${OWN_PR_NUMBER}"
-            SIBLING_BACK_LINE="Sibling promotion PR: [${{ github.repository }}#${OWN_PR_NUMBER}](${OWN_PR_URL}) — merge both together to keep frontend and backend in lockstep."
+            OWN_PR_URL="https://github.com/${GITHUB_REPOSITORY}/pull/${OWN_PR_NUMBER}"
+            SIBLING_BACK_LINE="Sibling promotion PR: [${GITHUB_REPOSITORY}#${OWN_PR_NUMBER}](${OWN_PR_URL}) — merge both together to keep frontend and backend in lockstep."
             SIBLING_BACK_BLOCK=$(printf '<!-- alphaci:sibling-promotion:start -->\n### 🔗 Paired Promotion\n%s\n<!-- alphaci:sibling-promotion:end -->' "${SIBLING_BACK_LINE}")
 
             if CURRENT_SIBLING_BODY=$(gh pr view "${SIBLING_PR_NUMBER}" --repo "${SIBLING_REPO}" --json body -q .body 2>/dev/null); then
