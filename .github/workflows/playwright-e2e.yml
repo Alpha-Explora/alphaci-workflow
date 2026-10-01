@@ -87,6 +87,15 @@ on:
         type: string
         default: "test-results/alphaci-e2e.json"
         description: "Where the Playwright JSON reporter writes, relative to working-directory"
+    secrets:
+      # A Vercel preview sits behind Deployment Protection, which answers a
+      # browser with a redirect to Vercel's sign-in. Protection Bypass for
+      # Automation is Vercel's answer for CI: the suite sends this secret as
+      # the `x-vercel-protection-bypass` header. Exposed to the test command as
+      # an environment variable of the same name, which a project's Playwright
+      # config reads; optional, so unprotected hosts need nothing.
+      VERCEL_AUTOMATION_BYPASS_SECRET:
+        required: false
     outputs:
       e2e-result:
         description: "E2E test pass/fail result"
@@ -241,6 +250,8 @@ jobs:
           # A project whose config does not enable the json reporter simply
           # writes nothing, and the counts are omitted rather than invented.
           PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ inputs.json-report }}
+          # Empty when the caller passes none; the config then sends no header.
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           # Substitute {browser} placeholder using env var â€” avoids eval on raw input
           CMD="${E2E_TEST_CMD//\{browser\}/${E2E_BROWSER}}"
