@@ -17,7 +17,7 @@ const { spawnSync } = require('node:child_process');
 const workflow = fs.readFileSync(
   path.join(__dirname, '..', '.github', 'workflows', 'dotnet-test.yml'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 const START = 'python3 - >> "$GITHUB_OUTPUT" <<\'PYEOF\'\n';
 const startIndex = workflow.indexOf(START);

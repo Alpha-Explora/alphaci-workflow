@@ -15,7 +15,7 @@ const path = require('node:path');
 const workflow = fs.readFileSync(
   path.join(__dirname, '..', '.github', 'workflows', 'lint-check.yml'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 const START = "<<'MATCHER'\n";
 const startIndex = workflow.indexOf(START);
