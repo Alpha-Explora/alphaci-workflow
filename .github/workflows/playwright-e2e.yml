@@ -87,6 +87,11 @@ on:
         type: string
         default: "test-results/alphaci-e2e.json"
         description: "Where the Playwright JSON reporter writes, relative to working-directory"
+      ensure-test-deps:
+        required: false
+        type: string
+        default: ""
+        description: "Space-separated npm specs (name@version) installed with --no-save when not already resolvable, e.g. '@playwright/test@^1.55.0 @axe-core/playwright@^4.10.0'"
       # Visual testing with baselines stored by ALPHACI. Opt-in: with
       # visual-baselines false (the default) none of this runs and no request
       # is made to the API.
@@ -263,6 +268,40 @@ jobs:
           else
             echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
             npm install --no-audit --no-fund
+          fi
+
+      # Installs test packages the repo does not already have, without touching
+      # package.json or the lockfile. A generated "Add browser tests" PR cannot
+      # update package-lock.json, and editing package.json under a lockfile would
+      # make `npm ci` fail as out of sync, so the verify run installs them.
+      # Runs before the Playwright version check so that a freshly installed
+      # @playwright/test is the version that gets checked.
+      - name: Ensure test dependencies
+        if: ${{ inputs.ensure-test-deps != '' }}
+        env:
+          ENSURE_TEST_DEPS: ${{ inputs.ensure-test-deps }}
+        run: |
+          # The specs end up on a shell command line, so each one must match a
+          # strict name@version shape; anything else is skipped.
+          PATTERN='^(@[a-z0-9._-]+/)?[a-z0-9._-]+@[\^~]?[0-9][0-9A-Za-z.+-]*$'
+          MISSING=()
+          for SPEC in ${ENSURE_TEST_DEPS}; do
+            if ! [[ "${SPEC}" =~ ${PATTERN} ]]; then
+              echo "::warning::ensure-test-deps: ignoring '${SPEC}', which is not a name@version spec."
+              continue
+            fi
+            # The version starts at the last '@'; a scope's '@' is at position 0.
+            NAME="${SPEC%@*}"
+            if node -e "require.resolve(process.argv[1] + '/package.json')" "${NAME}" >/dev/null 2>&1; then
+              echo "${NAME} is already installed."
+            else
+              MISSING+=("${SPEC}")
+            fi
+          done
+
+          if [ "${#MISSING[@]}" -gt 0 ]; then
+            echo "::notice::ensure-test-deps: installing ${MISSING[*]} (not saved to package.json)."
+            npm install --no-save --no-audit --no-fund "${MISSING[@]}"
           fi
 
       - name: Validate E2E tests folder exists
