@@ -285,6 +285,8 @@ jobs:
           # strict name@version shape; anything else is skipped.
           PATTERN='^(@[a-z0-9._-]+/)?[a-z0-9._-]+@[\^~]?[0-9][0-9A-Za-z.+-]*$'
           MISSING=()
+          # Split on whitespace only: no filename expansion of a stray '*'.
+          set -f
           for SPEC in ${ENSURE_TEST_DEPS}; do
             if ! [[ "${SPEC}" =~ ${PATTERN} ]]; then
               echo "::warning::ensure-test-deps: ignoring '${SPEC}', which is not a name@version spec."
@@ -298,6 +300,7 @@ jobs:
               MISSING+=("${SPEC}")
             fi
           done
+          set +f
 
           if [ "${#MISSING[@]}" -gt 0 ]; then
             echo "::notice::ensure-test-deps: installing ${MISSING[*]} (not saved to package.json)."
