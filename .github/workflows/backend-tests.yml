@@ -99,15 +99,35 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/${WORKING_DIRECTORY}/package-lock.json" ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No package-lock.json found, so the npm dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
       - name: Install Dependencies
-        run: npm ci --ignore-scripts
+        run: |
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci --ignore-scripts
+          else
+            echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+            npm install --no-audit --no-fund --ignore-scripts
+          fi
 
       - name: Display Selected Backend Stack
         run: |
@@ -198,15 +218,35 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/${WORKING_DIRECTORY}/package-lock.json" ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No package-lock.json found, so the npm dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
       - name: Install Dependencies
-        run: npm ci --ignore-scripts
+        run: |
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci --ignore-scripts
+          else
+            echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+            npm install --no-audit --no-fund --ignore-scripts
+          fi
 
       - name: Display Selected Backend Stack
         run: |

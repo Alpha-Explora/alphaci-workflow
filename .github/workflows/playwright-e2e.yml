@@ -87,6 +87,29 @@ on:
         type: string
         default: "test-results/alphaci-e2e.json"
         description: "Where the Playwright JSON reporter writes, relative to working-directory"
+      # Visual testing with baselines stored by ALPHACI. Opt-in: with
+      # visual-baselines false (the default) none of this runs and no request
+      # is made to the API.
+      visual-baselines:
+        required: false
+        type: boolean
+        default: false
+        description: "Fetch ALPHACI-stored screenshot baselines before the tests and report snapshot results afterwards (needs alphaci-api-url and secret ALPHACI_TOKEN)"
+      alphaci-api-url:
+        required: false
+        type: string
+        default: ""
+        description: "ALPHACI API origin used for visual baselines, e.g. https://alphaci.example.com (no trailing path)"
+      visual-branch:
+        required: false
+        type: string
+        default: ""
+        description: "Pipeline branch this run is for (e.g. uat or main); defaults to the PR base branch or the ref name"
+      visual-snapshot-dir:
+        required: false
+        type: string
+        default: "tests/e2e/__visual__"
+        description: "Directory, relative to working-directory, where baselines are written and screenshots are read from"
     secrets:
       # A Vercel preview sits behind Deployment Protection, which answers a
       # browser with a redirect to Vercel's sign-in. Protection Bypass for
@@ -95,6 +118,10 @@ on:
       # an environment variable of the same name, which a project's Playwright
       # config reads; optional, so unprotected hosts need nothing.
       VERCEL_AUTOMATION_BYPASS_SECRET:
+        required: false
+      # Bearer token for the ALPHACI visual-baseline API. Only read when
+      # visual-baselines is true; it is never exposed to the test command.
+      ALPHACI_TOKEN:
         required: false
     outputs:
       e2e-result:
@@ -117,6 +144,9 @@ on:
       tests-failures:
         description: "JSON array of {name,message} for the failed tests, capped"
         value: ${{ jobs.finalize.outputs.tests-failures }}
+      tests-passes:
+        description: "JSON array of the full names of the passed tests (suite path and title joined with ' > '), capped at 300"
+        value: ${{ jobs.finalize.outputs.tests-passes }}
 
 permissions:
   contents: read
@@ -203,11 +233,24 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches (before any install step can fall back), so the cache is
+        # only switched on when a lockfile exists.
+        run: |
+          if [ -n "$(find "$GITHUB_WORKSPACE" -type d -name node_modules -prune -o -name package-lock.json -print -quit)" ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No package-lock.json found, so the npm dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             **/package-lock.json
 
@@ -233,9 +276,155 @@ jobs:
           fi
           echo "âœ… E2E tests folder found: ${E2E_TESTS_DIRECTORY}"
 
+      # Visual baselines are opt-in and need three things at once: the input,
+      # an API URL and the token. Anything less leaves them off with a warning,
+      # so a half-configured caller still gets a normal functional run.
+      - name: Resolve visual baseline settings
+        id: visual
+        env:
+          VISUAL_ENABLED: ${{ inputs.visual-baselines }}
+          API_URL: ${{ inputs.alphaci-api-url }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          VISUAL_BRANCH: ${{ inputs.visual-branch }}
+          SNAPSHOT_DIR: ${{ inputs.visual-snapshot-dir }}
+        run: |
+          ENABLED="false"
+          if [ "${VISUAL_ENABLED}" = "true" ]; then
+            if [ -z "${API_URL}" ] || [ -z "${ALPHACI_TOKEN}" ]; then
+              echo "::warning::visual-baselines is on but alphaci-api-url or the ALPHACI_TOKEN secret is missing, so visual baselines are skipped."
+            elif [ "${API_URL#http://}" = "${API_URL}" ] && [ "${API_URL#https://}" = "${API_URL}" ]; then
+              echo "::warning::alphaci-api-url must start with http:// or https://, so visual baselines are skipped."
+            elif [ -z "${SNAPSHOT_DIR}" ] || [ "${SNAPSHOT_DIR#/}" != "${SNAPSHOT_DIR}" ] || [[ "/${SNAPSHOT_DIR}/" == *"/../"* ]]; then
+              echo "::warning::visual-snapshot-dir must be a relative path without '..', so visual baselines are skipped."
+            else
+              ENABLED="true"
+            fi
+          fi
+
+          # The branch the baselines belong to: explicit input, else the PR base,
+          # else the ref the run is on.
+          BRANCH="${VISUAL_BRANCH:-${GITHUB_BASE_REF:-${GITHUB_REF_NAME}}}"
+
+          echo "enabled=${ENABLED}" >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+
       - name: Install Playwright browsers
         run: |
           npx playwright install --with-deps chromium firefox webkit
+
+      # `--update-snapshots=missing` writes a screenshot that has no baseline
+      # instead of failing the test. It needs Playwright 1.50 or newer; on an
+      # older one the flag is left off rather than breaking the run.
+      - name: Check Playwright version for visual baselines
+        id: visual-version
+        if: ${{ steps.visual.outputs.enabled == 'true' }}
+        run: |
+          VERSION="$(npx --no-install playwright --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true)"
+          MAJOR="${VERSION%%.*}"
+          MINOR="${VERSION#*.}"
+          MINOR="${MINOR%%.*}"
+          if [ -n "${VERSION}" ] && { [ "${MAJOR}" -gt 1 ] || { [ "${MAJOR}" -eq 1 ] && [ "${MINOR}" -ge 50 ]; }; }; then
+            echo "flag=--update-snapshots=missing" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Visual baselines need Playwright 1.50 or newer (found '${VERSION:-unknown}'), so --update-snapshots=missing is not passed and a snapshot without a baseline will fail."
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Download the stored baselines into the snapshot directory. Fail-soft: if
+      # the API is unreachable or says no, the tests still run and capture new
+      # screenshots instead of comparing against baselines.
+      - name: Fetch visual baselines
+        if: ${{ steps.visual.outputs.enabled == 'true' }}
+        continue-on-error: true
+        env:
+          API_URL: ${{ inputs.alphaci-api-url }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          BRANCH: ${{ steps.visual.outputs.branch }}
+          SNAPSHOT_DIR: ${{ inputs.visual-snapshot-dir }}
+        run: |
+          set -uo pipefail
+
+          API="${API_URL%/}"
+          WORK="${RUNNER_TEMP}/alphaci-visual"
+          mkdir -p "${WORK}" "${SNAPSHOT_DIR}"
+          : > "${WORK}/downloaded.txt"
+
+          HTTP="$(curl -sS --max-time 30 -G -o "${WORK}/baselines.json" -w '%{http_code}' \
+            -H "Authorization: Bearer ${ALPHACI_TOKEN}" \
+            --data-urlencode "repoFullName=${GITHUB_REPOSITORY}" \
+            --data-urlencode "branch=${BRANCH}" \
+            "${API}/api/v1/ci/visual-baselines" 2>/dev/null)" || HTTP="000"
+          if [ "${HTTP}" != "200" ]; then
+            echo "::warning::Visual baselines unavailable (HTTP ${HTTP}); screenshots without a baseline will be captured as new."
+            exit 0
+          fi
+
+          # Validate the manifest in one place. A baseline name becomes a file
+          # name under the snapshot directory, so anything that could leave it
+          # (a slash, a backslash, '..') or break a line is dropped. The url is
+          # only ever a path on the same API host, so the bearer token is never
+          # sent anywhere else.
+          python3 - "${WORK}/baselines.json" "${WORK}/entries.tsv" <<'PYEOF'
+          import json, re, sys
+
+          manifest, out = sys.argv[1], sys.argv[2]
+          try:
+              with open(manifest, encoding="utf-8") as handle:
+                  items = json.load(handle).get("baselines") or []
+          except (OSError, ValueError, AttributeError):
+              print("::warning::Visual baseline manifest was not valid JSON; skipping baselines.")
+              items = []
+
+          control = re.compile(r"[\x00-\x1f\x7f]")
+          rows = []
+          for item in items if isinstance(items, list) else []:
+              if not isinstance(item, dict):
+                  continue
+              name, url, sha = item.get("name"), item.get("url"), item.get("sha256") or ""
+              if (not isinstance(name, str) or not name or "/" in name or "\\" in name
+                      or ".." in name or control.search(name)):
+                  print(f"::warning::Skipping baseline with an unsafe name: {name!r}")
+                  continue
+              if (not isinstance(url, str) or not url.startswith("/") or url.startswith("//")
+                      or control.search(url) or " " in url):
+                  print(f"::warning::Skipping baseline {name}: its url is not a path on the API host.")
+                  continue
+              if sha and not re.fullmatch(r"[0-9a-fA-F]{64}", str(sha)):
+                  sha = ""
+              rows.append((name, url, str(sha).lower() or "-"))
+
+          if len(rows) > 200:
+              print(f"::warning::{len(rows)} baselines listed; only the first 200 are downloaded.")
+              rows = rows[:200]
+
+          with open(out, "w", encoding="utf-8", newline="") as handle:
+              for row in rows:
+                  handle.write("\t".join(row) + "\n")
+          PYEOF
+
+          COUNT=0
+          while IFS=$'\t' read -r NAME URL SHA; do
+            [ -n "${NAME}" ] || continue
+            TMP="${WORK}/download.tmp"
+            CODE="$(curl -sS --max-time 60 -o "${TMP}" -w '%{http_code}' \
+              -H "Authorization: Bearer ${ALPHACI_TOKEN}" "${API}${URL}" </dev/null 2>/dev/null)" || CODE="000"
+            if [ "${CODE}" != "200" ]; then
+              echo "::warning::Could not download baseline ${NAME} (HTTP ${CODE})."
+              continue
+            fi
+            if [ "${SHA}" != "-" ]; then
+              ACTUAL_SHA="$(sha256sum "${TMP}" | cut -d' ' -f1)"
+              if [ "${ACTUAL_SHA}" != "${SHA}" ]; then
+                echo "::warning::Baseline ${NAME} failed its sha256 check and was discarded."
+                continue
+              fi
+            fi
+            mv "${TMP}" "${SNAPSHOT_DIR}/${NAME}"
+            printf '%s\n' "${NAME}" >> "${WORK}/downloaded.txt"
+            COUNT=$((COUNT + 1))
+          done < "${WORK}/entries.tsv"
+
+          echo "Downloaded ${COUNT} visual baseline(s) into ${SNAPSHOT_DIR}."
 
       - name: Run Playwright E2E
         id: run-e2e
@@ -252,12 +441,170 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ inputs.json-report }}
           # Empty when the caller passes none; the config then sends no header.
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          # Empty unless visual baselines are on and Playwright is 1.50+.
+          VISUAL_UPDATE_FLAG: ${{ steps.visual-version.outputs.flag }}
         run: |
           # Substitute {browser} placeholder using env var â€” avoids eval on raw input
           CMD="${E2E_TEST_CMD//\{browser\}/${E2E_BROWSER}}"
           echo "Running browser: ${E2E_BROWSER}"
           echo "Using Playwright local browser execution"
+          # Visual baselines: let a screenshot with no baseline be captured
+          # rather than fail. `npm run <script>` forwards flags only after
+          # `--`; a command that already has its own `--` or runs
+          # playwright directly (npx, pnpm, yarn) takes the flag as is.
+          if [ -n "${VISUAL_UPDATE_FLAG}" ]; then
+            case "${CMD}" in
+              *" -- "*) CMD="${CMD} ${VISUAL_UPDATE_FLAG}" ;;
+              "npm run "*|"npm run-script "*|"npm test"*|"npm t "*) CMD="${CMD} -- ${VISUAL_UPDATE_FLAG}" ;;
+              *) CMD="${CMD} ${VISUAL_UPDATE_FLAG}" ;;
+            esac
+          fi
           bash -c "${CMD}"
+
+      # Reports what the run did to each screenshot, whatever the test verdict:
+      # a failing visual test is exactly when the diff matters. Every request is
+      # fail-soft; the verdict stays Playwright's.
+      #
+      #   changed  Playwright wrote <name>-diff.png under test-results/
+      #   new      the file was not among the downloaded baselines (captured now)
+      #   passed   anything else
+      - name: Report visual results
+        if: ${{ always() && steps.visual.outputs.enabled == 'true' }}
+        continue-on-error: true
+        env:
+          API_URL: ${{ inputs.alphaci-api-url }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          BRANCH: ${{ steps.visual.outputs.branch }}
+          SNAPSHOT_DIR: ${{ inputs.visual-snapshot-dir }}
+          BROWSER: ${{ matrix.browser }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -uo pipefail
+
+          API="${API_URL%/}"
+          WORK="${RUNNER_TEMP}/alphaci-visual"
+          mkdir -p "${WORK}"
+          [ -f "${WORK}/downloaded.txt" ] || : > "${WORK}/downloaded.txt"
+
+          if [ ! -d "${SNAPSHOT_DIR}" ]; then
+            echo "::notice::No snapshot directory (${SNAPSHOT_DIR}), so there are no visual results to report."
+            exit 0
+          fi
+
+          COMMIT_SHA="$(git rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA}")"
+          MAX_SNAPSHOTS=60
+          MAX_BYTES=3145728
+          TAB="$(printf '\t')"
+
+          # Classify every screenshot. Rank sorts changed first, then new, so
+          # that the 60-snapshot cap drops passed ones before anything a
+          # reviewer needs to see.
+          : > "${WORK}/snapshots.raw"
+          for FILE in "${SNAPSHOT_DIR}"/*.png; do
+            [ -f "${FILE}" ] || continue
+            NAME="$(basename "${FILE}")"
+            case "${NAME}" in
+              *\\*|*..*)
+                echo "::warning::Skipping snapshot with an unsafe name: ${NAME}"
+                continue
+                ;;
+            esac
+            BASE="${NAME%.png}"
+            PATTERN="$(printf '%s' "${BASE}" | sed 's/[][*?\\]/\\&/g')"
+            DIFF=""
+            ACTUAL=""
+            if [ -d test-results ]; then
+              DIFF="$(find test-results -type f -name "${PATTERN}-diff.png" -print -quit 2>/dev/null || true)"
+              ACTUAL="$(find test-results -type f -name "${PATTERN}-actual.png" -print -quit 2>/dev/null || true)"
+            fi
+            if [ -n "${DIFF}" ]; then
+              RANK=0; STATUS="changed"
+            elif ! grep -Fxq -- "${NAME}" "${WORK}/downloaded.txt"; then
+              RANK=1; STATUS="new"
+            else
+              RANK=2; STATUS="passed"
+            fi
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${RANK}" "${STATUS}" "${NAME}" "${FILE}" "${ACTUAL:--}" "${DIFF:--}" >> "${WORK}/snapshots.raw"
+          done
+
+          TOTAL="$(wc -l < "${WORK}/snapshots.raw" | tr -d ' ')"
+          if [ "${TOTAL}" -eq 0 ]; then
+            echo "::notice::No screenshots found in ${SNAPSHOT_DIR}; nothing to report."
+            exit 0
+          fi
+          if [ "${TOTAL}" -gt "${MAX_SNAPSHOTS}" ]; then
+            echo "::warning::${TOTAL} screenshots found; only ${MAX_SNAPSHOTS} are reported (changed and new first)."
+          fi
+          LC_ALL=C sort -s -t "${TAB}" -k1,1n "${WORK}/snapshots.raw" | head -n "${MAX_SNAPSHOTS}" > "${WORK}/snapshots.tsv"
+
+          export COMMIT_SHA
+          python3 - "${WORK}/snapshots.tsv" > "${WORK}/summary.json" <<'PYEOF'
+          import json, os, sys
+
+          def number(value):
+              return int(value) if value.isdigit() else value
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              rows = [line.rstrip("\n").split("\t") for line in handle if line.strip()]
+
+          print(json.dumps({
+              "repoFullName": os.environ["GITHUB_REPOSITORY"],
+              "branch": os.environ["BRANCH"],
+              "commitSha": os.environ["COMMIT_SHA"],
+              "runId": number(os.environ["RUN_ID"]),
+              "runAttempt": number(os.environ["RUN_ATTEMPT"]),
+              "browser": os.environ["BROWSER"],
+              "snapshots": [{"name": row[2], "status": row[1]} for row in rows],
+          }, separators=(",", ":")))
+          PYEOF
+
+          HTTP="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${ALPHACI_TOKEN}" -H 'Content-Type: application/json' \
+            --data-binary @"${WORK}/summary.json" \
+            "${API}/api/v1/ci/visual-summary" </dev/null 2>/dev/null)" || HTTP="000"
+          case "${HTTP}" in
+            2??) echo "Reported $(wc -l < "${WORK}/snapshots.tsv" | tr -d ' ') snapshot(s) to ALPHACI." ;;
+            *) echo "::warning::Visual summary was not accepted (HTTP ${HTTP}); the test result is unaffected." ;;
+          esac
+
+          # One multipart upload per image. --form-string keeps a value that
+          # starts with '@' or '<' from being read as a file reference.
+          upload() {
+            local KIND="$1" PATH_TO_FILE="$2" NAME="$3" SIZE CODE
+            SIZE="$(wc -c < "${PATH_TO_FILE}" | tr -d ' ')"
+            if [ "${SIZE}" -gt "${MAX_BYTES}" ]; then
+              echo "::warning::Skipping ${KIND} upload for ${NAME}: ${SIZE} bytes is over the 3 MB limit."
+              return 0
+            fi
+            CODE="$(curl -sS --max-time 60 -o /dev/null -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer ${ALPHACI_TOKEN}" \
+              --form-string "repoFullName=${GITHUB_REPOSITORY}" \
+              --form-string "branch=${BRANCH}" \
+              --form-string "commitSha=${COMMIT_SHA}" \
+              --form-string "runId=${RUN_ID}" \
+              --form-string "browser=${BROWSER}" \
+              --form-string "name=${NAME}" \
+              --form-string "kind=${KIND}" \
+              -F "file=@\"${PATH_TO_FILE}\";type=image/png" \
+              "${API}/api/v1/ci/visual-results/file" </dev/null 2>/dev/null)" || CODE="000"
+            case "${CODE}" in
+              2??) ;;
+              *) echo "::warning::Upload of ${KIND} for ${NAME} failed (HTTP ${CODE}); the test result is unaffected." ;;
+            esac
+          }
+
+          while IFS="${TAB}" read -r RANK STATUS NAME FILE ACTUAL DIFF; do
+            case "${STATUS}" in
+              changed)
+                if [ "${ACTUAL}" != "-" ]; then upload actual "${ACTUAL}" "${NAME}"; fi
+                upload diff "${DIFF}" "${NAME}"
+                ;;
+              new)
+                upload actual "${FILE}" "${NAME}"
+                ;;
+            esac
+          done < "${WORK}/snapshots.tsv"
 
       # Carried as an artifact because a matrix job's `outputs` are overwritten
       # by whichever leg finishes last — a three-browser run would otherwise
@@ -297,6 +644,7 @@ jobs:
       tests-passed: ${{ steps.summary.outputs.tests-passed }}
       tests-failed: ${{ steps.summary.outputs.tests-failed }}
       tests-failures: ${{ steps.summary.outputs.tests-failures }}
+      tests-passes: ${{ steps.summary.outputs.tests-passes }}
     steps:
       - name: Download E2E JSON reports
         if: ${{ always() }}
@@ -320,11 +668,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 - >> "$GITHUB_OUTPUT" <<'PYEOF'
+          # The script prints key=value lines and, when there is no report, a
+          # `::notice::` command. A line with no `=` in GITHUB_OUTPUT makes the
+          # runner reject the whole file ("Invalid format"), so the two are
+          # split: commands go to the log, only key=value lines to the output.
+          SUMMARY_FILE="${RUNNER_TEMP}/alphaci-e2e-summary.txt"
+          python3 - > "${SUMMARY_FILE}" <<'PYEOF'
           import glob, json, os
 
           total = passed = failed = 0
           failures = []
+          passes = []
+          seen_passes = set()
           found = False
 
           def walk(suite, trail):
@@ -335,6 +690,14 @@ jobs:
 
               for spec in suite.get("specs") or []:
                   if spec.get("ok") is True:
+                      # `ok` is also true for a skipped spec, which did not
+                      # pass, so it needs at least one test that actually ran.
+                      # The same name from another browser is listed once.
+                      if any(test.get("status") != "skipped" for test in spec.get("tests") or []):
+                          passed_name = " > ".join(here + [spec.get("title") or "unknown"])
+                          if passed_name not in seen_passes:
+                              seen_passes.add(passed_name)
+                              passes.append(passed_name)
                       continue
                   name = " > ".join(here + [spec.get("title") or "unknown"])
                   message = ""
@@ -391,11 +754,17 @@ jobs:
               print(f"tests-passed={passed}")
               print(f"tests-failed={failed}")
               print("tests-failures=" + json.dumps(failures[:20], separators=(",", ":")))
+              # Capped at 300 names: GITHUB_OUTPUT and job outputs are size
+              # limited, and a product page has no use for more rows than that.
+              print("tests-passes=" + json.dumps(passes[:300], separators=(",", ":")))
           else:
               print("::notice::No Playwright JSON report was produced, so the "
                     "run reports pass/fail only. Add ['json'] to the reporter "
                     "list in playwright.config.ts to report per-test results.")
           PYEOF
+
+          grep '^::' "${SUMMARY_FILE}" || true
+          grep -v '^::' "${SUMMARY_FILE}" >> "$GITHUB_OUTPUT" || true
 
       - name: Resolve final e2e result
         id: finalize

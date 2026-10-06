@@ -195,11 +195,30 @@ jobs:
 
           echo "manager=${PM}" >> "$GITHUB_OUTPUT"
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -220,7 +239,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Run Lint
@@ -280,11 +304,30 @@ jobs:
 
           echo "manager=${PM}" >> "$GITHUB_OUTPUT"
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -305,7 +348,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Run Unit Tests
@@ -370,11 +418,30 @@ jobs:
 
           echo "manager=${PM}" >> "$GITHUB_OUTPUT"
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -395,7 +462,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Run Integration Tests
@@ -436,11 +508,30 @@ jobs:
 
           echo "manager=${PM}" >> "$GITHUB_OUTPUT"
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -461,7 +552,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Run Component Tests
@@ -502,11 +598,30 @@ jobs:
 
           echo "manager=${PM}" >> "$GITHUB_OUTPUT"
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -527,7 +642,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Run Contract Tests
@@ -568,11 +688,30 @@ jobs:
 
           echo "manager=${PM}" >> "$GITHUB_OUTPUT"
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -593,7 +732,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Run End-to-End Tests
@@ -634,11 +778,30 @@ jobs:
 
           echo "manager=${PM}" >> "$GITHUB_OUTPUT"
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -659,7 +822,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Run Dependency Audit
@@ -743,11 +911,30 @@ jobs:
 
           echo "manager=${PM}" >> "$GITHUB_OUTPUT"
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -768,7 +955,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Validate Licenses
@@ -848,11 +1040,30 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ inputs.stack-name }}-${{ hashFiles('**/package-lock.json', '**/npm-shrinkwrap.json', '**/yarn.lock', '**/pnpm-lock.yaml') }}-
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches, so the cache is only switched on when one exists.
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          SERVICE_PATH: ${{ inputs.service-path }}
+        run: |
+          FOUND=""
+          for LOCK in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml; do
+            [ -f "$GITHUB_WORKSPACE/${SERVICE_PATH}/${LOCK}" ] && FOUND="yes"
+          done
+          if [ -n "${FOUND}" ]; then
+            echo "cache=${PACKAGE_MANAGER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No lockfile found, so the dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: ${{ steps.package-manager.outputs.manager }}
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             ${{ inputs.service-path }}/package-lock.json
             ${{ inputs.service-path }}/npm-shrinkwrap.json
@@ -873,7 +1084,12 @@ jobs:
             corepack enable
             yarn install --immutable || yarn install --frozen-lockfile
           else
-            npm ci
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: Build Service
