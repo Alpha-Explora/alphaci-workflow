@@ -279,12 +279,26 @@ jobs:
             exit 1
           fi
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches (before any install step can fall back), so the cache is
+        # only switched on when a lockfile exists.
+        run: |
+          if [ -n "$(find "$GITHUB_WORKSPACE" -type d -name node_modules -prune -o -name package-lock.json -print -quit)" ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No package-lock.json found, so the npm dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }} (npm)
         if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             **/package-lock.json
 
@@ -317,7 +331,12 @@ jobs:
             corepack enable
             pnpm install --frozen-lockfile --ignore-scripts
           else
-            npm ci --ignore-scripts
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci --ignore-scripts
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund --ignore-scripts
+            fi
           fi
 
       - name: Ensure Android Native Project
@@ -420,12 +439,26 @@ jobs:
             exit 1
           fi
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches (before any install step can fall back), so the cache is
+        # only switched on when a lockfile exists.
+        run: |
+          if [ -n "$(find "$GITHUB_WORKSPACE" -type d -name node_modules -prune -o -name package-lock.json -print -quit)" ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No package-lock.json found, so the npm dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }} (npm)
         if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             **/package-lock.json
 
@@ -458,7 +491,12 @@ jobs:
             corepack enable
             pnpm install --frozen-lockfile --ignore-scripts
           else
-            npm ci --ignore-scripts
+            if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+              npm ci --ignore-scripts
+            else
+              echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
+              npm install --no-audit --no-fund --ignore-scripts
+            fi
           fi
 
       - name: Select Xcode 26.2
