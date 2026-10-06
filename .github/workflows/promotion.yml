@@ -199,6 +199,32 @@ jobs:
             done
           }
 
+          # ── REST helpers ──
+          # PR_TOKEN is a classic PAT without read:org. Every `gh pr ...`
+          # subcommand goes through GraphQL and requests org/team fields
+          # (login, name, slug) that need read:org, so they fail with "Your token
+          # has not been granted the required scopes". The REST API needs only
+          # the repo scope, so all PR reads/writes below use `gh api`.
+          # Bodies are passed as a JSON file built by jq (--input), never via
+          # shell interpolation, so quotes/backticks/$/newlines survive intact.
+          WORK_DIR="${RUNNER_TEMP:-/tmp}"
+
+          # find_open_pr <repo> <base> <head-branch> -> prints number (or nothing)
+          find_open_pr() {
+            gh api -X GET "repos/$1/pulls" -f state=open -f base="$2" -f head="${1%%/*}:$3" --jq '.[0].number // empty'
+          }
+
+          update_own_pr() {
+            jq -n --arg title "${TITLE}" --arg body "${PR_BODY}" '{title: $title, body: $body}' > "${WORK_DIR}/pr-update.json" || return 1
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/pulls/${EXISTING_PR}" --input "${WORK_DIR}/pr-update.json" --jq .number > "${WORK_DIR}/pr-update.out"
+          }
+
+          create_own_pr() {
+            jq -n --arg base "${TARGET_BRANCH}" --arg head "${SOURCE_BRANCH}" --arg title "${TITLE}" --arg body "${PR_BODY}" '{base: $base, head: $head, title: $title, body: $body}' > "${WORK_DIR}/pr-create.json" || return 1
+            # Overwritten on every attempt so a failed try never leaks into the URL.
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls" --input "${WORK_DIR}/pr-create.json" --jq .html_url > "${WORK_DIR}/pr-create.out"
+          }
+
           SHORT_SHA="${GITHUB_SHA:0:7}"
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
@@ -267,7 +293,16 @@ jobs:
 
           COMPARE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${TARGET_BRANCH}...${SOURCE_BRANCH}"
 
-          EXISTING_PR=$(gh pr list --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          # A failed lookup must not silently read as "no PR exists". Warn with
+          # the reason; creation below re-checks and GitHub itself rejects a
+          # duplicate head/base PR (HTTP 422), so a blind fallback cannot
+          # produce a second PR.
+          LOOKUP_FAILED="false"
+          if ! EXISTING_PR=$(find_open_pr "${GITHUB_REPOSITORY}" "${TARGET_BRANCH}" "${SOURCE_BRANCH}" 2>"${WORK_DIR}/pr-lookup.err"); then
+            EXISTING_PR=""
+            LOOKUP_FAILED="true"
+            echo "::warning::Could not look up an existing ${SOURCE_BRANCH} -> ${TARGET_BRANCH} PR via the REST API: $(tr '\n' ' ' < "${WORK_DIR}/pr-lookup.err")"
+          fi
 
           if [ -n "${SYSTEMS_JSON_INPUT}" ]; then
             SYSTEMS_JSON="${SYSTEMS_JSON_INPUT}"
@@ -543,7 +578,7 @@ jobs:
           SIBLING_PR_NUMBER=""
           if [ -n "${SIBLING_REPO}" ]; then
             SIBLING_LOOKUP_OK="false"
-            if SIBLING_PR_JSON=$(gh pr list --repo "${SIBLING_REPO}" --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --state open --json number,url 2>/dev/null); then
+            if SIBLING_PR_JSON=$(gh api -X GET "repos/${SIBLING_REPO}/pulls" -f state=open -f base="${TARGET_BRANCH}" -f head="${SIBLING_REPO%%/*}:${SOURCE_BRANCH}" --jq '[.[] | {number: .number, url: .html_url}]' 2>/dev/null); then
               SIBLING_LOOKUP_OK="true"
               SIBLING_PR_NUMBER=$(echo "${SIBLING_PR_JSON}" | jq -r '.[0].number // empty')
               SIBLING_PR_URL=$(echo "${SIBLING_PR_JSON}" | jq -r '.[0].url // empty')
@@ -628,7 +663,7 @@ jobs:
 
           OWN_PR_NUMBER=""
           if [ -n "${EXISTING_PR}" ]; then
-            retry 3 3 gh pr edit "${EXISTING_PR}" --title "${TITLE}" --body "${PR_BODY}"
+            retry 3 3 update_own_pr
             echo "✅ Updated PR #${EXISTING_PR}: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
             OWN_PR_NUMBER="${EXISTING_PR}"
           else
@@ -643,9 +678,19 @@ jobs:
               exit 0
             fi
 
-            CREATED_PR_URL=$(retry 3 3 gh pr create --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --title "${TITLE}" --body "${PR_BODY}")
-            echo "✅ Created PR: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
-            OWN_PR_NUMBER="${CREATED_PR_URL##*/}"
+            # If the earlier lookup failed, look once more before creating so an
+            # open PR is updated instead of attempting a create.
+            if [ "${LOOKUP_FAILED}" = "true" ] && RECHECK_PR=$(find_open_pr "${GITHUB_REPOSITORY}" "${TARGET_BRANCH}" "${SOURCE_BRANCH}" 2>/dev/null) && [ -n "${RECHECK_PR}" ]; then
+              EXISTING_PR="${RECHECK_PR}"
+              retry 3 3 update_own_pr
+              echo "✅ Updated PR #${EXISTING_PR}: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
+              OWN_PR_NUMBER="${EXISTING_PR}"
+            else
+              retry 3 3 create_own_pr
+              CREATED_PR_URL=$(cat "${WORK_DIR}/pr-create.out")
+              echo "✅ Created PR: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
+              OWN_PR_NUMBER="${CREATED_PR_URL##*/}"
+            fi
           fi
 
           # ── Cross-link back: update the sibling's PR body too ──
@@ -663,7 +708,7 @@ jobs:
             SIBLING_BACK_LINE="Sibling promotion PR: [${GITHUB_REPOSITORY}#${OWN_PR_NUMBER}](${OWN_PR_URL}) — merge both together to keep frontend and backend in lockstep."
             SIBLING_BACK_BLOCK=$(printf '<!-- alphaci:sibling-promotion:start -->\n### 🔗 Paired Promotion\n%s\n<!-- alphaci:sibling-promotion:end -->' "${SIBLING_BACK_LINE}")
 
-            if CURRENT_SIBLING_BODY=$(gh pr view "${SIBLING_PR_NUMBER}" --repo "${SIBLING_REPO}" --json body -q .body 2>/dev/null); then
+            if CURRENT_SIBLING_BODY=$(gh api "repos/${SIBLING_REPO}/pulls/${SIBLING_PR_NUMBER}" --jq '.body // ""' 2>/dev/null); then
               NEW_SIBLING_BODY=$(printf '%s' "${CURRENT_SIBLING_BODY}" | awk '
                 /<!-- alphaci:sibling-promotion:start -->/ { skip=1 }
                 !skip { print }
@@ -671,7 +716,7 @@ jobs:
               ')
               NEW_SIBLING_BODY=$(printf '%s\n\n%s\n' "${NEW_SIBLING_BODY}" "${SIBLING_BACK_BLOCK}")
 
-              if gh pr edit "${SIBLING_PR_NUMBER}" --repo "${SIBLING_REPO}" --body "${NEW_SIBLING_BODY}" 2>/dev/null; then
+              if jq -n --arg body "${NEW_SIBLING_BODY}" '{body: $body}' > "${WORK_DIR}/sibling-update.json" 2>/dev/null && gh api -X PATCH "repos/${SIBLING_REPO}/pulls/${SIBLING_PR_NUMBER}" --input "${WORK_DIR}/sibling-update.json" --silent 2>/dev/null; then
                 echo "✅ Cross-linked sibling PR ${SIBLING_REPO}#${SIBLING_PR_NUMBER}"
               else
                 echo "::warning::Found sibling PR ${SIBLING_REPO}#${SIBLING_PR_NUMBER} but could not update its body (this workflow's token may lack write access there). This repo's own PR still links to it."
