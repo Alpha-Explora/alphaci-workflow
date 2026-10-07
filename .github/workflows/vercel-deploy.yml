@@ -35,6 +35,11 @@ on:
         type: string
         default: ""
         description: "Stable hostname to point at this preview deploy, so a later stage can find it. Ignored for production, which already has one"
+      require-branch-alias:
+        required: false
+        type: boolean
+        default: true
+        description: "Fail the deploy when branch-alias cannot be set (or the alias does not answer). The verify stage tests that alias, so the default is true; set false to only warn"
       checkout-ref:
         required: false
         type: string
@@ -172,30 +177,132 @@ jobs:
       - name: Deploy to Vercel
         id: deploy
         run: |
+          # GitHub starts bash with -e; turn it off. Every failure below is
+          # handled and reported explicitly (a bare -e would exit on the
+          # `$(vercel deploy ...)` assignment before its output is printed).
+          set +e
+          set -uo pipefail
+
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          SYSTEM_NAME="${{ inputs.system-name }}"
 
           META_ARGS=(--meta githubCommitRef="${BRANCH_NAME}" --meta githubCommitSha="${GITHUB_SHA}")
           if [ -n "${SYSTEM_NAME}" ]; then
             META_ARGS+=(--meta systemName="${SYSTEM_NAME}")
           fi
 
-          if [ "${{ inputs.environment }}" = "production" ]; then
-            DEPLOY_OUTPUT=$(vercel deploy --prebuilt --prod --token="${VERCEL_TOKEN}" "${META_ARGS[@]}" 2>&1)
-          else
-            DEPLOY_OUTPUT=$(vercel deploy --prebuilt --token="${VERCEL_TOKEN}" "${META_ARGS[@]}" 2>&1)
+          DEPLOY_ARGS=(--prebuilt --token="${VERCEL_TOKEN}")
+          if [ "${DEPLOY_ENVIRONMENT}" = "production" ]; then
+            DEPLOY_ARGS+=(--prod)
           fi
 
-          URL=$(echo "${DEPLOY_OUTPUT}" | grep -Eo 'https://[^[:space:]]+' | tail -n 1 | tr -d '\r')
+          # The deployment URL is the ONLY thing `vercel deploy` writes to
+          # stdout; progress, warnings and doc links go to stderr. Reading the
+          # URL from the merged stream picked up whatever link was printed last
+          # (CLI 50.x ends with https://vercel.link/unused-build-settings), and
+          # every later step then ran against that link instead of the deploy.
+          DEPLOY_LOG="${RUNNER_TEMP}/vercel-deploy.log"
+          STDOUT=$(vercel deploy "${DEPLOY_ARGS[@]}" "${META_ARGS[@]}" 2>"${DEPLOY_LOG}")
+          DEPLOY_STATUS=$?
 
-          if [ -z "${URL}" ]; then
-            echo "❌ Failed to extract deployment URL from Vercel output."
-            echo "${DEPLOY_OUTPUT}"
+          echo "::group::vercel deploy output"
+          cat "${DEPLOY_LOG}"
+          printf '%s\n' "${STDOUT}"
+          echo "::endgroup::"
+
+          if [ "${DEPLOY_STATUS}" -ne 0 ]; then
+            echo "::error::vercel deploy exited with status ${DEPLOY_STATUS}."
             exit 1
           fi
 
-          echo "url=$URL" >> $GITHUB_OUTPUT
+          # Hosts that can appear in CLI output but are never a deployment.
+          not_a_deployment() {
+            [[ "$1" =~ (^|\.)(vercel\.link|vercel\.com)$ ]]
+          }
+
+          URL=""
+          STDOUT_URLS=$(printf '%s\n' "${STDOUT}" | tr -d '\r' \
+            | grep -E '^[[:space:]]*https://[A-Za-z0-9.-]+/?[[:space:]]*$' | sed -E 's/[[:space:]]+//g' || true)
+          if [ "$(printf '%s\n' "${STDOUT_URLS}" | grep -c .)" = "1" ]; then
+            CANDIDATE="${STDOUT_URLS%/}"
+            if ! not_a_deployment "${CANDIDATE#https://}"; then
+              URL="${CANDIDATE}"
+            fi
+          fi
+
+          if [ -z "${URL}" ]; then
+            # stdout did not hold exactly one usable URL. Fall back to the last
+            # *.vercel.app deployment host anywhere in the output, never a
+            # vercel.link / vercel.com documentation link.
+            URL=$(printf '%s\n%s\n' "$(cat "${DEPLOY_LOG}")" "${STDOUT}" | tr -d '\r' \
+              | grep -Eo 'https://[a-z0-9-]+\.vercel\.app' | tail -n 1 || true)
+            if [ -n "${URL}" ]; then
+              echo "::warning::vercel deploy stdout was not a single URL; using the last *.vercel.app host in its output: ${URL}"
+            fi
+          fi
+
+          if [ -z "${URL}" ]; then
+            echo "::error::Failed to extract the deployment URL from vercel deploy output."
+            exit 1
+          fi
+
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "🚀 Deployed to: $URL"
+
+          # Resolve the deployment's id AND its owner. `vercel alias` and
+          # `vercel remove` are account-level: they run against the scope they
+          # are given, and VERCEL_ORG_ID is not always the team that owns this
+          # deployment (a mismatch is refused as "Not authorized: Trying to
+          # access resource under scope ..."). The deployment itself knows its
+          # owner, so ask it. The project's accountId is the second source.
+          HOSTNAME="${URL#https://}"
+          api_get() {
+            curl -sS --max-time 30 -H "Authorization: Bearer ${VERCEL_TOKEN}" "$1" 2>/dev/null || true
+          }
+          QS_LIST=("")
+          if [[ "${VERCEL_ORG_ID:-}" == team_* ]]; then
+            QS_LIST+=("?teamId=${VERCEL_ORG_ID}")
+          fi
+
+          DEP_ID=""
+          OWNER_ID=""
+          for QS in "${QS_LIST[@]}"; do
+            DEP_JSON=$(api_get "https://api.vercel.com/v13/deployments/${HOSTNAME}${QS}")
+            DEP_ID=$(printf '%s' "${DEP_JSON}" | jq -r '.id // ""' 2>/dev/null || true)
+            OWNER_ID=$(printf '%s' "${DEP_JSON}" | jq -r '.ownerId // ""' 2>/dev/null || true)
+            if [ -n "${DEP_ID}" ] && [ -n "${OWNER_ID}" ]; then break; fi
+          done
+          if [ -z "${OWNER_ID}" ]; then
+            for QS in "${QS_LIST[@]}"; do
+              PROJECT_JSON=$(api_get "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}${QS}")
+              OWNER_ID=$(printf '%s' "${PROJECT_JSON}" | jq -r '.accountId // ""' 2>/dev/null || true)
+              if [ -n "${OWNER_ID}" ]; then break; fi
+            done
+          fi
+          if [ -z "${DEP_ID}" ]; then
+            DEP_ID=$(api_get "https://api.vercel.com/v13/deployments?url=${HOSTNAME}&projectId=${VERCEL_PROJECT_ID}&limit=1" \
+              | jq -r '.deployments[0].uid // ""' 2>/dev/null || true)
+          fi
+          if [[ ! "${OWNER_ID}" =~ ^[A-Za-z0-9_]+$ ]]; then OWNER_ID=""; fi
+
+          echo "id=${DEP_ID}" >> "$GITHUB_OUTPUT"
+          echo "owner=${OWNER_ID}" >> "$GITHUB_OUTPUT"
+          if [ -n "${DEP_ID}" ]; then
+            echo "🆔 Deployment ID: ${DEP_ID}"
+          else
+            echo "⚠️ Could not resolve deployment ID from Vercel API — id output will be empty."
+          fi
+
+          # --scope takes a team id only; a user id (personal account) is
+          # rejected by the CLI and needs no scope. When the lookup produced
+          # nothing, VERCEL_ORG_ID is the last resort, as before.
+          SCOPE_ARGS=()
+          if [[ "${OWNER_ID}" == team_* ]]; then
+            SCOPE_ARGS=(--scope "${OWNER_ID}")
+            echo "🏷️ Deployment owner: ${OWNER_ID}"
+          elif [ -z "${OWNER_ID}" ] && [[ "${VERCEL_ORG_ID:-}" == team_* ]]; then
+            SCOPE_ARGS=(--scope "${VERCEL_ORG_ID}")
+            echo "::warning::Could not resolve the deployment owner; using VERCEL_ORG_ID as the alias scope."
+          fi
 
           # Give a preview deploy a STABLE hostname.
           #
@@ -205,50 +312,84 @@ jobs:
           # suite has no address to point at — production works only because
           # --prod already lands on a fixed domain.
           #
-          # Never fails the deploy. The release succeeded; not being able to
-          # nickname it is a problem for the stage that wanted the nickname,
-          # and that stage reports it rather than retroactively failing a
-          # deployment that is live and serving.
-          #
-          # `vercel alias` is an account-level command: unlike deploy, it does
-          # not read the linked project, so without --scope it runs against the
-          # token owner's personal account and a team project's alias is
-          # refused ("Not authorized: Trying to access resource under scope").
-          # A personal-account project's org id is a user id, which --scope
-          # does not take, so only a team id is passed.
-          SCOPE_ARGS=()
-          if [[ "${VERCEL_ORG_ID:-}" == team_* ]]; then
-            SCOPE_ARGS=(--scope "${VERCEL_ORG_ID}")
-          fi
-          ALIAS="${{ inputs.branch-alias }}"
-          if [ -n "${ALIAS}" ] && [ "${{ inputs.environment }}" != "production" ]; then
-            if vercel alias set "${URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" "${SCOPE_ARGS[@]}" 2>&1; then
-              echo "alias=https://${ALIAS}" >> $GITHUB_OUTPUT
-              echo "🔗 Aliased to: https://${ALIAS}"
-            else
-              echo "::warning::Could not alias ${URL} to ${ALIAS}. The deploy is live; anything addressing it by the stable name will not find it."
+          # A failure to alias FAILS this step (require-branch-alias, default
+          # true). It used to be a warning, on the reasoning that the release
+          # itself had succeeded. But the verify stage tests the alias, and
+          # nothing else: a silent warning left every browser test running
+          # against a hostname Vercel answers with 404 DEPLOYMENT_NOT_FOUND
+          # while this job showed green. The deployment stays live either way;
+          # the error names it. A caller that really wants the old behaviour
+          # sets require-branch-alias: false.
+          alias_failed() {
+            local detail
+            detail=$(printf '%s' "$1" | tr '\r\n' '  ' | cut -c1-400)
+            if [ "${REQUIRE_BRANCH_ALIAS}" = "false" ]; then
+              echo "::warning::Could not publish https://${ALIAS}: ${detail}. The deployment is live at ${URL}; anything addressing it by the stable name will not find it."
+              return 0
             fi
-          fi
+            echo "::error::The UAT site the verify stage tests (https://${ALIAS}) could not be published: ${detail}. The deployment itself is live at ${URL}."
+            exit 1
+          }
 
-          # Fetch deployment ID from Vercel API using the deployment URL
-          HOSTNAME="${URL#https://}"
-          DEP_ID=$(curl -sS \
-            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-            "https://api.vercel.com/v13/deployments?url=${HOSTNAME}&projectId=${VERCEL_PROJECT_ID}&limit=1" \
-            | jq -r '.deployments[0].uid // ""' 2>/dev/null || true)
+          if [ -n "${ALIAS}" ] && [ "${DEPLOY_ENVIRONMENT}" != "production" ]; then
+            if [[ ! "${ALIAS}" =~ ^[A-Za-z0-9.-]+$ ]]; then
+              alias_failed "branch-alias '${ALIAS}' is not a valid hostname"
+            else
+              ALIAS_OK=false
+              ALIAS_OUT=""
+              for ATTEMPT in 1 2; do
+                if ALIAS_OUT=$(vercel alias set "${URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" "${SCOPE_ARGS[@]}" 2>&1); then
+                  ALIAS_OK=true
+                  break
+                fi
+                echo "vercel alias set failed (attempt ${ATTEMPT}): ${ALIAS_OUT}"
+                sleep "${RETRY_DELAY:-3}"
+              done
 
-          if [ -n "${DEP_ID}" ]; then
-            echo "id=${DEP_ID}" >> $GITHUB_OUTPUT
-            echo "🆔 Deployment ID: ${DEP_ID}"
-          else
-            echo "⚠️ Could not resolve deployment ID from Vercel API — id output will be empty."
-            echo "id=" >> $GITHUB_OUTPUT
+              if [ "${ALIAS_OK}" != "true" ]; then
+                alias_failed "vercel alias set failed: ${ALIAS_OUT}"
+              else
+                echo "${ALIAS_OUT}"
+
+                # Confirm the name really answers. A 404 carrying
+                # X-Vercel-Error: DEPLOYMENT_NOT_FOUND means Vercel does not
+                # route the hostname to any deployment, whatever alias set
+                # said. Allow a few seconds for propagation. Other statuses
+                # (401 from deployment protection, 200, an app 404) mean the
+                # name routes, so they pass; an unreachable host is inconclusive.
+                HDR_FILE="${RUNNER_TEMP}/alias-headers.txt"
+                ALIAS_LIVE=unknown
+                for CHECK in 1 2 3 4 5; do
+                  : > "${HDR_FILE}"
+                  CODE=$(curl -s -o /dev/null -D "${HDR_FILE}" -w '%{http_code}' --max-time 15 "https://${ALIAS}" || true)
+                  echo "🔎 https://${ALIAS} -> HTTP ${CODE:-000} (check ${CHECK}/5)"
+                  if [ "${CODE}" = "404" ] && grep -qi '^x-vercel-error:[[:space:]]*DEPLOYMENT_NOT_FOUND' "${HDR_FILE}"; then
+                    ALIAS_LIVE=false
+                    sleep "${RETRY_DELAY:-3}"
+                  else
+                    ALIAS_LIVE=true
+                    break
+                  fi
+                done
+
+                if [ "${ALIAS_LIVE}" = "false" ]; then
+                  alias_failed "alias set reported success but https://${ALIAS} still answers 404 DEPLOYMENT_NOT_FOUND"
+                else
+                  echo "alias=https://${ALIAS}" >> "$GITHUB_OUTPUT"
+                  echo "🔗 Aliased to: https://${ALIAS}"
+                fi
+              fi
+            fi
           fi
         working-directory: ${{ steps.prepare.outputs.deploy_dir }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          SYSTEM_NAME: ${{ inputs.system-name }}
+          ALIAS: ${{ inputs.branch-alias }}
+          REQUIRE_BRANCH_ALIAS: ${{ inputs.require-branch-alias }}
 
       - name: Cleanup previous branch preview deployments
         if: ${{ inputs.environment == 'preview' }}
@@ -256,12 +397,12 @@ jobs:
           set -euo pipefail
 
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          CURRENT_URL="${{ steps.deploy.outputs.url }}"
 
           if [ -z "${CURRENT_URL}" ]; then
             echo "⚠️ Current deployment URL is empty; skipping cleanup."
             exit 0
           fi
+          CURRENT_HOST="${CURRENT_URL#https://}"
 
           API_URL="https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&target=preview&meta-githubCommitRef=${BRANCH_NAME}&limit=100"
           RESPONSE=$(curl -sS -H "Authorization: Bearer ${VERCEL_TOKEN}" "${API_URL}")
@@ -271,12 +412,26 @@ jobs:
             exit 0
           fi
 
-          OLD_URLS=$(echo "${RESPONSE}" | jq -r --arg current "${CURRENT_URL}" '
+          # Safety: only delete when the deployment this run just made is
+          # itself in the list. If the recorded URL is not a real deployment of
+          # this branch (a mis-captured link, say), "everything that is not the
+          # current URL" would include the live deployment, so remove nothing.
+          if ! echo "${RESPONSE}" | jq -e --arg host "${CURRENT_HOST}" --arg id "${CURRENT_ID}" '
+              [.deployments[]?
+                | select((.url // "") == $host or ($id != "" and (.uid // "") == $id))
+              ] | length > 0
+            ' >/dev/null; then
+            echo "⚠️ Current deployment ${CURRENT_HOST} not found among this branch's deployments; skipping cleanup."
+            exit 0
+          fi
+
+          OLD_URLS=$(echo "${RESPONSE}" | jq -r --arg host "${CURRENT_HOST}" --arg id "${CURRENT_ID}" '
             [.deployments[]?
               | select((.state // "") == "READY")
               | select((.url // "") != "")
+              | select(.url != $host)
+              | select($id == "" or (.uid // "") != $id)
               | ("https://" + .url)
-              | select(. != $current)
             ] | unique | .[]
           ')
 
@@ -285,9 +440,12 @@ jobs:
             exit 0
           fi
 
-          # Same scope rule as the alias above: `vercel remove` is account-level.
+          # Same scope rule as the alias above: `vercel remove` is account-level,
+          # so use the deployment's own owner, falling back to the org id.
           SCOPE_ARGS=()
-          if [[ "${VERCEL_ORG_ID:-}" == team_* ]]; then
+          if [[ "${OWNER_ID}" == team_* ]]; then
+            SCOPE_ARGS=(--scope "${OWNER_ID}")
+          elif [ -z "${OWNER_ID}" ] && [[ "${VERCEL_ORG_ID:-}" == team_* ]]; then
             SCOPE_ARGS=(--scope "${VERCEL_ORG_ID}")
           fi
 
@@ -302,6 +460,9 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          CURRENT_URL: ${{ steps.deploy.outputs.url }}
+          CURRENT_ID: ${{ steps.deploy.outputs.id }}
+          OWNER_ID: ${{ steps.deploy.outputs.owner }}
 
       - name: Comment Deployment URL on PR
         if: ${{ github.event_name == 'pull_request' }}
