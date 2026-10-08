@@ -648,7 +648,7 @@ jobs:
 
             describe(test) {
               const titlePath = test.titlePath();
-              const project = clip(titlePath[1] || '', 300);
+              const project = clip(titlePath[1] || 'default', 100);
               let file = '';
               try {
                 const absolute = test.location && test.location.file ? test.location.file : '';
@@ -658,7 +658,7 @@ jobs:
               }
               const parts = titlePath.slice(3);
               const title = clip(parts.join(SEP), 300);
-              const id = clip([file].concat(parts).join(SEP), 300);
+              const id = clip([file].concat(parts).join(SEP), 300) || 'unnamed test';
               return { id: id, file: clip(file, 300), title: title, project: project };
             }
 
