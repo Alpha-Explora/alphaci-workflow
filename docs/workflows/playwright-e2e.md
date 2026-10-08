@@ -51,6 +51,60 @@ path and title joined with ` > `, flaky specs included, skipped specs and
 repeats from other browsers excluded), capped at 300. All five are empty when
 the suite wrote no Playwright JSON report.
 
+## Live test progress
+
+While Playwright runs, each browser leg streams one event per test to ALPHACI so
+QA Studio can show tests as they finish. There is no input to set: it is on when
+`alphaci-api-url` is a `http(s)://` origin **and** the secret `ALPHACI_TOKEN` is
+present (the same two the visual steps need, without `visual-baselines`). With
+either missing, nothing is added and the run is exactly what it was before.
+
+The workflow writes a small dependency-free reporter to
+`$RUNNER_TEMP/alphaci-live-reporter.cjs` (plain Node 18+, `fetch`) and the
+settings, including the token, to a private file in `$RUNNER_TEMP`, so the token
+is not in the environment of the processes the tests start. The reporter is
+added with the `--reporter` flag as `list,html,json,<reporter>`: that flag
+replaces the reporters a project's config lists, so the ones the workflow relies
+on (`list` console output, `html` for `playwright-report/`, and `json`, which
+feeds `tests-passes` and the other results through `json-report`) are named
+again. It is only added when the test command is a `playwright test` run (direct,
+or through an `npm run` / `npm test` script) that sets no `--reporter` of its own;
+anything else runs untouched with a notice. A project that relied on another
+config reporter (for example `junit`) should pass its own `--reporter` list,
+which turns live progress off for that run.
+
+`POST {alphaci-api-url}/api/v1/ci/playwright-progress`, `Authorization: Bearer
+<ALPHACI_TOKEN>`, JSON body (nothing else is sent):
+
+```json
+{ "repoFullName": "owner/repo", "branch": "<visual-branch, else PR base, else ref name>",
+  "runId": 123, "runAttempt": 1, "commitSha": "<checked-out HEAD>",
+  "events": [
+    { "type": "run_started", "at": "ISO", "total": 12 },
+    { "type": "test_started", "at": "ISO",
+      "test": { "id": "file > describe > title", "file": "tests/x.spec.ts", "title": "describe > title", "project": "chromium" } },
+    { "type": "test_finished", "at": "ISO",
+      "test": { "id": "...", "file": "...", "title": "...", "project": "...",
+                "status": "passed|failed|skipped|timedOut|interrupted",
+                "durationMs": 840, "retry": 0, "error": "first lines, ANSI stripped, 1000 chars max, or null" } },
+    { "type": "run_finished", "at": "ISO", "status": "passed|failed|timedout|interrupted",
+      "summary": { "passed": 0, "failed": 0, "skipped": 0, "flaky": 0, "durationMs": 0 } }
+  ] }
+```
+
+(The `>` in `id` and `title` is the `U+203A` separator Playwright prints.) Events
+are buffered and sent every ~2 seconds, at most 200 per request, in order, and
+once more when the run ends. A test that retries sends a `test_started` and a
+`test_finished` per attempt, with `retry` counting up. With a browser matrix each
+leg sends its own `run_started`/`run_finished` under the same `runId`; `project`
+tells the legs apart. Resending is safe: the server is idempotent.
+
+It is strictly best effort. Each request times out after 5 seconds and is
+retried twice on a network error, timeout, 5xx or 429 (other 4xx are not
+retried); a batch that still fails is dropped with a single `::warning::` per
+run. The reporter never throws, never changes the exit code, and the only wait it
+adds is one final flush bounded at 10 seconds.
+
 ## Visual baselines (opt-in)
 
 With `visual-baselines: true`, `alphaci-api-url` and the secret `ALPHACI_TOKEN`,

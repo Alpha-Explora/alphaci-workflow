@@ -104,7 +104,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "ALPHACI API origin used for visual baselines, e.g. https://alphaci.example.com (no trailing path)"
+        description: "ALPHACI API origin used for visual baselines and live test progress, e.g. https://alphaci.example.com (no trailing path)"
       visual-branch:
         required: false
         type: string
@@ -124,8 +124,9 @@ on:
       # config reads; optional, so unprotected hosts need nothing.
       VERCEL_AUTOMATION_BYPASS_SECRET:
         required: false
-      # Bearer token for the ALPHACI visual-baseline API. Only read when
-      # visual-baselines is true; it is never exposed to the test command.
+      # Bearer token for the ALPHACI APIs. Read when visual-baselines is true
+      # and, with alphaci-api-url, for live test progress. It is never passed
+      # to the test command as an environment variable.
       ALPHACI_TOKEN:
         required: false
     outputs:
@@ -468,6 +469,334 @@ jobs:
 
           echo "Downloaded ${COUNT} visual baseline(s) into ${SNAPSHOT_DIR}."
 
+      # Live test progress. Streams one event per test to ALPHACI while
+      # Playwright runs, so the product can show each test as it finishes. On
+      # only when alphaci-api-url is a http(s) origin AND the ALPHACI_TOKEN secret
+      # is present; otherwise nothing is written and the run is exactly what it
+      # was before. Fail-soft end to end: if this step fails the reporter is
+      # simply not added, and once added it never changes the exit code.
+      - name: Prepare live test progress reporter
+        id: live
+        continue-on-error: true
+        env:
+          API_URL: ${{ inputs.alphaci-api-url }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          BRANCH: ${{ steps.visual.outputs.branch }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${API_URL}" ] || [ -z "${ALPHACI_TOKEN}" ]; then
+            echo "Live test progress is off (alphaci-api-url or the ALPHACI_TOKEN secret is not set)."
+            exit 0
+          fi
+          if [ "${API_URL#http://}" = "${API_URL}" ] && [ "${API_URL#https://}" = "${API_URL}" ]; then
+            echo "::warning::alphaci-api-url must start with http:// or https://, so live test progress is skipped."
+            exit 0
+          fi
+
+          # Files are private to the runner user; the token goes in a file, not
+          # in the environment of every process the tests start.
+          umask 077
+          REPORTER="${RUNNER_TEMP}/alphaci-live-reporter.cjs"
+          SETTINGS="${RUNNER_TEMP}/alphaci-live.json"
+          COMMIT_SHA="$(git rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA}")"
+          export COMMIT_SHA SETTINGS
+
+          node - <<'NODE_EOF'
+          const fs = require('fs');
+          const env = process.env;
+          let origin = env.API_URL;
+          while (origin.endsWith('/')) origin = origin.slice(0, -1);
+          const settings = {
+            url: origin + '/api/v1/ci/playwright-progress',
+            token: env.ALPHACI_TOKEN,
+            repoFullName: env.GITHUB_REPOSITORY,
+            branch: env.BRANCH,
+            runId: Number(env.RUN_ID),
+            runAttempt: Number(env.RUN_ATTEMPT),
+            commitSha: env.COMMIT_SHA,
+          };
+          fs.writeFileSync(env.SETTINGS, JSON.stringify(settings), { mode: 0o600 });
+          NODE_EOF
+
+          cat > "${REPORTER}" <<'REPORTER_EOF'
+          'use strict';
+          // ALPHACI live progress reporter. Written by the playwright-e2e reusable
+          // workflow and added next to the project's own reporters. It streams one event
+          // per test to ALPHACI while Playwright runs. Best effort only: it never throws,
+          // never changes the exit code and never holds the run up beyond one bounded
+          // final flush.
+          const fs = require('fs');
+          const path = require('path');
+
+          const SEP = ' ' + String.fromCharCode(0x203a) + ' ';
+          const MAX_BATCH = 200;
+          const MAX_QUEUE = 5000;
+          const FLUSH_MS = 2000;
+          const POST_TIMEOUT_MS = 5000;
+          const RETRIES = 2;
+          const FINAL_FLUSH_MS = 10000;
+
+          function clip(value, max) {
+            const text = typeof value === 'string' ? value : String(value == null ? '' : value);
+            return text.length > max ? text.slice(0, max) : text;
+          }
+
+          // Removes terminal escape sequences (colours, cursor moves, OSC titles).
+          function stripAnsi(input) {
+            const text = String(input == null ? '' : input);
+            let out = '';
+            let i = 0;
+            while (i < text.length) {
+              if (text.charCodeAt(i) !== 27) {
+                out += text[i];
+                i += 1;
+                continue;
+              }
+              const next = text[i + 1];
+              if (next === '[') {
+                i += 2;
+                while (i < text.length) {
+                  const code = text.charCodeAt(i);
+                  i += 1;
+                  if (code >= 0x40 && code <= 0x7e) break;
+                }
+              } else if (next === ']') {
+                i += 2;
+                while (i < text.length) {
+                  const code = text.charCodeAt(i);
+                  i += 1;
+                  if (code === 7) break;
+                  if (code === 27) {
+                    i += 1;
+                    break;
+                  }
+                }
+              } else {
+                i += 2;
+              }
+            }
+            return out;
+          }
+
+          function sleep(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+          }
+
+          function withTimeout(promise, ms) {
+            let timer;
+            const limit = new Promise((resolve) => {
+              timer = setTimeout(resolve, ms);
+            });
+            return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+          }
+
+          function iso() {
+            return new Date().toISOString();
+          }
+
+          class AlphaciLiveReporter {
+            constructor() {
+              this.cfg = null;
+              this.queue = [];
+              this.draining = null;
+              this.timer = null;
+              this.warned = false;
+              this.suite = null;
+              this.rootDir = process.cwd();
+              this.startedAt = Date.now();
+              try {
+                const file = process.env.ALPHACI_LIVE_CONFIG;
+                if (file) {
+                  const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+                  if (parsed && typeof parsed.url === 'string' && typeof parsed.token === 'string') {
+                    this.cfg = parsed;
+                  }
+                }
+              } catch (error) {
+                this.cfg = null;
+              }
+            }
+
+            printsToStdio() {
+              return false;
+            }
+
+            warn(message) {
+              if (this.warned) return;
+              this.warned = true;
+              try {
+                console.log('::warning::ALPHACI live progress: ' + message + ' The test run is unaffected.');
+              } catch (error) {
+                // nothing to do
+              }
+            }
+
+            push(event) {
+              if (!this.cfg) return;
+              if (this.queue.length >= MAX_QUEUE) return;
+              this.queue.push(event);
+              if (!this.timer) {
+                this.timer = setInterval(() => {
+                  this.flush().catch(() => {});
+                }, FLUSH_MS);
+                if (this.timer.unref) this.timer.unref();
+              }
+            }
+
+            describe(test) {
+              const titlePath = test.titlePath();
+              const project = clip(titlePath[1] || 'default', 100);
+              let file = '';
+              try {
+                const absolute = test.location && test.location.file ? test.location.file : '';
+                file = absolute ? path.relative(this.rootDir, absolute).split(path.sep).join('/') : '';
+              } catch (error) {
+                file = '';
+              }
+              const parts = titlePath.slice(3);
+              const title = clip(parts.join(SEP), 300);
+              const id = clip([file].concat(parts).join(SEP), 300) || 'unnamed test';
+              return { id: id, file: clip(file, 300), title: title, project: project };
+            }
+
+            onBegin(config, suite) {
+              try {
+                this.suite = suite;
+                this.startedAt = Date.now();
+                if (config && config.configFile) this.rootDir = path.dirname(config.configFile);
+                else if (config && config.rootDir) this.rootDir = config.rootDir;
+                this.push({ type: 'run_started', at: iso(), total: suite.allTests().length });
+              } catch (error) {
+                // never throw into Playwright
+              }
+            }
+
+            onTestBegin(test) {
+              try {
+                this.push({ type: 'test_started', at: iso(), test: this.describe(test) });
+              } catch (error) {
+                // never throw into Playwright
+              }
+            }
+
+            onTestEnd(test, result) {
+              try {
+                const info = this.describe(test);
+                let message = null;
+                const first = result.error || (result.errors && result.errors[0]);
+                if (first && (first.message || first.value)) {
+                  message = clip(stripAnsi(first.message || first.value).trim(), 1000) || null;
+                }
+                info.status = result.status;
+                info.durationMs = Math.max(0, Math.round(result.duration || 0));
+                info.retry = Math.max(0, Math.round(result.retry || 0));
+                info.error = result.status === 'passed' || result.status === 'skipped' ? null : message;
+                this.push({ type: 'test_finished', at: iso(), test: info });
+              } catch (error) {
+                // never throw into Playwright
+              }
+            }
+
+            async onEnd(result) {
+              try {
+                const summary = { passed: 0, failed: 0, skipped: 0, flaky: 0, durationMs: 0 };
+                try {
+                  for (const test of this.suite.allTests()) {
+                    const outcome = test.outcome();
+                    if (outcome === 'expected') summary.passed += 1;
+                    else if (outcome === 'unexpected') summary.failed += 1;
+                    else if (outcome === 'flaky') summary.flaky += 1;
+                    else if (outcome === 'skipped') summary.skipped += 1;
+                  }
+                } catch (error) {
+                  // counts stay at zero
+                }
+                summary.durationMs = Math.max(0, Math.round((result && result.duration) || Date.now() - this.startedAt));
+                const known = ['passed', 'failed', 'timedout', 'interrupted'];
+                const status = result && known.indexOf(result.status) >= 0 ? result.status : 'failed';
+                this.push({ type: 'run_finished', at: iso(), status: status, summary: summary });
+                await withTimeout(this.flush(), FINAL_FLUSH_MS);
+              } catch (error) {
+                // never throw into Playwright
+              } finally {
+                if (this.timer) clearInterval(this.timer);
+                this.timer = null;
+              }
+            }
+
+            async flush() {
+              for (;;) {
+                if (!this.draining) {
+                  if (this.queue.length === 0) return;
+                  this.draining = this.drain()
+                    .catch(() => {})
+                    .then(() => {
+                      this.draining = null;
+                    });
+                }
+                await this.draining;
+              }
+            }
+
+            async drain() {
+              while (this.queue.length > 0) {
+                const batch = this.queue.splice(0, MAX_BATCH);
+                await this.send(batch);
+              }
+            }
+
+            async send(events) {
+              const cfg = this.cfg;
+              const body = JSON.stringify({
+                repoFullName: cfg.repoFullName,
+                branch: cfg.branch,
+                runId: cfg.runId,
+                runAttempt: cfg.runAttempt,
+                commitSha: cfg.commitSha,
+                events: events,
+              });
+              let reason = 'unknown error.';
+              for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
+                if (attempt > 0) await sleep(300 * attempt);
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
+                try {
+                  const response = await fetch(cfg.url, {
+                    method: 'POST',
+                    headers: { Authorization: 'Bearer ' + cfg.token, 'Content-Type': 'application/json' },
+                    body: body,
+                    signal: controller.signal,
+                  });
+                  clearTimeout(timer);
+                  try {
+                    if (response.body) await response.body.cancel();
+                  } catch (error) {
+                    // body already consumed or closed
+                  }
+                  if (response.status >= 200 && response.status < 300) return true;
+                  reason = 'the API answered HTTP ' + response.status + '.';
+                  if (response.status >= 400 && response.status < 500 && response.status !== 429) break;
+                } catch (error) {
+                  clearTimeout(timer);
+                  reason = error && error.name === 'AbortError' ? 'the API did not answer in time.' : 'the API could not be reached.';
+                }
+              }
+              this.warn('some live test events were not delivered because ' + reason);
+              return false;
+            }
+          }
+
+          module.exports = AlphaciLiveReporter;
+          REPORTER_EOF
+
+          node --check "${REPORTER}" || { echo "::warning::The live progress reporter did not validate, so it is skipped."; exit 0; }
+          echo "reporter=${REPORTER}" >> "$GITHUB_OUTPUT"
+          echo "settings=${SETTINGS}" >> "$GITHUB_OUTPUT"
+          echo "Live test progress is on."
+
       - name: Run Playwright E2E
         id: run-e2e
         env:
@@ -485,6 +814,9 @@ jobs:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           # Empty unless visual baselines are on and Playwright is 1.50+.
           VISUAL_UPDATE_FLAG: ${{ steps.visual-version.outputs.flag }}
+          # Set only when live test progress is on (see the step above).
+          ALPHACI_LIVE_REPORTER: ${{ steps.live.outputs.reporter }}
+          ALPHACI_LIVE_CONFIG: ${{ steps.live.outputs.settings }}
         run: |
           # Substitute {browser} placeholder using env var â€” avoids eval on raw input
           CMD="${E2E_TEST_CMD//\{browser\}/${E2E_BROWSER}}"
@@ -500,6 +832,39 @@ jobs:
               "npm run "*|"npm run-script "*|"npm test"*|"npm t "*) CMD="${CMD} -- ${VISUAL_UPDATE_FLAG}" ;;
               *) CMD="${CMD} ${VISUAL_UPDATE_FLAG}" ;;
             esac
+          fi
+          # Live test progress: add the ALPHACI reporter next to the project's
+          # own. Playwright's --reporter replaces the configured list, so the
+          # ones this workflow and its artifacts rely on are named again: list
+          # (console), html (playwright-report/) and json (read in finalize via
+          # PLAYWRIGHT_JSON_OUTPUT_NAME). It is only added when the command is
+          # demonstrably `playwright test` (directly or through an npm script)
+          # and sets no --reporter of its own; otherwise it is skipped and the
+          # command runs untouched.
+          if [ -n "${ALPHACI_LIVE_REPORTER}" ]; then
+            if E2E_CMD="${CMD}" node -e "
+              const cmd = process.env.E2E_CMD;
+              let body = cmd;
+              const run = /^npm (run|run-script) ([^ ]+)/.exec(cmd);
+              const test = ['npm test', 'npm t'].some((c) => cmd === c || cmd.startsWith(c + ' '));
+              const name = run ? run[2] : test ? 'test' : '';
+              if (name) {
+                try { body = require(process.cwd() + '/package.json').scripts[name] || ''; } catch (e) { body = ''; }
+              }
+              process.exit(/playwright/.test(body) && !body.includes('--reporter') && !cmd.includes('--reporter') ? 0 : 1);
+            "; then
+              LIVE_FLAG="--reporter=list,html,json,${ALPHACI_LIVE_REPORTER}"
+              export PLAYWRIGHT_HTML_OPEN=never
+              case "${CMD}" in
+                *" -- "*) CMD="${CMD} ${LIVE_FLAG}" ;;
+                "npm run "*|"npm run-script "*|"npm test"*|"npm t "*) CMD="${CMD} -- ${LIVE_FLAG}" ;;
+                *) CMD="${CMD} ${LIVE_FLAG}" ;;
+              esac
+              echo "Live test progress: streaming to ALPHACI."
+            else
+              echo "::notice::Live test progress skipped: the test command is not a plain 'playwright test' run, or it sets its own --reporter."
+              unset ALPHACI_LIVE_CONFIG
+            fi
           fi
           bash -c "${CMD}"
 
