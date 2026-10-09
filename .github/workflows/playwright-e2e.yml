@@ -150,6 +150,9 @@ on:
       tests-failures:
         description: "JSON array of {name,message} for the failed tests, capped"
         value: ${{ jobs.finalize.outputs.tests-failures }}
+      tests-cases:
+        description: "Every test with what it checks (its description annotation), notes, top-level steps, duration, retries and full error, failures first, at most 50, as a JSON array"
+        value: ${{ jobs.finalize.outputs.tests-cases }}
       tests-passes:
         description: "JSON array of the full names of the passed tests (suite path and title joined with ' > '), capped at 300"
         value: ${{ jobs.finalize.outputs.tests-passes }}
@@ -1052,6 +1055,7 @@ jobs:
       tests-failed: ${{ steps.summary.outputs.tests-failed }}
       tests-failures: ${{ steps.summary.outputs.tests-failures }}
       tests-passes: ${{ steps.summary.outputs.tests-passes }}
+      tests-cases: ${{ steps.summary.outputs.tests-cases }}
     steps:
       - name: Download E2E JSON reports
         if: ${{ always() }}
@@ -1083,19 +1087,99 @@ jobs:
           python3 - > "${SUMMARY_FILE}" <<'PYEOF'
           import glob, json, os
 
+          import re
+
           total = passed = failed = 0
           failures = []
           passes = []
           seen_passes = set()
+          cases = []
           found = False
+          ANSI = re.compile(r"\x1b\[[0-9;]*m")
+          CASE_STATUS = {"expected": "passed", "unexpected": "failed", "flaky": "flaky", "skipped": "skipped"}
 
-          def walk(suite, trail):
+          # The project's own directory on the runner, as written in the
+          # report. Removed from error text, which otherwise ends with an
+          # absolute path like /home/runner/work/<repo>/<repo>/tests/...
+          ROOTS = []
+
+          def clean(text, limit):
+              """Strip colour codes and runner paths, keep line breaks, trim."""
+              text = ANSI.sub("", text or "")
+              for root in ROOTS:
+                  text = text.replace(root, "")
+              return text.strip()[:limit]
+
+          def case_of(spec, test, name, test_dir):
+              """One test as a person reads it: what, what it checks, how it ended."""
+              results = test.get("results") or []
+              last = results[-1] if results else {}
+              annotations = list(test.get("annotations") or []) + list(last.get("annotations") or [])
+              description = ""
+              notes = []
+              seen_notes = set()
+              for annotation in annotations:
+                  kind = str(annotation.get("type") or "").strip()
+                  text = clean(str(annotation.get("description") or ""), 1000)
+                  if not kind or not text:
+                      continue
+                  if kind.lower() == "description":
+                      description = description or text
+                  elif (kind, text) not in seen_notes and len(notes) < 10:
+                      seen_notes.add((kind, text))
+                      notes.append({"type": kind[:40], "text": text})
+              steps = []
+              for step in last.get("steps") or []:
+                  title = clean(str(step.get("title") or ""), 300)
+                  if not title or title in ("Before Hooks", "After Hooks"):
+                      continue
+                  entry = {"title": title, "durationMs": max(0, int(step.get("duration") or 0))}
+                  if step.get("error"):
+                      entry["failed"] = True
+                  steps.append(entry)
+                  if len(steps) >= 20:
+                      break
+              case = {
+                  "title": name[:500],
+                  "status": CASE_STATUS.get(test.get("status"), "failed"),
+                  "durationMs": max(0, int(last.get("duration") or 0)),
+              }
+              file_name = spec.get("file") or ""
+              if file_name:
+                  case["file"] = (test_dir + "/" + file_name if test_dir else file_name)[:300]
+              if isinstance(spec.get("line"), int):
+                  case["line"] = spec["line"]
+              if test.get("projectName"):
+                  case["project"] = str(test["projectName"])[:60]
+              if len(results) > 1:
+                  case["retries"] = len(results) - 1
+              if description:
+                  case["description"] = description
+              if notes:
+                  case["notes"] = notes
+              if steps:
+                  case["steps"] = steps
+              errors = last.get("errors") or ([last["error"]] if last.get("error") else [])
+              if errors and case["status"] in ("failed", "flaky"):
+                  first = errors[0] or {}
+                  error = {"message": clean(first.get("message") or first.get("value") or "", 4000)}
+                  where = first.get("location") or {}
+                  if where.get("line") and case.get("file"):
+                      error["location"] = case["file"] + ":" + str(where["line"])
+                  if error["message"]:
+                      case["error"] = error
+              return case
+
+          def walk(suite, trail, test_dir):
               """Collect failed specs, depth-first, keeping the suite path."""
               global failed
               title = suite.get("title") or ""
               here = trail + [title] if title else trail
 
               for spec in suite.get("specs") or []:
+                  spec_name = " > ".join(here + [spec.get("title") or "unknown"])
+                  for test in spec.get("tests") or []:
+                      cases.append(case_of(spec, test, spec_name, test_dir))
                   if spec.get("ok") is True:
                       # `ok` is also true for a skipped spec, which did not
                       # pass, so it needs at least one test that actually ran.
@@ -1124,7 +1208,7 @@ jobs:
                   failures.append({"name": name, "message": message})
 
               for child in suite.get("suites") or []:
-                  walk(child, here)
+                  walk(child, here, test_dir)
 
           for path in sorted(glob.glob("e2e-json/**/*.json", recursive=True)):
               try:
@@ -1153,8 +1237,24 @@ jobs:
               failed += unexpected
               total += expected + flaky + unexpected + skipped
 
+              # Paths relative to the project, e.g. tests/e2e/home.e2e-spec.ts,
+              # not to Playwright's testDir or the runner's checkout.
+              # Playwright's `rootDir` is the test folder itself, so the project
+              # root is where the config file lives.
+              config = report.get("config") or {}
+              config_file = str(config.get("configFile") or "").replace("\\", "/")
+              project_root = config_file.rsplit("/", 1)[0] if "/" in config_file else ""
+              projects = config.get("projects") or []
+              test_dir = ""
+              if project_root and projects and projects[0].get("testDir"):
+                  raw_dir = str(projects[0]["testDir"]).replace("\\", "/")
+                  if raw_dir.startswith(project_root + "/"):
+                      test_dir = raw_dir[len(project_root) + 1:]
+              if project_root:
+                  ROOTS[:] = [project_root + "/", project_root.replace("/", "\\") + "\\"]
+
               for suite in report.get("suites") or []:
-                  walk(suite, [])
+                  walk(suite, [], test_dir)
 
           if found:
               print(f"tests-total={total}")
@@ -1164,6 +1264,27 @@ jobs:
               # Capped at 300 names: GITHUB_OUTPUT and job outputs are size
               # limited, and a product page has no use for more rows than that.
               print("tests-passes=" + json.dumps(passes[:300], separators=(",", ":")))
+
+              # Failures first, then retried, passed and skipped; at most 50. The
+              # report job reads this through an environment variable, which
+              # Linux caps near 128 KB, so the error text is shortened until
+              # the list fits well under that.
+              order = {"failed": 0, "flaky": 1, "passed": 2, "skipped": 3}
+              listed = sorted(cases, key=lambda case: order.get(case["status"], 4))[:50]
+              encoded = json.dumps(listed, separators=(",", ":"))
+              for limit in (1500, 500, 200):
+                  if len(encoded) <= 90000:
+                      break
+                  for case in listed:
+                      if "error" in case:
+                          case["error"]["message"] = case["error"]["message"][:limit]
+                  encoded = json.dumps(listed, separators=(",", ":"))
+              if len(encoded) > 90000:
+                  for case in listed:
+                      case.pop("steps", None)
+                      case.pop("notes", None)
+                  encoded = json.dumps(listed, separators=(",", ":"))
+              print("tests-cases=" + encoded)
           else:
               print("::notice::No Playwright JSON report was produced, so the "
                     "run reports pass/fail only. Add ['json'] to the reporter "
