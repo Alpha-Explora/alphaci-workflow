@@ -63,6 +63,18 @@ on:
       quality-gate-status:
         description: "SonarCloud quality gate status"
         value: ${{ jobs.sonarcloud-scan.outputs.status }}
+      gate-status:
+        description: "SonarCloud quality gate: OK, ERROR, or UNKNOWN when it could not be read"
+        value: ${{ jobs.sonarcloud-scan.outputs.gate-status }}
+      failed-conditions:
+        description: "Quality-gate conditions that failed, each with its actual value and threshold"
+        value: ${{ jobs.sonarcloud-scan.outputs.failed-conditions }}
+      measures:
+        description: "Bugs, vulnerabilities, code smells, hotspots, coverage and duplication as reported by SonarCloud"
+        value: ${{ jobs.sonarcloud-scan.outputs.measures }}
+      issues:
+        description: "The most severe open issues on new code (rule, severity, message, file, line), at most 20"
+        value: ${{ jobs.sonarcloud-scan.outputs.issues }}
 
 permissions:
   contents: read
@@ -74,6 +86,10 @@ jobs:
     timeout-minutes: 30
     outputs:
       status: ${{ steps.quality-gate.outputs.status }}
+      gate-status: ${{ steps.findings.outputs.gate-status }}
+      failed-conditions: ${{ steps.findings.outputs.failed-conditions }}
+      measures: ${{ steps.findings.outputs.measures }}
+      issues: ${{ steps.findings.outputs.issues }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -115,6 +131,7 @@ jobs:
           echo "✅ SonarCloud preflight passed."
 
       - name: Run SonarCloud Scan
+        id: scan
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -131,6 +148,120 @@ jobs:
             -Dsonar.qualitygate.wait=${{ inputs.quality-gate-wait }}
             -Dsonar.pullrequest.provider=GitHub
             -Dsonar.pullrequest.github.repository=${{ github.repository }}
+
+      # Bring the findings back, so nobody has to open SonarCloud to learn what
+      # it said: the gate, each failed condition with its value and threshold,
+      # the headline measures, and the most severe issues on new code with
+      # their file and line.
+      #
+      # The analysis is processed by SonarCloud after the scanner exits, so the
+      # project's gate read straight away can still be the PREVIOUS analysis.
+      # The scanner leaves its task id in report-task.txt; this waits for that
+      # task and reads the gate of exactly that analysis.
+      #
+      # Read-only and never allowed to fail the job: it reports what the
+      # analysis found, it does not decide anything. Outputs that cannot be
+      # read are left empty, and ALPHACI then leaves them out.
+      - name: Collect Findings
+        id: findings
+        if: always() && steps.scan.conclusion != 'skipped'
+        continue-on-error: true
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${SONAR_TOKEN}" ] || [ -z "${SONAR_PROJECT_KEY}" ]; then
+            echo "No SonarCloud credentials; nothing to collect."
+            exit 0
+          fi
+
+          api() {
+            curl -sf --max-time 20 \
+              -H "Authorization: Bearer ${SONAR_TOKEN}" \
+              "https://sonarcloud.io/api/$1" 2>/dev/null
+          }
+
+          # Which analysis, and which branch it was for.
+          TASK_FILE=".scannerwork/report-task.txt"
+          CE_TASK_ID=""
+          BRANCH_PARAM=""
+          if [ -f "${TASK_FILE}" ]; then
+            CE_TASK_ID="$(sed -n 's/^ceTaskId=//p' "${TASK_FILE}" | head -n 1)"
+            DASHBOARD="$(sed -n 's/^dashboardUrl=//p' "${TASK_FILE}" | head -n 1)"
+            BRANCH="$(printf '%s' "${DASHBOARD}" | sed -n 's/.*[?&]branch=\([^&]*\).*/\1/p')"
+            if [ -n "${BRANCH}" ]; then
+              BRANCH_PARAM="&branch=${BRANCH}"
+            fi
+          fi
+
+          # Wait for SonarCloud to finish processing this analysis (at most
+          # about two minutes), then read the gate of that analysis.
+          ANALYSIS_ID=""
+          if [ -n "${CE_TASK_ID}" ]; then
+            for _ in $(seq 1 24); do
+              task_json="$(api "ce/task?id=${CE_TASK_ID}")" || task_json=""
+              task_status="$(printf '%s' "${task_json}" | jq -r '.task.status // empty' 2>/dev/null || true)"
+              if [ "${task_status}" = "SUCCESS" ]; then
+                ANALYSIS_ID="$(printf '%s' "${task_json}" | jq -r '.task.analysisId // empty' 2>/dev/null || true)"
+                break
+              fi
+              if [ "${task_status}" = "FAILED" ] || [ "${task_status}" = "CANCELED" ]; then
+                break
+              fi
+              sleep 5
+            done
+          fi
+
+          if [ -n "${ANALYSIS_ID}" ]; then
+            gate_json="$(api "qualitygates/project_status?analysisId=${ANALYSIS_ID}")" || gate_json=""
+          else
+            gate_json="$(api "qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}${BRANCH_PARAM}")" || gate_json=""
+          fi
+          gate_status="$(printf '%s' "${gate_json}" | jq -r '.projectStatus.status // "UNKNOWN"' 2>/dev/null || echo UNKNOWN)"
+
+          conditions="$(printf '%s' "${gate_json}" | jq -c '
+            [.projectStatus.conditions[]?
+             | select(.status == "ERROR" or .status == "WARN")
+             | {metric: .metricKey, status: .status, actual: .actualValue, threshold: .errorThreshold}]
+          ' 2>/dev/null || printf '[]')"
+
+          measures_json="$(api "measures/component?component=${SONAR_PROJECT_KEY}${BRANCH_PARAM}&metricKeys=bugs,vulnerabilities,code_smells,security_hotspots,coverage,duplicated_lines_density,new_coverage,new_duplicated_lines_density")" || measures_json=""
+          measures="$(printf '%s' "${measures_json}" | jq -c '
+            [.component.measures[]?
+             | {(.metric): (.value // .period.value // (.periods[0].value))}
+             | with_entries(select(.value != null))]
+            | add // {}
+          ' 2>/dev/null || printf '{}')"
+
+          # The most severe open issues on new code. `component` is
+          # "<projectKey>:<path>", so the path is everything after the first colon.
+          issues_json="$(api "issues/search?componentKeys=${SONAR_PROJECT_KEY}${BRANCH_PARAM}&resolved=false&inNewCodePeriod=true&ps=20&s=SEVERITY&asc=false")" || issues_json=""
+          issues="$(printf '%s' "${issues_json}" | jq -c '
+            [.issues[]?
+             | {rule: .rule,
+                severity: (.severity // ""),
+                type: (.type // ""),
+                message: ((.message // "")[0:1000]),
+                file: ((.component // "") | split(":") | .[1:] | join(":")),
+                line: .line}
+             | with_entries(select(.value != null and .value != ""))]
+            | .[0:20]
+          ' 2>/dev/null || printf '[]')"
+
+          {
+            echo "gate-status=${gate_status}"
+            echo "failed-conditions=${conditions:-[]}"
+            echo "measures=${measures:-{\}}"
+            echo "issues=${issues:-[]}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Quality gate: ${gate_status}${ANALYSIS_ID:+ (analysis ${ANALYSIS_ID})}"
+          printf '%s' "${conditions}" | jq -r '.[]? | "  failed: \(.metric) \(.actual) (threshold \(.threshold))"' 2>/dev/null || true
+          printf '%s' "${measures}" | jq -r 'to_entries[]? | "  \(.key): \(.value)"' 2>/dev/null || true
+          printf '%s' "${issues}" | jq -r '.[]? | "  \(.severity) \(.file):\(.line // "-") \(.message)"' 2>/dev/null || true
 
       - name: Check Quality Gate
         id: quality-gate

@@ -84,6 +84,9 @@ on:
       measures:
         description: "Bugs, vulnerabilities, code smells, hotspots, coverage and duplication as reported by SonarCloud"
         value: ${{ jobs.sonarcloud-dotnet.outputs.measures }}
+      issues:
+        description: "The most severe open issues on new code (rule, severity, message, file, line), at most 20"
+        value: ${{ jobs.sonarcloud-dotnet.outputs.issues }}
     secrets:
       SONAR_TOKEN:
         required: false
@@ -106,6 +109,7 @@ jobs:
       gate-status: ${{ steps.findings.outputs.gate-status }}
       failed-conditions: ${{ steps.findings.outputs.failed-conditions }}
       measures: ${{ steps.findings.outputs.measures }}
+      issues: ${{ steps.findings.outputs.issues }}
     defaults:
       run:
         working-directory: ./${{ inputs.working-directory }}
@@ -354,10 +358,26 @@ jobs:
             [.component.measures[]? | {(.metric): .value}] | add // {}
           ' 2>/dev/null || printf '{}')"
 
+          # The most severe open issues on new code, so a developer gets the
+          # file and line to fix. `component` is "<projectKey>:<path>".
+          issues_json="$(api "issues/search?componentKeys=${SONAR_PROJECT_KEY}&resolved=false&inNewCodePeriod=true&ps=20&s=SEVERITY&asc=false")" || issues_json=""
+          issues="$(printf '%s' "${issues_json}" | jq -c '
+            [.issues[]?
+             | {rule: .rule,
+                severity: (.severity // ""),
+                type: (.type // ""),
+                message: ((.message // "")[0:1000]),
+                file: ((.component // "") | split(":") | .[1:] | join(":")),
+                line: .line}
+             | with_entries(select(.value != null and .value != ""))]
+            | .[0:20]
+          ' 2>/dev/null || printf '[]')"
+
           {
             echo "gate-status=${gate_status}"
             echo "failed-conditions=${conditions:-[]}"
             echo "measures=${measures:-{\}}"
+            echo "issues=${issues:-[]}"
           } >> "$GITHUB_OUTPUT"
 
           echo "Quality gate: ${gate_status}"
