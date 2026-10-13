@@ -317,6 +317,15 @@ jobs:
       # Both endpoints are documented Web API v1 and take the same token the
       # scan already holds. Read-only, and never allowed to fail the job: this
       # step reports what the analysis found, it does not decide anything.
+      #
+      # It reads the gate of THIS analysis. SonarCloud processes the report
+      # after the scanner exits, so the project's gate read straight away is
+      # the PREVIOUS analysis (or, when the scan never reached SonarCloud, one
+      # SonarCloud made on its own). That is how a run whose scanner printed
+      # "QUALITY GATE STATUS: FAILED" was reported here as OK. The scanner
+      # leaves its compute-engine task in report-task.txt; this waits for that
+      # task and asks for the gate by the analysis id it produced. With no
+      # task there is no analysis, and the gate is UNKNOWN rather than a guess.
       - name: Collect Findings
         id: findings
         if: always() && steps.scan.conclusion != 'skipped'
@@ -338,12 +347,86 @@ jobs:
               "https://sonarcloud.io/api/$1" 2>/dev/null
           }
 
+          # Which analysis this run produced, and which branch or pull request
+          # it was for. The .NET scanner writes report-task.txt under its own
+          # output directory, relative to where `begin` ran.
+          TASK_FILE=".sonarqube/out/.sonar/report-task.txt"
+          if [ ! -f "${TASK_FILE}" ]; then
+            found="$(find . -maxdepth 5 -path '*.sonarqube*' -name report-task.txt 2>/dev/null | head -n 1)"
+            if [ -n "${found}" ]; then
+              TASK_FILE="${found}"
+            fi
+          fi
+
+          CE_TASK_ID=""
+          SCOPE_PARAM=""
+          if [ -f "${TASK_FILE}" ]; then
+            CE_TASK_ID="$(tr -d '\r' < "${TASK_FILE}" | sed -n 's/^ceTaskId=//p' | head -n 1)"
+            if [ -z "${CE_TASK_ID}" ]; then
+              CE_TASK_ID="$(tr -d '\r' < "${TASK_FILE}" | sed -n 's/^ceTaskUrl=.*[?&]id=\([^&]*\).*/\1/p' | head -n 1)"
+            fi
+            DASHBOARD="$(tr -d '\r' < "${TASK_FILE}" | sed -n 's/^dashboardUrl=//p' | head -n 1)"
+            BRANCH="$(printf '%s' "${DASHBOARD}" | sed -n 's/.*[?&]branch=\([^&]*\).*/\1/p')"
+            PULL_REQUEST="$(printf '%s' "${DASHBOARD}" | sed -n 's/.*[?&]pullRequest=\([^&]*\).*/\1/p')"
+            if [ -n "${PULL_REQUEST}" ]; then
+              SCOPE_PARAM="&pullRequest=${PULL_REQUEST}"
+            elif [ -n "${BRANCH}" ]; then
+              SCOPE_PARAM="&branch=${BRANCH}"
+            fi
+          fi
+
+          # No task means the scan never reached SonarCloud (Automatic
+          # Analysis in the way, a rejected token, a failed build). Whatever the
+          # project's gate says now was not produced by this run, so it is not
+          # read at all: reporting it blames the code for an analysis that
+          # never happened.
+          if [ -z "${CE_TASK_ID}" ]; then
+            {
+              echo "gate-status=UNKNOWN"
+              echo "failed-conditions=[]"
+              echo "measures={}"
+              echo "issues=[]"
+            } >> "$GITHUB_OUTPUT"
+            echo "Quality gate: UNKNOWN (no report-task.txt, so this run produced no analysis to read)"
+            exit 0
+          fi
+
+          # Wait for SonarCloud to finish processing this analysis (at most
+          # about three minutes; with quality-gate-wait it is already done),
+          # then read the gate of that analysis.
+          ANALYSIS_ID=""
+          for _ in $(seq 1 36); do
+            task_json="$(api "ce/task?id=${CE_TASK_ID}")" || task_json=""
+            task_status="$(printf '%s' "${task_json}" | jq -r '.task.status // empty' 2>/dev/null || true)"
+            if [ "${task_status}" = "SUCCESS" ]; then
+              ANALYSIS_ID="$(printf '%s' "${task_json}" | jq -r '.task.analysisId // empty' 2>/dev/null || true)"
+              break
+            fi
+            if [ "${task_status}" = "FAILED" ] || [ "${task_status}" = "CANCELED" ]; then
+              break
+            fi
+            sleep 5
+          done
+
           # The gate, and the conditions behind it. `project_status` names each
           # condition with its actual value and its threshold, which is the
           # difference between "quality gate failed" and "coverage 61.2% is
           # below the required 80%".
-          gate_json="$(api "qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}")"
+          #
+          # By analysis id when the task finished. Otherwise scoped to the
+          # branch or pull request the scanner reported, and never the bare
+          # project key: that is the project's default-branch gate, which is
+          # not this run's.
+          gate_json=""
+          if [ -n "${ANALYSIS_ID}" ]; then
+            gate_json="$(api "qualitygates/project_status?analysisId=${ANALYSIS_ID}")" || gate_json=""
+          elif [ -n "${SCOPE_PARAM}" ]; then
+            gate_json="$(api "qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}${SCOPE_PARAM}")" || gate_json=""
+          fi
           gate_status="$(printf '%s' "${gate_json}" | jq -r '.projectStatus.status // "UNKNOWN"' 2>/dev/null || echo UNKNOWN)"
+          if [ -z "${gate_status}" ]; then
+            gate_status="UNKNOWN"
+          fi
 
           conditions="$(printf '%s' "${gate_json}" | jq -c '
             [.projectStatus.conditions[]?
@@ -353,14 +436,14 @@ jobs:
 
           # The counts a reader wants first. Requested in one call; a metric the
           # plan does not expose simply comes back absent rather than failing.
-          measures_json="$(api "measures/component?component=${SONAR_PROJECT_KEY}&metricKeys=bugs,vulnerabilities,code_smells,security_hotspots,coverage,duplicated_lines_density")"
+          measures_json="$(api "measures/component?component=${SONAR_PROJECT_KEY}${SCOPE_PARAM}&metricKeys=bugs,vulnerabilities,code_smells,security_hotspots,coverage,duplicated_lines_density")" || measures_json=""
           measures="$(printf '%s' "${measures_json}" | jq -c '
             [.component.measures[]? | {(.metric): .value}] | add // {}
           ' 2>/dev/null || printf '{}')"
 
           # The most severe open issues on new code, so a developer gets the
           # file and line to fix. `component` is "<projectKey>:<path>".
-          issues_json="$(api "issues/search?componentKeys=${SONAR_PROJECT_KEY}&resolved=false&inNewCodePeriod=true&ps=20&s=SEVERITY&asc=false")" || issues_json=""
+          issues_json="$(api "issues/search?componentKeys=${SONAR_PROJECT_KEY}${SCOPE_PARAM}&resolved=false&inNewCodePeriod=true&ps=20&s=SEVERITY&asc=false")" || issues_json=""
           issues="$(printf '%s' "${issues_json}" | jq -c '
             [.issues[]?
              | {rule: .rule,
@@ -380,6 +463,6 @@ jobs:
             echo "issues=${issues:-[]}"
           } >> "$GITHUB_OUTPUT"
 
-          echo "Quality gate: ${gate_status}"
+          echo "Quality gate: ${gate_status}${ANALYSIS_ID:+ (analysis ${ANALYSIS_ID})}"
           printf '%s' "${conditions}" | jq -r '.[]? | "  \(.metric): \(.actual) (threshold \(.threshold))"' 2>/dev/null || true
           printf '%s' "${measures}" | jq -r 'to_entries[]? | "  \(.key): \(.value)"' 2>/dev/null || true
