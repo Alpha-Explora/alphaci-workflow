@@ -28,6 +28,21 @@ on:
         required: true
         type: string
         description: "Commit being released. A workflow_run chain reports the default branch in github.sha, so this must be passed explicitly"
+      environment-id:
+        required: false
+        type: string
+        default: ""
+        description: "Stable AlphaCI environment ID; when set, environment-name and target-id are also required"
+      environment-name:
+        required: false
+        type: string
+        default: ""
+        description: "Caller-validated protected GitHub Environment name for this release target"
+      target-id:
+        required: false
+        type: string
+        default: ""
+        description: "Stable AlphaCI deployment target ID; never inferred from branch"
       artifact:
         required: false
         type: string
@@ -102,7 +117,7 @@ permissions:
 # cancel-in-progress: cancelling half way through leaves the host mid-rollout
 # with nothing watching it.
 concurrency:
-  group: alphaci-release-${{ inputs.system-name || github.repository }}-${{ inputs.slot }}-${{ inputs.branch }}
+  group: alphaci-release-${{ inputs.system-name || github.repository }}-${{ inputs.slot }}-${{ inputs.target-id || inputs.branch }}
   cancel-in-progress: false
 
 jobs:
@@ -110,6 +125,7 @@ jobs:
     name: "Release ${{ inputs.slot }} (${{ inputs.branch }})"
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: ${{ inputs.environment-id != '' && inputs.environment-name || null }}
     outputs:
       release_id: ${{ steps.request.outputs.release_id }}
       release_status: ${{ steps.wait.outputs.release_status }}
@@ -156,6 +172,48 @@ jobs:
 
           echo "base=${base}" >> "$GITHUB_OUTPUT"
 
+      - name: Validate deployment identity
+        id: target
+        env:
+          ENVIRONMENT_ID: ${{ inputs.environment-id }}
+          ENVIRONMENT_NAME: ${{ inputs.environment-name }}
+          TARGET_ID: ${{ inputs.target-id }}
+          COMMIT_SHA: ${{ inputs.commit-sha }}
+          ARTIFACT: ${{ inputs.artifact }}
+        run: |
+          set -euo pipefail
+          any_id=false
+          for value in "${ENVIRONMENT_ID}" "${ENVIRONMENT_NAME}" "${TARGET_ID}"; do
+            if [ -n "${value}" ]; then any_id=true; fi
+          done
+          if [ "${any_id}" = "true" ]; then
+            if [ -z "${ENVIRONMENT_ID}" ] || [ -z "${ENVIRONMENT_NAME}" ] || [ -z "${TARGET_ID}" ]; then
+              echo "::error::environment-id, environment-name, and target-id must be supplied together."
+              exit 1
+            fi
+            for value in "${ENVIRONMENT_ID}" "${ENVIRONMENT_NAME}" "${TARGET_ID}"; do
+              case "${value}" in *$'\n'*|*$'\r'*)
+                echo "::error::Environment and target identifiers must be single-line values."
+                exit 1
+                ;;
+              esac
+            done
+            if ! printf '%s' "${COMMIT_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "::error::Targeted releases require a full 40-character commit-sha."
+              exit 1
+            fi
+            if [ -n "${ARTIFACT}" ] && {
+              [[ "${ARTIFACT}" == *$'\n'* || "${ARTIFACT}" == *$'\r'* ]] ||
+              ! printf '%s' "${ARTIFACT}" | grep -Eq '^[a-z0-9./:_-]+@sha256:[0-9a-f]{64}$'
+            }; then
+              echo "::error::Targeted container artifacts must use an immutable image@sha256:digest reference."
+              exit 1
+            fi
+            echo "targeted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "targeted=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Request release
         id: request
         env:
@@ -167,6 +225,10 @@ jobs:
           COMMIT_SHA: ${{ inputs.commit-sha }}
           ARTIFACT: ${{ inputs.artifact }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ENVIRONMENT_ID: ${{ inputs.environment-id }}
+          ENVIRONMENT_NAME: ${{ inputs.environment-name }}
+          TARGET_ID: ${{ inputs.target-id }}
+          TARGETED: ${{ steps.target.outputs.targeted }}
         run: |
           set -euo pipefail
 
@@ -181,9 +243,14 @@ jobs:
             --arg branch "${BRANCH}" \
             --arg commitSha "${COMMIT_SHA}" \
             --arg artifact "${ARTIFACT}" \
+            --arg environmentId "${ENVIRONMENT_ID}" \
+            --arg environmentName "${ENVIRONMENT_NAME}" \
+            --arg targetId "${TARGET_ID}" \
+            --arg targeted "${TARGETED}" \
             --arg runUrl "${RUN_URL}" \
             '{repoFullName: $repoFullName, slot: $slot, branch: $branch, commitSha: $commitSha, runUrl: $runUrl}
-             + (if $artifact == "" then {} else {artifact: $artifact} end)')
+             + (if $artifact == "" then {} else {artifact: $artifact} end)
+             + (if $targeted == "true" then {environmentId: $environmentId, environmentName: $environmentName, targetId: $targetId} else {} end)')
 
           response=$(mktemp)
           code=$(curl -sS -o "${response}" -w "%{http_code}" -X POST \

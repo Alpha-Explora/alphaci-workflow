@@ -18,6 +18,7 @@ Runs inside `central-workflow`. It is not a consumer workflow template.
 ## Checks
 
 - Action syntax through actionlint.
+- The actionlint list includes `render-deploy.yml` and `vercel-deploy.yml` alongside build and release workflows.
 - Reusable workflow contract docs and contract comments.
 - GCP Cloud Run deploy workflow contract through `scripts/validate-gcp-cloud-run-workflow.cjs`.
 - Granular workflow template metadata and reusable workflow targets.

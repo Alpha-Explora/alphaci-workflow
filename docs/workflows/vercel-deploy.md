@@ -8,7 +8,7 @@ Deploys a frontend to Vercel, as a preview for UAT branches or as a production p
 
 ## Public Contract
 - Source workflow: `.github/workflows/vercel-deploy.yml`
-- Inputs: `system-name`, `working-directory`, `environment`, `branch-alias`, `require-branch-alias`, `checkout-ref`, `git-branch`
+- Inputs: `system-name`, `working-directory`, `environment`, `branch-alias`, `require-branch-alias`, `checkout-ref`, `git-branch`, `environment-id`, `environment-name`, `target-id`
 - Secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `GH_PR_TOKEN`
 - Outputs: `deployment_url`, `deployment_id`
 
@@ -25,6 +25,16 @@ optional: a caller that omits it pulls only the branch-independent preview varia
 account-level commands. When `VERCEL_ORG_ID` is a team id (`team_…`) they run with `--scope` set to
 it; without that they ran against the token owner's personal account, and a team project's alias
 was refused, leaving the stable UAT hostname (`uat-<alias>.vercel.app`) unset.
+Targeted callers supply `environment-id`, `environment-name`, and `target-id` together and pass
+`checkout-ref` as the full pinned commit SHA. The reusable job uses the supplied GitHub Environment
+name and records the environment and target IDs as Vercel deployment metadata. It does not clean up
+deployments by branch in targeted mode. If `git-branch` is supplied for a preview deploy, its
+branch-scoped variables are still pulled in targeted mode. A targeted deploy fails if Vercel's
+deployment ID cannot be resolved; the ID is required for the target record and remains distinct from
+a container image digest. Untargeted deploys retain the legacy behavior of warning and returning an
+empty ID when lookup fails. The caller validates and protects the named environment and confirms the
+target before invoking this workflow. With the three identity inputs omitted, existing environment
+and branch behavior remains.
 
 The deployment URL is read from `vercel deploy`'s stdout only (the CLI prints warnings and doc links
 such as `vercel.link` to stderr). The alias scope is the deployment's own owner, looked up through the

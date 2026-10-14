@@ -10,7 +10,11 @@ Builds Docker images, optionally pushes them, and optionally scans them.
 - Source workflow: `.github/workflows/docker-build.yml`
 - Inputs: `working-directory`, `image-name`, `dockerfile-path`, `push-image`, `scan-vulnerabilities`, `fail-on-vulnerabilities`, `build-args`, `generate-sbom`, `generate-provenance`, `release-tag`, `checkout-ref`, `pipeline-branch`
 - Secrets: none
-- Outputs: `image-tag`, `image-digest`, `scan-result`, `image-repo`
+- Outputs: `image-tag`, `image-digest`, `image-ref`, `scan-result`, `image-repo`
+
+`image-ref` is the canonical immutable `image-repo@sha256:<digest>` value when the image was pushed.
+It is empty for local-only builds. Managed container deployment callers should pass this exact value
+through release and promotion so each environment reuses the same image bytes.
 
 ## Usage
 Call after tests, lint, and security with `needs`. Only set `push-image: true` on trusted branches. Use
@@ -24,3 +28,7 @@ it keep the previous tags.
 
 A failure to write the build cache no longer fails the job: the image has already been pushed by then,
 and a cache that cannot be saved only costs time on the next run.
+
+The vulnerability scan fails the job on fixable HIGH or CRITICAL findings. Uploading its SARIF file to
+code scanning is best effort: a private repository without Advanced Security refuses it, and the file
+is always kept as the `<image-name>-security-scan` artifact.
