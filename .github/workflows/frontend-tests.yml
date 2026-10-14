@@ -76,11 +76,24 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches (before any install step can fall back), so the cache is
+        # only switched on when a lockfile exists.
+        run: |
+          if [ -n "$(find "$GITHUB_WORKSPACE" -type d -name node_modules -prune -o -name package-lock.json -print -quit)" ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No package-lock.json found, so the npm dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             **/package-lock.json
 

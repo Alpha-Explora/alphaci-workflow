@@ -30,7 +30,19 @@ async function runSmoke(): Promise<void> {
   const browser = await launchBrowser(browserName);
 
   try {
-    const page = await browser.newPage();
+    // A protected Vercel preview answers with a sign-in redirect unless the
+    // project's Protection Bypass for Automation secret is sent.
+    const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+    const page = await browser.newPage(
+      bypass
+        ? {
+            extraHTTPHeaders: {
+              'x-vercel-protection-bypass': bypass,
+              'x-vercel-set-bypass-cookie': 'true',
+            },
+          }
+        : {},
+    );
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
 
     const bodyText = (await page.textContent('body')) || '';

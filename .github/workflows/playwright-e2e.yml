@@ -87,6 +87,48 @@ on:
         type: string
         default: "test-results/alphaci-e2e.json"
         description: "Where the Playwright JSON reporter writes, relative to working-directory"
+      ensure-test-deps:
+        required: false
+        type: string
+        default: ""
+        description: "Space-separated npm specs (name@version) installed with --no-save when not already resolvable, e.g. '@playwright/test@^1.55.0 @axe-core/playwright@^4.10.0'"
+      # Visual testing with baselines stored by ALPHACI. Opt-in: with
+      # visual-baselines false (the default) none of this runs and no request
+      # is made to the API.
+      visual-baselines:
+        required: false
+        type: boolean
+        default: false
+        description: "Fetch ALPHACI-stored screenshot baselines before the tests and report snapshot results afterwards (needs alphaci-api-url and secret ALPHACI_TOKEN)"
+      alphaci-api-url:
+        required: false
+        type: string
+        default: ""
+        description: "ALPHACI API origin used for visual baselines and live test progress, e.g. https://alphaci.example.com (no trailing path)"
+      visual-branch:
+        required: false
+        type: string
+        default: ""
+        description: "Pipeline branch this run is for (e.g. uat or main); defaults to the PR base branch or the ref name"
+      visual-snapshot-dir:
+        required: false
+        type: string
+        default: "tests/e2e/__visual__"
+        description: "Directory, relative to working-directory, where baselines are written and screenshots are read from"
+    secrets:
+      # A Vercel preview sits behind Deployment Protection, which answers a
+      # browser with a redirect to Vercel's sign-in. Protection Bypass for
+      # Automation is Vercel's answer for CI: the suite sends this secret as
+      # the `x-vercel-protection-bypass` header. Exposed to the test command as
+      # an environment variable of the same name, which a project's Playwright
+      # config reads; optional, so unprotected hosts need nothing.
+      VERCEL_AUTOMATION_BYPASS_SECRET:
+        required: false
+      # Bearer token for the ALPHACI APIs. Read when visual-baselines is true
+      # and, with alphaci-api-url, for live test progress. It is never passed
+      # to the test command as an environment variable.
+      ALPHACI_TOKEN:
+        required: false
     outputs:
       e2e-result:
         description: "E2E test pass/fail result"
@@ -108,6 +150,12 @@ on:
       tests-failures:
         description: "JSON array of {name,message} for the failed tests, capped"
         value: ${{ jobs.finalize.outputs.tests-failures }}
+      tests-cases:
+        description: "Every test with what it checks (its description annotation), notes, top-level steps, duration, retries and full error, failures first, at most 50, as a JSON array"
+        value: ${{ jobs.finalize.outputs.tests-cases }}
+      tests-passes:
+        description: "JSON array of the full names of the passed tests (suite path and title joined with ' > '), capped at 300"
+        value: ${{ jobs.finalize.outputs.tests-passes }}
 
 permissions:
   contents: read
@@ -194,11 +242,24 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
 
+      - name: Detect dependency lockfile
+        id: dep-cache
+        # setup-node fails the whole job when `cache` is set and no lockfile
+        # matches (before any install step can fall back), so the cache is
+        # only switched on when a lockfile exists.
+        run: |
+          if [ -n "$(find "$GITHUB_WORKSPACE" -type d -name node_modules -prune -o -name package-lock.json -print -quit)" ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No package-lock.json found, so the npm dependency cache is disabled for this run. Commit a lockfile."
+          fi
+
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
+          cache: ${{ steps.dep-cache.outputs.cache }}
           cache-dependency-path: |
             **/package-lock.json
 
@@ -213,6 +274,43 @@ jobs:
             npm install --no-audit --no-fund
           fi
 
+      # Installs test packages the repo does not already have, without touching
+      # package.json or the lockfile. A generated "Add browser tests" PR cannot
+      # update package-lock.json, and editing package.json under a lockfile would
+      # make `npm ci` fail as out of sync, so the verify run installs them.
+      # Runs before the Playwright version check so that a freshly installed
+      # @playwright/test is the version that gets checked.
+      - name: Ensure test dependencies
+        if: ${{ inputs.ensure-test-deps != '' }}
+        env:
+          ENSURE_TEST_DEPS: ${{ inputs.ensure-test-deps }}
+        run: |
+          # The specs end up on a shell command line, so each one must match a
+          # strict name@version shape; anything else is skipped.
+          PATTERN='^(@[a-z0-9._-]+/)?[a-z0-9._-]+@[\^~]?[0-9][0-9A-Za-z.+-]*$'
+          MISSING=()
+          # Split on whitespace only: no filename expansion of a stray '*'.
+          set -f
+          for SPEC in ${ENSURE_TEST_DEPS}; do
+            if ! [[ "${SPEC}" =~ ${PATTERN} ]]; then
+              echo "::warning::ensure-test-deps: ignoring '${SPEC}', which is not a name@version spec."
+              continue
+            fi
+            # The version starts at the last '@'; a scope's '@' is at position 0.
+            NAME="${SPEC%@*}"
+            if node -e "require.resolve(process.argv[1] + '/package.json')" "${NAME}" >/dev/null 2>&1; then
+              echo "${NAME} is already installed."
+            else
+              MISSING+=("${SPEC}")
+            fi
+          done
+          set +f
+
+          if [ "${#MISSING[@]}" -gt 0 ]; then
+            echo "::notice::ensure-test-deps: installing ${MISSING[*]} (not saved to package.json)."
+            npm install --no-save --no-audit --no-fund "${MISSING[@]}"
+          fi
+
       - name: Validate E2E tests folder exists
         env:
           E2E_TESTS_DIRECTORY: ${{ inputs.e2e-tests-directory }}
@@ -224,9 +322,483 @@ jobs:
           fi
           echo "âœ… E2E tests folder found: ${E2E_TESTS_DIRECTORY}"
 
+      # Visual baselines are opt-in and need three things at once: the input,
+      # an API URL and the token. Anything less leaves them off with a warning,
+      # so a half-configured caller still gets a normal functional run.
+      - name: Resolve visual baseline settings
+        id: visual
+        env:
+          VISUAL_ENABLED: ${{ inputs.visual-baselines }}
+          API_URL: ${{ inputs.alphaci-api-url }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          VISUAL_BRANCH: ${{ inputs.visual-branch }}
+          SNAPSHOT_DIR: ${{ inputs.visual-snapshot-dir }}
+        run: |
+          ENABLED="false"
+          if [ "${VISUAL_ENABLED}" = "true" ]; then
+            if [ -z "${API_URL}" ] || [ -z "${ALPHACI_TOKEN}" ]; then
+              echo "::warning::visual-baselines is on but alphaci-api-url or the ALPHACI_TOKEN secret is missing, so visual baselines are skipped."
+            elif [ "${API_URL#http://}" = "${API_URL}" ] && [ "${API_URL#https://}" = "${API_URL}" ]; then
+              echo "::warning::alphaci-api-url must start with http:// or https://, so visual baselines are skipped."
+            elif [ -z "${SNAPSHOT_DIR}" ] || [ "${SNAPSHOT_DIR#/}" != "${SNAPSHOT_DIR}" ] || [[ "/${SNAPSHOT_DIR}/" == *"/../"* ]]; then
+              echo "::warning::visual-snapshot-dir must be a relative path without '..', so visual baselines are skipped."
+            else
+              ENABLED="true"
+            fi
+          fi
+
+          # The branch the baselines belong to: explicit input, else the PR base,
+          # else the ref the run is on.
+          BRANCH="${VISUAL_BRANCH:-${GITHUB_BASE_REF:-${GITHUB_REF_NAME}}}"
+
+          echo "enabled=${ENABLED}" >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+
       - name: Install Playwright browsers
         run: |
           npx playwright install --with-deps chromium firefox webkit
+
+      # `--update-snapshots=missing` writes a screenshot that has no baseline
+      # instead of failing the test. It needs Playwright 1.50 or newer; on an
+      # older one the flag is left off rather than breaking the run.
+      - name: Check Playwright version for visual baselines
+        id: visual-version
+        if: ${{ steps.visual.outputs.enabled == 'true' }}
+        run: |
+          VERSION="$(npx --no-install playwright --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true)"
+          MAJOR="${VERSION%%.*}"
+          MINOR="${VERSION#*.}"
+          MINOR="${MINOR%%.*}"
+          if [ -n "${VERSION}" ] && { [ "${MAJOR}" -gt 1 ] || { [ "${MAJOR}" -eq 1 ] && [ "${MINOR}" -ge 50 ]; }; }; then
+            echo "flag=--update-snapshots=missing" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Visual baselines need Playwright 1.50 or newer (found '${VERSION:-unknown}'), so --update-snapshots=missing is not passed and a snapshot without a baseline will fail."
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Download the stored baselines into the snapshot directory. Fail-soft: if
+      # the API is unreachable or says no, the tests still run and capture new
+      # screenshots instead of comparing against baselines.
+      - name: Fetch visual baselines
+        if: ${{ steps.visual.outputs.enabled == 'true' }}
+        continue-on-error: true
+        env:
+          API_URL: ${{ inputs.alphaci-api-url }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          BRANCH: ${{ steps.visual.outputs.branch }}
+          SNAPSHOT_DIR: ${{ inputs.visual-snapshot-dir }}
+        run: |
+          set -uo pipefail
+
+          API="${API_URL%/}"
+          WORK="${RUNNER_TEMP}/alphaci-visual"
+          mkdir -p "${WORK}" "${SNAPSHOT_DIR}"
+          : > "${WORK}/downloaded.txt"
+
+          HTTP="$(curl -sS --max-time 30 -G -o "${WORK}/baselines.json" -w '%{http_code}' \
+            -H "Authorization: Bearer ${ALPHACI_TOKEN}" \
+            --data-urlencode "repoFullName=${GITHUB_REPOSITORY}" \
+            --data-urlencode "branch=${BRANCH}" \
+            "${API}/api/v1/ci/visual-baselines" 2>/dev/null)" || HTTP="000"
+          if [ "${HTTP}" != "200" ]; then
+            echo "::warning::Visual baselines unavailable (HTTP ${HTTP}); screenshots without a baseline will be captured as new."
+            exit 0
+          fi
+
+          # Validate the manifest in one place. A baseline name becomes a file
+          # name under the snapshot directory, so anything that could leave it
+          # (a slash, a backslash, '..') or break a line is dropped. The url is
+          # only ever a path on the same API host, so the bearer token is never
+          # sent anywhere else.
+          python3 - "${WORK}/baselines.json" "${WORK}/entries.tsv" <<'PYEOF'
+          import json, re, sys
+
+          manifest, out = sys.argv[1], sys.argv[2]
+          try:
+              with open(manifest, encoding="utf-8") as handle:
+                  items = json.load(handle).get("baselines") or []
+          except (OSError, ValueError, AttributeError):
+              print("::warning::Visual baseline manifest was not valid JSON; skipping baselines.")
+              items = []
+
+          control = re.compile(r"[\x00-\x1f\x7f]")
+          rows = []
+          for item in items if isinstance(items, list) else []:
+              if not isinstance(item, dict):
+                  continue
+              name, url, sha = item.get("name"), item.get("url"), item.get("sha256") or ""
+              if (not isinstance(name, str) or not name or "/" in name or "\\" in name
+                      or ".." in name or control.search(name)):
+                  print(f"::warning::Skipping baseline with an unsafe name: {name!r}")
+                  continue
+              if (not isinstance(url, str) or not url.startswith("/") or url.startswith("//")
+                      or control.search(url) or " " in url):
+                  print(f"::warning::Skipping baseline {name}: its url is not a path on the API host.")
+                  continue
+              if sha and not re.fullmatch(r"[0-9a-fA-F]{64}", str(sha)):
+                  sha = ""
+              rows.append((name, url, str(sha).lower() or "-"))
+
+          if len(rows) > 200:
+              print(f"::warning::{len(rows)} baselines listed; only the first 200 are downloaded.")
+              rows = rows[:200]
+
+          with open(out, "w", encoding="utf-8", newline="") as handle:
+              for row in rows:
+                  handle.write("\t".join(row) + "\n")
+          PYEOF
+
+          COUNT=0
+          while IFS=$'\t' read -r NAME URL SHA; do
+            [ -n "${NAME}" ] || continue
+            TMP="${WORK}/download.tmp"
+            CODE="$(curl -sS --max-time 60 -o "${TMP}" -w '%{http_code}' \
+              -H "Authorization: Bearer ${ALPHACI_TOKEN}" "${API}${URL}" </dev/null 2>/dev/null)" || CODE="000"
+            if [ "${CODE}" != "200" ]; then
+              echo "::warning::Could not download baseline ${NAME} (HTTP ${CODE})."
+              continue
+            fi
+            if [ "${SHA}" != "-" ]; then
+              ACTUAL_SHA="$(sha256sum "${TMP}" | cut -d' ' -f1)"
+              if [ "${ACTUAL_SHA}" != "${SHA}" ]; then
+                echo "::warning::Baseline ${NAME} failed its sha256 check and was discarded."
+                continue
+              fi
+            fi
+            mv "${TMP}" "${SNAPSHOT_DIR}/${NAME}"
+            printf '%s\n' "${NAME}" >> "${WORK}/downloaded.txt"
+            COUNT=$((COUNT + 1))
+          done < "${WORK}/entries.tsv"
+
+          echo "Downloaded ${COUNT} visual baseline(s) into ${SNAPSHOT_DIR}."
+
+      # Live test progress. Streams one event per test to ALPHACI while
+      # Playwright runs, so the product can show each test as it finishes. On
+      # only when alphaci-api-url is a http(s) origin AND the ALPHACI_TOKEN secret
+      # is present; otherwise nothing is written and the run is exactly what it
+      # was before. Fail-soft end to end: if this step fails the reporter is
+      # simply not added, and once added it never changes the exit code.
+      - name: Prepare live test progress reporter
+        id: live
+        continue-on-error: true
+        env:
+          API_URL: ${{ inputs.alphaci-api-url }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          BRANCH: ${{ steps.visual.outputs.branch }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${API_URL}" ] || [ -z "${ALPHACI_TOKEN}" ]; then
+            echo "Live test progress is off (alphaci-api-url or the ALPHACI_TOKEN secret is not set)."
+            exit 0
+          fi
+          if [ "${API_URL#http://}" = "${API_URL}" ] && [ "${API_URL#https://}" = "${API_URL}" ]; then
+            echo "::warning::alphaci-api-url must start with http:// or https://, so live test progress is skipped."
+            exit 0
+          fi
+
+          # Files are private to the runner user; the token goes in a file, not
+          # in the environment of every process the tests start.
+          umask 077
+          REPORTER="${RUNNER_TEMP}/alphaci-live-reporter.cjs"
+          SETTINGS="${RUNNER_TEMP}/alphaci-live.json"
+          COMMIT_SHA="$(git rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA}")"
+          export COMMIT_SHA SETTINGS
+
+          node - <<'NODE_EOF'
+          const fs = require('fs');
+          const env = process.env;
+          let origin = env.API_URL;
+          while (origin.endsWith('/')) origin = origin.slice(0, -1);
+          const settings = {
+            url: origin + '/api/v1/ci/playwright-progress',
+            token: env.ALPHACI_TOKEN,
+            repoFullName: env.GITHUB_REPOSITORY,
+            branch: env.BRANCH,
+            runId: Number(env.RUN_ID),
+            runAttempt: Number(env.RUN_ATTEMPT),
+            commitSha: env.COMMIT_SHA,
+          };
+          fs.writeFileSync(env.SETTINGS, JSON.stringify(settings), { mode: 0o600 });
+          NODE_EOF
+
+          cat > "${REPORTER}" <<'REPORTER_EOF'
+          'use strict';
+          // ALPHACI live progress reporter. Written by the playwright-e2e reusable
+          // workflow and added next to the project's own reporters. It streams one event
+          // per test to ALPHACI while Playwright runs. Best effort only: it never throws,
+          // never changes the exit code and never holds the run up beyond one bounded
+          // final flush.
+          const fs = require('fs');
+          const path = require('path');
+
+          const SEP = ' ' + String.fromCharCode(0x203a) + ' ';
+          const MAX_BATCH = 200;
+          const MAX_QUEUE = 5000;
+          const FLUSH_MS = 2000;
+          const POST_TIMEOUT_MS = 5000;
+          const RETRIES = 2;
+          const FINAL_FLUSH_MS = 10000;
+
+          function clip(value, max) {
+            const text = typeof value === 'string' ? value : String(value == null ? '' : value);
+            return text.length > max ? text.slice(0, max) : text;
+          }
+
+          // Removes terminal escape sequences (colours, cursor moves, OSC titles).
+          function stripAnsi(input) {
+            const text = String(input == null ? '' : input);
+            let out = '';
+            let i = 0;
+            while (i < text.length) {
+              if (text.charCodeAt(i) !== 27) {
+                out += text[i];
+                i += 1;
+                continue;
+              }
+              const next = text[i + 1];
+              if (next === '[') {
+                i += 2;
+                while (i < text.length) {
+                  const code = text.charCodeAt(i);
+                  i += 1;
+                  if (code >= 0x40 && code <= 0x7e) break;
+                }
+              } else if (next === ']') {
+                i += 2;
+                while (i < text.length) {
+                  const code = text.charCodeAt(i);
+                  i += 1;
+                  if (code === 7) break;
+                  if (code === 27) {
+                    i += 1;
+                    break;
+                  }
+                }
+              } else {
+                i += 2;
+              }
+            }
+            return out;
+          }
+
+          function sleep(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+          }
+
+          function withTimeout(promise, ms) {
+            let timer;
+            const limit = new Promise((resolve) => {
+              timer = setTimeout(resolve, ms);
+            });
+            return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+          }
+
+          function iso() {
+            return new Date().toISOString();
+          }
+
+          class AlphaciLiveReporter {
+            constructor() {
+              this.cfg = null;
+              this.queue = [];
+              this.draining = null;
+              this.timer = null;
+              this.warned = false;
+              this.suite = null;
+              this.rootDir = process.cwd();
+              this.startedAt = Date.now();
+              try {
+                const file = process.env.ALPHACI_LIVE_CONFIG;
+                if (file) {
+                  const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+                  if (parsed && typeof parsed.url === 'string' && typeof parsed.token === 'string') {
+                    this.cfg = parsed;
+                  }
+                }
+              } catch (error) {
+                this.cfg = null;
+              }
+            }
+
+            printsToStdio() {
+              return false;
+            }
+
+            warn(message) {
+              if (this.warned) return;
+              this.warned = true;
+              try {
+                console.log('::warning::ALPHACI live progress: ' + message + ' The test run is unaffected.');
+              } catch (error) {
+                // nothing to do
+              }
+            }
+
+            push(event) {
+              if (!this.cfg) return;
+              if (this.queue.length >= MAX_QUEUE) return;
+              this.queue.push(event);
+              if (!this.timer) {
+                this.timer = setInterval(() => {
+                  this.flush().catch(() => {});
+                }, FLUSH_MS);
+                if (this.timer.unref) this.timer.unref();
+              }
+            }
+
+            describe(test) {
+              const titlePath = test.titlePath();
+              const project = clip(titlePath[1] || 'default', 100);
+              let file = '';
+              try {
+                const absolute = test.location && test.location.file ? test.location.file : '';
+                file = absolute ? path.relative(this.rootDir, absolute).split(path.sep).join('/') : '';
+              } catch (error) {
+                file = '';
+              }
+              const parts = titlePath.slice(3);
+              const title = clip(parts.join(SEP), 300);
+              const id = clip([file].concat(parts).join(SEP), 300) || 'unnamed test';
+              return { id: id, file: clip(file, 300), title: title, project: project };
+            }
+
+            onBegin(config, suite) {
+              try {
+                this.suite = suite;
+                this.startedAt = Date.now();
+                if (config && config.configFile) this.rootDir = path.dirname(config.configFile);
+                else if (config && config.rootDir) this.rootDir = config.rootDir;
+                this.push({ type: 'run_started', at: iso(), total: suite.allTests().length });
+              } catch (error) {
+                // never throw into Playwright
+              }
+            }
+
+            onTestBegin(test) {
+              try {
+                this.push({ type: 'test_started', at: iso(), test: this.describe(test) });
+              } catch (error) {
+                // never throw into Playwright
+              }
+            }
+
+            onTestEnd(test, result) {
+              try {
+                const info = this.describe(test);
+                let message = null;
+                const first = result.error || (result.errors && result.errors[0]);
+                if (first && (first.message || first.value)) {
+                  message = clip(stripAnsi(first.message || first.value).trim(), 1000) || null;
+                }
+                info.status = result.status;
+                info.durationMs = Math.max(0, Math.round(result.duration || 0));
+                info.retry = Math.max(0, Math.round(result.retry || 0));
+                info.error = result.status === 'passed' || result.status === 'skipped' ? null : message;
+                this.push({ type: 'test_finished', at: iso(), test: info });
+              } catch (error) {
+                // never throw into Playwright
+              }
+            }
+
+            async onEnd(result) {
+              try {
+                const summary = { passed: 0, failed: 0, skipped: 0, flaky: 0, durationMs: 0 };
+                try {
+                  for (const test of this.suite.allTests()) {
+                    const outcome = test.outcome();
+                    if (outcome === 'expected') summary.passed += 1;
+                    else if (outcome === 'unexpected') summary.failed += 1;
+                    else if (outcome === 'flaky') summary.flaky += 1;
+                    else if (outcome === 'skipped') summary.skipped += 1;
+                  }
+                } catch (error) {
+                  // counts stay at zero
+                }
+                summary.durationMs = Math.max(0, Math.round((result && result.duration) || Date.now() - this.startedAt));
+                const known = ['passed', 'failed', 'timedout', 'interrupted'];
+                const status = result && known.indexOf(result.status) >= 0 ? result.status : 'failed';
+                this.push({ type: 'run_finished', at: iso(), status: status, summary: summary });
+                await withTimeout(this.flush(), FINAL_FLUSH_MS);
+              } catch (error) {
+                // never throw into Playwright
+              } finally {
+                if (this.timer) clearInterval(this.timer);
+                this.timer = null;
+              }
+            }
+
+            async flush() {
+              for (;;) {
+                if (!this.draining) {
+                  if (this.queue.length === 0) return;
+                  this.draining = this.drain()
+                    .catch(() => {})
+                    .then(() => {
+                      this.draining = null;
+                    });
+                }
+                await this.draining;
+              }
+            }
+
+            async drain() {
+              while (this.queue.length > 0) {
+                const batch = this.queue.splice(0, MAX_BATCH);
+                await this.send(batch);
+              }
+            }
+
+            async send(events) {
+              const cfg = this.cfg;
+              const body = JSON.stringify({
+                repoFullName: cfg.repoFullName,
+                branch: cfg.branch,
+                runId: cfg.runId,
+                runAttempt: cfg.runAttempt,
+                commitSha: cfg.commitSha,
+                events: events,
+              });
+              let reason = 'unknown error.';
+              for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
+                if (attempt > 0) await sleep(300 * attempt);
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
+                try {
+                  const response = await fetch(cfg.url, {
+                    method: 'POST',
+                    headers: { Authorization: 'Bearer ' + cfg.token, 'Content-Type': 'application/json' },
+                    body: body,
+                    signal: controller.signal,
+                  });
+                  clearTimeout(timer);
+                  try {
+                    if (response.body) await response.body.cancel();
+                  } catch (error) {
+                    // body already consumed or closed
+                  }
+                  if (response.status >= 200 && response.status < 300) return true;
+                  reason = 'the API answered HTTP ' + response.status + '.';
+                  if (response.status >= 400 && response.status < 500 && response.status !== 429) break;
+                } catch (error) {
+                  clearTimeout(timer);
+                  reason = error && error.name === 'AbortError' ? 'the API did not answer in time.' : 'the API could not be reached.';
+                }
+              }
+              this.warn('some live test events were not delivered because ' + reason);
+              return false;
+            }
+          }
+
+          module.exports = AlphaciLiveReporter;
+          REPORTER_EOF
+
+          node --check "${REPORTER}" || { echo "::warning::The live progress reporter did not validate, so it is skipped."; exit 0; }
+          echo "reporter=${REPORTER}" >> "$GITHUB_OUTPUT"
+          echo "settings=${SETTINGS}" >> "$GITHUB_OUTPUT"
+          echo "Live test progress is on."
 
       - name: Run Playwright E2E
         id: run-e2e
@@ -241,12 +813,208 @@ jobs:
           # A project whose config does not enable the json reporter simply
           # writes nothing, and the counts are omitted rather than invented.
           PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ inputs.json-report }}
+          # Empty when the caller passes none; the config then sends no header.
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          # Empty unless visual baselines are on and Playwright is 1.50+.
+          VISUAL_UPDATE_FLAG: ${{ steps.visual-version.outputs.flag }}
+          # Set only when live test progress is on (see the step above).
+          ALPHACI_LIVE_REPORTER: ${{ steps.live.outputs.reporter }}
+          ALPHACI_LIVE_CONFIG: ${{ steps.live.outputs.settings }}
         run: |
           # Substitute {browser} placeholder using env var â€” avoids eval on raw input
           CMD="${E2E_TEST_CMD//\{browser\}/${E2E_BROWSER}}"
           echo "Running browser: ${E2E_BROWSER}"
           echo "Using Playwright local browser execution"
+          # Visual baselines: let a screenshot with no baseline be captured
+          # rather than fail. `npm run <script>` forwards flags only after
+          # `--`; a command that already has its own `--` or runs
+          # playwright directly (npx, pnpm, yarn) takes the flag as is.
+          if [ -n "${VISUAL_UPDATE_FLAG}" ]; then
+            case "${CMD}" in
+              *" -- "*) CMD="${CMD} ${VISUAL_UPDATE_FLAG}" ;;
+              "npm run "*|"npm run-script "*|"npm test"*|"npm t "*) CMD="${CMD} -- ${VISUAL_UPDATE_FLAG}" ;;
+              *) CMD="${CMD} ${VISUAL_UPDATE_FLAG}" ;;
+            esac
+          fi
+          # Live test progress: add the ALPHACI reporter next to the project's
+          # own. Playwright's --reporter replaces the configured list, so the
+          # ones this workflow and its artifacts rely on are named again: list
+          # (console), html (playwright-report/) and json (read in finalize via
+          # PLAYWRIGHT_JSON_OUTPUT_NAME). It is only added when the command is
+          # demonstrably `playwright test` (directly or through an npm script)
+          # and sets no --reporter of its own; otherwise it is skipped and the
+          # command runs untouched.
+          if [ -n "${ALPHACI_LIVE_REPORTER}" ]; then
+            if E2E_CMD="${CMD}" node -e "
+              const cmd = process.env.E2E_CMD;
+              let body = cmd;
+              const run = /^npm (run|run-script) ([^ ]+)/.exec(cmd);
+              const test = ['npm test', 'npm t'].some((c) => cmd === c || cmd.startsWith(c + ' '));
+              const name = run ? run[2] : test ? 'test' : '';
+              if (name) {
+                try { body = require(process.cwd() + '/package.json').scripts[name] || ''; } catch (e) { body = ''; }
+              }
+              process.exit(/playwright/.test(body) && !body.includes('--reporter') && !cmd.includes('--reporter') ? 0 : 1);
+            "; then
+              LIVE_FLAG="--reporter=list,html,json,${ALPHACI_LIVE_REPORTER}"
+              export PLAYWRIGHT_HTML_OPEN=never
+              case "${CMD}" in
+                *" -- "*) CMD="${CMD} ${LIVE_FLAG}" ;;
+                "npm run "*|"npm run-script "*|"npm test"*|"npm t "*) CMD="${CMD} -- ${LIVE_FLAG}" ;;
+                *) CMD="${CMD} ${LIVE_FLAG}" ;;
+              esac
+              echo "Live test progress: streaming to ALPHACI."
+            else
+              echo "::notice::Live test progress skipped: the test command is not a plain 'playwright test' run, or it sets its own --reporter."
+              unset ALPHACI_LIVE_CONFIG
+            fi
+          fi
           bash -c "${CMD}"
+
+      # Reports what the run did to each screenshot, whatever the test verdict:
+      # a failing visual test is exactly when the diff matters. Every request is
+      # fail-soft; the verdict stays Playwright's.
+      #
+      #   changed  Playwright wrote <name>-diff.png under test-results/
+      #   new      the file was not among the downloaded baselines (captured now)
+      #   passed   anything else
+      - name: Report visual results
+        if: ${{ always() && steps.visual.outputs.enabled == 'true' }}
+        continue-on-error: true
+        env:
+          API_URL: ${{ inputs.alphaci-api-url }}
+          ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+          BRANCH: ${{ steps.visual.outputs.branch }}
+          SNAPSHOT_DIR: ${{ inputs.visual-snapshot-dir }}
+          BROWSER: ${{ matrix.browser }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -uo pipefail
+
+          API="${API_URL%/}"
+          WORK="${RUNNER_TEMP}/alphaci-visual"
+          mkdir -p "${WORK}"
+          [ -f "${WORK}/downloaded.txt" ] || : > "${WORK}/downloaded.txt"
+
+          if [ ! -d "${SNAPSHOT_DIR}" ]; then
+            echo "::notice::No snapshot directory (${SNAPSHOT_DIR}), so there are no visual results to report."
+            exit 0
+          fi
+
+          COMMIT_SHA="$(git rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA}")"
+          MAX_SNAPSHOTS=60
+          MAX_BYTES=3145728
+          TAB="$(printf '\t')"
+
+          # Classify every screenshot. Rank sorts changed first, then new, so
+          # that the 60-snapshot cap drops passed ones before anything a
+          # reviewer needs to see.
+          : > "${WORK}/snapshots.raw"
+          for FILE in "${SNAPSHOT_DIR}"/*.png; do
+            [ -f "${FILE}" ] || continue
+            NAME="$(basename "${FILE}")"
+            case "${NAME}" in
+              *\\*|*..*)
+                echo "::warning::Skipping snapshot with an unsafe name: ${NAME}"
+                continue
+                ;;
+            esac
+            BASE="${NAME%.png}"
+            PATTERN="$(printf '%s' "${BASE}" | sed 's/[][*?\\]/\\&/g')"
+            DIFF=""
+            ACTUAL=""
+            if [ -d test-results ]; then
+              DIFF="$(find test-results -type f -name "${PATTERN}-diff.png" -print -quit 2>/dev/null || true)"
+              ACTUAL="$(find test-results -type f -name "${PATTERN}-actual.png" -print -quit 2>/dev/null || true)"
+            fi
+            if [ -n "${DIFF}" ]; then
+              RANK=0; STATUS="changed"
+            elif ! grep -Fxq -- "${NAME}" "${WORK}/downloaded.txt"; then
+              RANK=1; STATUS="new"
+            else
+              RANK=2; STATUS="passed"
+            fi
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${RANK}" "${STATUS}" "${NAME}" "${FILE}" "${ACTUAL:--}" "${DIFF:--}" >> "${WORK}/snapshots.raw"
+          done
+
+          TOTAL="$(wc -l < "${WORK}/snapshots.raw" | tr -d ' ')"
+          if [ "${TOTAL}" -eq 0 ]; then
+            echo "::notice::No screenshots found in ${SNAPSHOT_DIR}; nothing to report."
+            exit 0
+          fi
+          if [ "${TOTAL}" -gt "${MAX_SNAPSHOTS}" ]; then
+            echo "::warning::${TOTAL} screenshots found; only ${MAX_SNAPSHOTS} are reported (changed and new first)."
+          fi
+          LC_ALL=C sort -s -t "${TAB}" -k1,1n "${WORK}/snapshots.raw" | head -n "${MAX_SNAPSHOTS}" > "${WORK}/snapshots.tsv"
+
+          export COMMIT_SHA
+          python3 - "${WORK}/snapshots.tsv" > "${WORK}/summary.json" <<'PYEOF'
+          import json, os, sys
+
+          def number(value):
+              return int(value) if value.isdigit() else value
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              rows = [line.rstrip("\n").split("\t") for line in handle if line.strip()]
+
+          print(json.dumps({
+              "repoFullName": os.environ["GITHUB_REPOSITORY"],
+              "branch": os.environ["BRANCH"],
+              "commitSha": os.environ["COMMIT_SHA"],
+              "runId": number(os.environ["RUN_ID"]),
+              "runAttempt": number(os.environ["RUN_ATTEMPT"]),
+              "browser": os.environ["BROWSER"],
+              "snapshots": [{"name": row[2], "status": row[1]} for row in rows],
+          }, separators=(",", ":")))
+          PYEOF
+
+          HTTP="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${ALPHACI_TOKEN}" -H 'Content-Type: application/json' \
+            --data-binary @"${WORK}/summary.json" \
+            "${API}/api/v1/ci/visual-summary" </dev/null 2>/dev/null)" || HTTP="000"
+          case "${HTTP}" in
+            2??) echo "Reported $(wc -l < "${WORK}/snapshots.tsv" | tr -d ' ') snapshot(s) to ALPHACI." ;;
+            *) echo "::warning::Visual summary was not accepted (HTTP ${HTTP}); the test result is unaffected." ;;
+          esac
+
+          # One multipart upload per image. --form-string keeps a value that
+          # starts with '@' or '<' from being read as a file reference.
+          upload() {
+            local KIND="$1" PATH_TO_FILE="$2" NAME="$3" SIZE CODE
+            SIZE="$(wc -c < "${PATH_TO_FILE}" | tr -d ' ')"
+            if [ "${SIZE}" -gt "${MAX_BYTES}" ]; then
+              echo "::warning::Skipping ${KIND} upload for ${NAME}: ${SIZE} bytes is over the 3 MB limit."
+              return 0
+            fi
+            CODE="$(curl -sS --max-time 60 -o /dev/null -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer ${ALPHACI_TOKEN}" \
+              --form-string "repoFullName=${GITHUB_REPOSITORY}" \
+              --form-string "branch=${BRANCH}" \
+              --form-string "commitSha=${COMMIT_SHA}" \
+              --form-string "runId=${RUN_ID}" \
+              --form-string "browser=${BROWSER}" \
+              --form-string "name=${NAME}" \
+              --form-string "kind=${KIND}" \
+              -F "file=@\"${PATH_TO_FILE}\";type=image/png" \
+              "${API}/api/v1/ci/visual-results/file" </dev/null 2>/dev/null)" || CODE="000"
+            case "${CODE}" in
+              2??) ;;
+              *) echo "::warning::Upload of ${KIND} for ${NAME} failed (HTTP ${CODE}); the test result is unaffected." ;;
+            esac
+          }
+
+          while IFS="${TAB}" read -r RANK STATUS NAME FILE ACTUAL DIFF; do
+            case "${STATUS}" in
+              changed)
+                if [ "${ACTUAL}" != "-" ]; then upload actual "${ACTUAL}" "${NAME}"; fi
+                upload diff "${DIFF}" "${NAME}"
+                ;;
+              new)
+                upload actual "${FILE}" "${NAME}"
+                ;;
+            esac
+          done < "${WORK}/snapshots.tsv"
 
       # Carried as an artifact because a matrix job's `outputs` are overwritten
       # by whichever leg finishes last — a three-browser run would otherwise
@@ -286,6 +1054,8 @@ jobs:
       tests-passed: ${{ steps.summary.outputs.tests-passed }}
       tests-failed: ${{ steps.summary.outputs.tests-failed }}
       tests-failures: ${{ steps.summary.outputs.tests-failures }}
+      tests-passes: ${{ steps.summary.outputs.tests-passes }}
+      tests-cases: ${{ steps.summary.outputs.tests-cases }}
     steps:
       - name: Download E2E JSON reports
         if: ${{ always() }}
@@ -309,21 +1079,116 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 - >> "$GITHUB_OUTPUT" <<'PYEOF'
+          # The script prints key=value lines and, when there is no report, a
+          # `::notice::` command. A line with no `=` in GITHUB_OUTPUT makes the
+          # runner reject the whole file ("Invalid format"), so the two are
+          # split: commands go to the log, only key=value lines to the output.
+          SUMMARY_FILE="${RUNNER_TEMP}/alphaci-e2e-summary.txt"
+          python3 - > "${SUMMARY_FILE}" <<'PYEOF'
           import glob, json, os
+
+          import re
 
           total = passed = failed = 0
           failures = []
+          passes = []
+          seen_passes = set()
+          cases = []
           found = False
+          ANSI = re.compile(r"\x1b\[[0-9;]*m")
+          CASE_STATUS = {"expected": "passed", "unexpected": "failed", "flaky": "flaky", "skipped": "skipped"}
 
-          def walk(suite, trail):
+          # The project's own directory on the runner, as written in the
+          # report. Removed from error text, which otherwise ends with an
+          # absolute path like /home/runner/work/<repo>/<repo>/tests/...
+          ROOTS = []
+
+          def clean(text, limit):
+              """Strip colour codes and runner paths, keep line breaks, trim."""
+              text = ANSI.sub("", text or "")
+              for root in ROOTS:
+                  text = text.replace(root, "")
+              return text.strip()[:limit]
+
+          def case_of(spec, test, name, test_dir):
+              """One test as a person reads it: what, what it checks, how it ended."""
+              results = test.get("results") or []
+              last = results[-1] if results else {}
+              annotations = list(test.get("annotations") or []) + list(last.get("annotations") or [])
+              description = ""
+              notes = []
+              seen_notes = set()
+              for annotation in annotations:
+                  kind = str(annotation.get("type") or "").strip()
+                  text = clean(str(annotation.get("description") or ""), 1000)
+                  if not kind or not text:
+                      continue
+                  if kind.lower() == "description":
+                      description = description or text
+                  elif (kind, text) not in seen_notes and len(notes) < 10:
+                      seen_notes.add((kind, text))
+                      notes.append({"type": kind[:40], "text": text})
+              steps = []
+              for step in last.get("steps") or []:
+                  title = clean(str(step.get("title") or ""), 300)
+                  if not title or title in ("Before Hooks", "After Hooks"):
+                      continue
+                  entry = {"title": title, "durationMs": max(0, int(step.get("duration") or 0))}
+                  if step.get("error"):
+                      entry["failed"] = True
+                  steps.append(entry)
+                  if len(steps) >= 20:
+                      break
+              case = {
+                  "title": name[:500],
+                  "status": CASE_STATUS.get(test.get("status"), "failed"),
+                  "durationMs": max(0, int(last.get("duration") or 0)),
+              }
+              file_name = spec.get("file") or ""
+              if file_name:
+                  case["file"] = (test_dir + "/" + file_name if test_dir else file_name)[:300]
+              if isinstance(spec.get("line"), int):
+                  case["line"] = spec["line"]
+              if test.get("projectName"):
+                  case["project"] = str(test["projectName"])[:60]
+              if len(results) > 1:
+                  case["retries"] = len(results) - 1
+              if description:
+                  case["description"] = description
+              if notes:
+                  case["notes"] = notes
+              if steps:
+                  case["steps"] = steps
+              errors = last.get("errors") or ([last["error"]] if last.get("error") else [])
+              if errors and case["status"] in ("failed", "flaky"):
+                  first = errors[0] or {}
+                  error = {"message": clean(first.get("message") or first.get("value") or "", 4000)}
+                  where = first.get("location") or {}
+                  if where.get("line") and case.get("file"):
+                      error["location"] = case["file"] + ":" + str(where["line"])
+                  if error["message"]:
+                      case["error"] = error
+              return case
+
+          def walk(suite, trail, test_dir):
               """Collect failed specs, depth-first, keeping the suite path."""
               global failed
               title = suite.get("title") or ""
               here = trail + [title] if title else trail
 
               for spec in suite.get("specs") or []:
+                  spec_name = " > ".join(here + [spec.get("title") or "unknown"])
+                  for test in spec.get("tests") or []:
+                      cases.append(case_of(spec, test, spec_name, test_dir))
                   if spec.get("ok") is True:
+                      # `ok` is also true for a skipped spec, which did not
+                      # pass, so it needs at least one test that actually ran.
+                      # The same name from another browser is listed once.
+                      if any(test.get("status") != "skipped" for test in spec.get("tests") or []):
+                          passed_name = " > ".join(here + [spec.get("title") or "unknown"])
+                          if passed_name not in seen_passes:
+                              seen_passes.add(passed_name)
+                              passes.append(passed_name)
                       continue
                   name = " > ".join(here + [spec.get("title") or "unknown"])
                   message = ""
@@ -343,7 +1208,7 @@ jobs:
                   failures.append({"name": name, "message": message})
 
               for child in suite.get("suites") or []:
-                  walk(child, here)
+                  walk(child, here, test_dir)
 
           for path in sorted(glob.glob("e2e-json/**/*.json", recursive=True)):
               try:
@@ -372,19 +1237,62 @@ jobs:
               failed += unexpected
               total += expected + flaky + unexpected + skipped
 
+              # Paths relative to the project, e.g. tests/e2e/home.e2e-spec.ts,
+              # not to Playwright's testDir or the runner's checkout.
+              # Playwright's `rootDir` is the test folder itself, so the project
+              # root is where the config file lives.
+              config = report.get("config") or {}
+              config_file = str(config.get("configFile") or "").replace("\\", "/")
+              project_root = config_file.rsplit("/", 1)[0] if "/" in config_file else ""
+              projects = config.get("projects") or []
+              test_dir = ""
+              if project_root and projects and projects[0].get("testDir"):
+                  raw_dir = str(projects[0]["testDir"]).replace("\\", "/")
+                  if raw_dir.startswith(project_root + "/"):
+                      test_dir = raw_dir[len(project_root) + 1:]
+              if project_root:
+                  ROOTS[:] = [project_root + "/", project_root.replace("/", "\\") + "\\"]
+
               for suite in report.get("suites") or []:
-                  walk(suite, [])
+                  walk(suite, [], test_dir)
 
           if found:
               print(f"tests-total={total}")
               print(f"tests-passed={passed}")
               print(f"tests-failed={failed}")
               print("tests-failures=" + json.dumps(failures[:20], separators=(",", ":")))
+              # Capped at 300 names: GITHUB_OUTPUT and job outputs are size
+              # limited, and a product page has no use for more rows than that.
+              print("tests-passes=" + json.dumps(passes[:300], separators=(",", ":")))
+
+              # Failures first, then retried, passed and skipped; at most 50. The
+              # report job reads this through an environment variable, which
+              # Linux caps near 128 KB, so the error text is shortened until
+              # the list fits well under that.
+              order = {"failed": 0, "flaky": 1, "passed": 2, "skipped": 3}
+              listed = sorted(cases, key=lambda case: order.get(case["status"], 4))[:50]
+              encoded = json.dumps(listed, separators=(",", ":"))
+              for limit in (1500, 500, 200):
+                  if len(encoded) <= 90000:
+                      break
+                  for case in listed:
+                      if "error" in case:
+                          case["error"]["message"] = case["error"]["message"][:limit]
+                  encoded = json.dumps(listed, separators=(",", ":"))
+              if len(encoded) > 90000:
+                  for case in listed:
+                      case.pop("steps", None)
+                      case.pop("notes", None)
+                  encoded = json.dumps(listed, separators=(",", ":"))
+              print("tests-cases=" + encoded)
           else:
               print("::notice::No Playwright JSON report was produced, so the "
                     "run reports pass/fail only. Add ['json'] to the reporter "
                     "list in playwright.config.ts to report per-test results.")
           PYEOF
+
+          grep '^::' "${SUMMARY_FILE}" || true
+          grep -v '^::' "${SUMMARY_FILE}" >> "$GITHUB_OUTPUT" || true
 
       - name: Resolve final e2e result
         id: finalize
