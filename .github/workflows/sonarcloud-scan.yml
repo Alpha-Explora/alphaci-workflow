@@ -63,6 +63,9 @@ on:
       quality-gate-status:
         description: "SonarCloud quality gate status"
         value: ${{ jobs.sonarcloud-scan.outputs.status }}
+      blocked-by:
+        description: "Why the analysis could not run, when the cause is a setting rather than the code"
+        value: ${{ jobs.sonarcloud-scan.outputs.blocked-by }}
       gate-status:
         description: "SonarCloud quality gate: OK, ERROR, or UNKNOWN when it could not be read"
         value: ${{ jobs.sonarcloud-scan.outputs.gate-status }}
@@ -86,10 +89,24 @@ jobs:
     timeout-minutes: 30
     outputs:
       status: ${{ steps.quality-gate.outputs.status }}
+      blocked-by: ${{ steps.diagnose.outputs.blocked-by }}
       gate-status: ${{ steps.findings.outputs.gate-status }}
       failed-conditions: ${{ steps.findings.outputs.failed-conditions }}
       measures: ${{ steps.findings.outputs.measures }}
       issues: ${{ steps.findings.outputs.issues }}
+    env:
+      # One definition, used by the scan and by the diagnostic re-run below, so
+      # the two cannot drift apart.
+      SONAR_SCAN_ARGS: >
+        -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+        -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+        -Dsonar.sources=${{ inputs.sources-path }}
+        -Dsonar.tests=${{ inputs.tests-path }}
+        -Dsonar.exclusions=${{ inputs.sources-exclusions }}
+        -Dsonar.javascript.lcov.reportPaths=${{ inputs.coverage-report-path }}
+        -Dsonar.qualitygate.wait=${{ inputs.quality-gate-wait }}
+        -Dsonar.pullrequest.provider=GitHub
+        -Dsonar.pullrequest.github.repository=${{ github.repository }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -130,24 +147,73 @@ jobs:
 
           echo "✅ SonarCloud preflight passed."
 
+      # continue-on-error so the steps after it can say WHY it failed. The job
+      # is still failed, by the last step, whenever this one failed: nothing
+      # here turns a failed analysis into a pass.
       - name: Run SonarCloud Scan
         id: scan
+        continue-on-error: true
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           projectBaseDir: ${{ inputs.working-directory }}
-          args: >
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.sources=${{ inputs.sources-path }}
-            -Dsonar.tests=${{ inputs.tests-path }}
-            -Dsonar.exclusions=${{ inputs.sources-exclusions }}
-            -Dsonar.javascript.lcov.reportPaths=${{ inputs.coverage-report-path }}
-            -Dsonar.qualitygate.wait=${{ inputs.quality-gate-wait }}
-            -Dsonar.pullrequest.provider=GitHub
-            -Dsonar.pullrequest.github.repository=${{ github.repository }}
+          args: ${{ env.SONAR_SCAN_ARGS }}
+
+      # The action's log is not available to later steps, so the one failure
+      # that is a setting rather than the code has to be recognised another way.
+      #
+      # SonarCloud turns Automatic Analysis on by default for new projects, and
+      # refuses to run a CI analysis next to it. The scanner says so as
+      #
+      #   ERROR You are running CI analysis while Automatic Analysis is enabled.
+      #   Please consider disabling one or the other.
+      #
+      # and exits non-zero, about fifteen seconds in and before any file is
+      # analysed. When the scan failed before it reached SonarCloud (no
+      # report-task.txt), this runs the same scanner once more with its output
+      # captured, and looks for that message. The re-run is cheap because it
+      # fails at the same early point, it is capped, it never submits anything
+      # when the conflict is present, and its result never changes the verdict.
+      #
+      # blocked-by is published as an output because a workflow-level ::error::
+      # is attributed to `.github`, which the platform drops as noise.
+      - name: Diagnose Scan Failure
+        id: diagnose
+        if: always() && steps.scan.outcome == 'failure'
+        continue-on-error: true
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          if [ -f .scannerwork/report-task.txt ]; then
+            echo "The scan reached SonarCloud (report-task.txt exists), so this is not the Automatic Analysis conflict."
+            exit 0
+          fi
+
+          if ! command -v sonar-scanner >/dev/null 2>&1; then
+            echo "The scanner was never installed; nothing to diagnose."
+            exit 0
+          fi
+
+          # Never wait for the gate on the diagnostic run.
+          read -r -a scan_args <<< "${SONAR_SCAN_ARGS//-Dsonar.qualitygate.wait=true/-Dsonar.qualitygate.wait=false}"
+
+          log="$(mktemp)"
+          timeout 120 sonar-scanner -Dsonar.projectBaseDir="${PWD}" "${scan_args[@]}" > "${log}" 2>&1
+          rerun_status=$?
+
+          if grep -qi "Automatic Analysis is enabled" "${log}"; then
+            echo "blocked-by=automatic-analysis" >> "$GITHUB_OUTPUT"
+            echo "::error title=SonarCloud Automatic Analysis is on::This project has Automatic Analysis enabled, which SonarCloud refuses to run alongside a CI analysis. Fix: SonarCloud > the project > Administration > Analysis Method > turn off Automatic Analysis ('Enabled for this project'). Keep the CI analysis: automatic analysis cannot read a coverage report, so the coverage gate would stop meaning anything."
+          else
+            echo "No Automatic Analysis conflict found (diagnostic re-run exit ${rerun_status}). Scanner messages:"
+            grep -E "ERROR|WARN" "${log}" | head -n 20 || true
+          fi
 
       # Bring the findings back, so nobody has to open SonarCloud to learn what
       # it said: the gate, each failed condition with its value and threshold,
@@ -170,6 +236,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
         run: |
           set -uo pipefail
 
@@ -197,6 +264,22 @@ jobs:
             fi
           fi
 
+          # A scan that failed before SonarCloud accepted it left no task. The
+          # project's CURRENT gate then belongs to an earlier analysis, or to
+          # SonarCloud's own Automatic Analysis of other files (Dockerfile,
+          # workflows), and reporting it would blame the code for a run that
+          # never analysed it. Say that the gate is unknown, and nothing else.
+          if [ -z "${CE_TASK_ID}" ] && [ "${SCAN_OUTCOME}" != "success" ]; then
+            {
+              echo "gate-status=UNKNOWN"
+              echo "failed-conditions=[]"
+              echo "measures={}"
+              echo "issues=[]"
+            } >> "$GITHUB_OUTPUT"
+            echo "Quality gate: UNKNOWN (the scan did not reach SonarCloud, so there is no analysis to read)"
+            exit 0
+          fi
+
           # Wait for SonarCloud to finish processing this analysis (at most
           # about two minutes), then read the gate of that analysis.
           ANALYSIS_ID=""
@@ -221,6 +304,9 @@ jobs:
             gate_json="$(api "qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}${BRANCH_PARAM}")" || gate_json=""
           fi
           gate_status="$(printf '%s' "${gate_json}" | jq -r '.projectStatus.status // "UNKNOWN"' 2>/dev/null || echo UNKNOWN)"
+          if [ -z "${gate_status}" ]; then
+            gate_status="UNKNOWN"
+          fi
 
           conditions="$(printf '%s' "${gate_json}" | jq -c '
             [.projectStatus.conditions[]?
@@ -263,13 +349,31 @@ jobs:
           printf '%s' "${measures}" | jq -r 'to_entries[]? | "  \(.key): \(.value)"' 2>/dev/null || true
           printf '%s' "${issues}" | jq -r '.[]? | "  \(.severity) \(.file):\(.line // "-") \(.message)"' 2>/dev/null || true
 
+      # The scan step is continue-on-error, so the job's own status no longer
+      # says whether the analysis failed. This step does, and fails the job.
       - name: Check Quality Gate
         id: quality-gate
         if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          BLOCKED_BY: ${{ steps.diagnose.outputs.blocked-by }}
         run: |
-          echo "status=${{ job.status }}" >> $GITHUB_OUTPUT
-          if [ "${{ job.status }}" = "success" ]; then
+          status="${JOB_STATUS}"
+          if [ "${SCAN_OUTCOME}" = "failure" ]; then
+            status="failure"
+          fi
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+
+          if [ "${status}" = "success" ]; then
             echo "✅ SonarCloud Quality Gate passed"
-          else
-            echo "❌ SonarCloud Quality Gate failed"
+            exit 0
+          fi
+
+          echo "❌ SonarCloud Quality Gate failed"
+          if [ "${BLOCKED_BY}" = "automatic-analysis" ]; then
+            echo "::error::SonarCloud did not analyse this code: Automatic Analysis is enabled for the project. Turn it off in SonarCloud > the project > Administration > Analysis Method, then re-run."
+          fi
+          if [ "${SCAN_OUTCOME}" = "failure" ]; then
+            exit 1
           fi

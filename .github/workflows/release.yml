@@ -272,8 +272,15 @@ jobs:
           case "${code}" in
             2*) ;;
             *)
-              echo "::error::AlphaCI refused the release (HTTP ${code})."
-              jq -r '.message // .error // .' "${response}" 2>/dev/null || cat "${response}" || true
+              # The reason goes INTO the annotation: ALPHACI's run report reads
+              # annotations, not the log, so a reason on its own line is lost.
+              reason="$(jq -r '.message // .error // empty' "${response}" 2>/dev/null | tr '\r\n' '  ' | cut -c1-600)"
+              if [ -n "${reason}" ]; then
+                echo "::error::AlphaCI refused the release (HTTP ${code}): ${reason}"
+              else
+                echo "::error::AlphaCI refused the release (HTTP ${code})."
+                cat "${response}" || true
+              fi
               exit 1
               ;;
           esac

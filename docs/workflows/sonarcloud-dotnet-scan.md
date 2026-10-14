@@ -10,7 +10,7 @@ Runs SonarQube Cloud analysis for C# using SonarScanner for .NET.
 - Source workflow: `.github/workflows/sonarcloud-dotnet-scan.yml`
 - Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `configuration`, `sources-path`, `tests-path`, `coverage-report-path`, `coverage-artifact-name`, `quality-gate-wait`, `checkout-ref`
 - Secrets: `SONAR_TOKEN`, `SONAR_PROJECT_KEY`, `SONAR_ORGANIZATION`
-- Outputs: `status`
+- Outputs: `status`, `blocked-by`, `gate-status`, `failed-conditions`, `measures`, `issues`
 
 ## Why this exists separately from sonarcloud-scan.yml
 SonarQube Cloud analyses C#, but only through SonarScanner for .NET. The generic
@@ -51,3 +51,7 @@ It bites **every new project**, not once per organisation. Automatic analysis is
 
 CI-based analysis is the one to keep. Automatic analysis states plainly that *"code coverage information is not supported"*, and a pipeline whose quality gate is coverage has given up the thing it exists to measure the moment coverage stops arriving.
 
+## Findings are read for this analysis
+`Collect Findings` reads the quality gate of the analysis this run produced. SonarCloud processes the report after the scanner exits, so the project's gate read straight away is the previous analysis: a run whose scanner printed `QUALITY GATE STATUS: FAILED` used to be reported as `OK`.
+
+The scanner leaves its compute-engine task in `.sonarqube/out/.sonar/report-task.txt`. The step polls `api/ce/task` for that task (up to about three minutes), then asks `api/qualitygates/project_status?analysisId=...`. If the task does not finish in time it falls back to a lookup scoped to the branch or pull request named in the report's `dashboardUrl`, and never to the bare project key. With no report-task.txt there is no analysis to read: `gate-status` is `UNKNOWN` and `failed-conditions`, `measures` and `issues` are empty.
