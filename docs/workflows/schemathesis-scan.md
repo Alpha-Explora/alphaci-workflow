@@ -25,6 +25,7 @@ contract it publishes. A run that exercised no operation is a failure.
 | `health-timeout-seconds` | number | no | `120` | How long to wait for the health path. |
 | `fail-on-failure` | boolean | no | `true` | Fail the job on a contract violation. `false` reports only. |
 | `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
+| `dotnet-version` | string | no | `10.0.x` | .NET SDK that builds a .NET project's OpenAPI document when none is committed. |
 
 ## Secrets
 
@@ -65,10 +66,14 @@ jobs:
 - Schema lookup order: `schema-url-path` if set; else `schema-path`, which
   must exist; else the first `*.json` under `working-directory` containing
   `"openapi"`, skipping `bin/` and `obj/`. No schema fails the job.
-- The workflow does not build the project. A schema that is only produced by
-  the build (as in the .NET scaffold, which writes it to the project root and
-  ignores it in git) is not present in a fresh checkout. Set `schema-path` to
-  a committed file or use `schema-url-path`.
+- The .NET scaffold writes its schema during the build and ignores it in git,
+  so a fresh checkout has none. When neither `schema-path` nor
+  `schema-url-path` is set, no OpenAPI document is committed, and
+  `working-directory` holds a .NET solution or project, the job builds it
+  first (`dotnet build --configuration Release`, SDK `dotnet-version`) and
+  discovery finds the document that build wrote. A failed build fails the job:
+  no build means no document, so the contract was not tested. Other stacks
+  still need a committed file or `schema-url-path`.
 - A pass needs at least one operation tested, no violations, and
   Schemathesis exiting `0`. With `fail-on-failure: false` the verdict step
   reports and exits `0`.
