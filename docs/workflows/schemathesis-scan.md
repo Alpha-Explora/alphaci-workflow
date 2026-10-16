@@ -8,7 +8,7 @@ Generates test cases **from the API's own OpenAPI document** and checks the depl
 
 ## Public Contract
 - Source workflow: `.github/workflows/schemathesis-scan.yml`
-- Inputs: `working-directory`, `system-name`, `base-url`, `schema-path`, `schema-url-path`, `checks`, `max-examples`, `schemathesis-version`, `python-version`, `health-path`, `health-timeout-seconds`, `fail-on-failure`, `checkout-ref`
+- Inputs: `working-directory`, `system-name`, `base-url`, `schema-path`, `schema-url-path`, `checks`, `max-examples`, `schemathesis-version`, `python-version`, `health-path`, `health-timeout-seconds`, `fail-on-failure`, `checkout-ref`, `dotnet-version`
 - Secrets: none
 - Outputs: `contract-result`, `operations-tested`, `failures`
 
@@ -21,6 +21,8 @@ The bugs it catches are unhandled-exception bugs and contract drift. `age: 21474
 `schema-path` (or discovery) reads the document from the build output. The .NET scaffold writes it during `dotnet build` via `Microsoft.Extensions.ApiDescription.Server`, so the running service publishes nothing extra describing its own surface, and the document cannot drift from the code that produced it.
 
 `schema-url-path` exists for services that genuinely serve their schema, but a file is preferred wherever the build can emit one.
+
+The document is gitignored, so a fresh checkout has none. When neither `schema-path` nor `schema-url-path` is given, no OpenAPI document is committed, and `working-directory` holds a .NET solution or project, the job builds it first (`dotnet build --configuration Release`) with the `dotnet-version` SDK, the same one the .NET quality jobs use. Discovery then finds the document that build wrote. A build failure fails the job with that reason: no build means no document, so the contract was not tested.
 
 ## A run that exercised nothing is a failure
 A schema describing zero operations produces a clean run and a zero exit. So does one whose paths were all filtered out. Either way the API shipped with nothing checked while the job went green — the same shape as an architecture test asserting over an empty type set.
