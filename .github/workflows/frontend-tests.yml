@@ -33,6 +33,11 @@ on:
         type: number
         default: 80
         description: "Minimum coverage percentage"
+      promotion-coverage-threshold:
+        required: false
+        type: number
+        default: 0
+        description: "Threshold uat and main enforce; coverage below it warns without failing. 0 turns it off"
       enforce-coverage:
         required: false
         type: boolean
@@ -144,6 +149,7 @@ jobs:
         env:
           ENFORCE_COVERAGE: ${{ inputs.enforce-coverage }}
           THRESHOLD: ${{ inputs.coverage-threshold }}
+          PROMOTION_THRESHOLD: ${{ inputs.promotion-coverage-threshold }}
         run: |
           if [ -f "coverage/coverage-summary.json" ]; then
             METRICS=$(node -e "
@@ -173,8 +179,10 @@ jobs:
             BRANCHES_COVERAGE="${BRANCHES_COVERAGE}" \
             STATEMENTS_COVERAGE="${STATEMENTS_COVERAGE}" \
             THRESHOLD="${THRESHOLD}" \
+            PROMOTION="${PROMOTION_THRESHOLD}" \
             node -e "
               const threshold = Number(process.env.THRESHOLD);
+              const promotion = Number(process.env.PROMOTION);
               const metrics = {
                 lines: Number(process.env.LINES_COVERAGE),
                 functions: Number(process.env.FUNCTIONS_COVERAGE),
@@ -187,6 +195,14 @@ jobs:
                 process.exit(1);
               }
               console.log('Coverage meets threshold ' + threshold + '% for lines/functions/branches/statements');
+              // Warns only. dev gates lower than uat and main, and a commit that
+              // cleared dev's bar used to meet the higher one at promotion.
+              const short = Number.isFinite(promotion) && promotion > threshold
+                ? Object.entries(metrics).filter(([, value]) => value < promotion)
+                : [];
+              if (short.length > 0) {
+                console.log('::warning::Coverage passes this branch, but uat and main require ' + promotion + '%: ' + short.map(([name, value]) => name + '=' + value + '%').join(', ') + '. Promotion will fail until these reach ' + promotion + '%.');
+              }
             "
           else
             echo "coverage=unknown" >> "$GITHUB_OUTPUT"

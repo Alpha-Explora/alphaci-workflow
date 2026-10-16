@@ -8,7 +8,7 @@ Runs frontend unit tests with coverage and optional artifact upload.
 
 ## Public Contract
 - Source workflow: `.github/workflows/frontend-tests.yml`
-- Inputs: `working-directory`, `system-name`, `node-version`, `test-command`, `unit-tests-directory`, `coverage-threshold`, `enforce-coverage`, `upload-artifact`, `checkout-ref`
+- Inputs: `working-directory`, `system-name`, `node-version`, `test-command`, `unit-tests-directory`, `coverage-threshold`, `promotion-coverage-threshold`, `enforce-coverage`, `upload-artifact`, `checkout-ref`
 - Secrets: none
 - Outputs: `test-result`, `coverage-percent`
 
@@ -17,5 +17,10 @@ Call directly from a consumer workflow before build or deploy work. Ordering bel
 
 Set `enforce-coverage: false` when a generated project enables unit tests but
 does not want the coverage gate.
+
+Set `promotion-coverage-threshold` to the threshold uat and main enforce when
+calling this on a branch that gates lower. Any metric that passes
+`coverage-threshold` but is below it gets a warning naming the metric; the job
+still passes. `0`, the default, turns it off.
 
 Use `checkout-ref` when a `workflow_run` chain must test the original triggering commit instead of the default branch commit.

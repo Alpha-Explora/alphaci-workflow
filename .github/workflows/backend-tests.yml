@@ -38,6 +38,11 @@ on:
         type: number
         default: 80
         description: "Minimum coverage percentage"
+      promotion-coverage-threshold:
+        required: false
+        type: number
+        default: 0
+        description: "Threshold uat and main enforce; coverage below it warns without failing. 0 turns it off"
       coverage-report-path:
         required: false
         type: string
@@ -156,6 +161,7 @@ jobs:
           report-path: ${{ inputs.coverage-report-path }}
           format: ${{ inputs.coverage-format }}
           threshold: ${{ inputs.coverage-threshold }}
+          promotion-threshold: ${{ inputs.promotion-coverage-threshold }}
           enforce: ${{ inputs.enforce-coverage }}
           working-directory: ${{ inputs.working-directory }}
 

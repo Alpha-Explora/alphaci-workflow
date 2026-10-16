@@ -17,6 +17,10 @@ inputs:
     description: "Fail the job when coverage is below threshold or the report is missing"
     required: false
     default: "true"
+  promotion-threshold:
+    description: "Threshold uat and main enforce. Coverage that passes threshold but not this gets a warning, never a failure. 0 turns it off."
+    required: false
+    default: "0"
   working-directory:
     description: "Directory the report path is relative to"
     required: false
@@ -39,6 +43,7 @@ runs:
         COVERAGE_REPORT_PATH: ${{ inputs.report-path }}
         COVERAGE_THRESHOLD: ${{ inputs.threshold }}
         COVERAGE_ENFORCE: ${{ inputs.enforce }}
+        PROMOTION_THRESHOLD: ${{ inputs.promotion-threshold }}
         PARSER: ${{ github.action_path }}/parse-coverage.mjs
       run: |
         set -uo pipefail
@@ -64,9 +69,13 @@ runs:
           exit 0
         fi
 
-        COVERAGE="${COVERAGE}" THRESHOLD="${COVERAGE_THRESHOLD}" node -e "
+        # The promotion threshold only warns. dev gates at a lower bar than uat
+        # and main, and a commit that clears dev's bar used to learn about the
+        # higher one only when its promotion failed.
+        COVERAGE="${COVERAGE}" THRESHOLD="${COVERAGE_THRESHOLD}" PROMOTION="${PROMOTION_THRESHOLD}" node -e "
           const coverage = Number(process.env.COVERAGE);
           const threshold = Number(process.env.THRESHOLD);
+          const promotion = Number(process.env.PROMOTION);
           if (!Number.isFinite(coverage)) {
             console.error('::error::Coverage value was not numeric.');
             process.exit(1);
@@ -76,4 +85,7 @@ runs:
             process.exit(1);
           }
           console.log('Coverage ' + coverage + '% meets the ' + threshold + '% threshold.');
+          if (Number.isFinite(promotion) && promotion > threshold && coverage < promotion) {
+            console.log('::warning::Coverage ' + coverage + '% passes this branch, but uat and main require ' + promotion + '%. Promotion will fail until coverage reaches ' + promotion + '%.');
+          }
         "
