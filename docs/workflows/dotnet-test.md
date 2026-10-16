@@ -8,7 +8,7 @@ Restores, builds, and tests a .NET solution, then merges the per-project coverag
 
 ## Public Contract
 - Source workflow: `.github/workflows/dotnet-test.yml`
-- Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `configuration`, `test-arguments`, `coverage-threshold`, `enforce-coverage`, `reportgenerator-version`, `upload-artifact`, `checkout-ref`
+- Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `configuration`, `test-arguments`, `coverage-threshold`, `promotion-coverage-threshold`, `enforce-coverage`, `reportgenerator-version`, `upload-artifact`, `checkout-ref`
 - Secrets: none
 - Outputs: `unit-test-result`, `coverage-percent`
 
@@ -21,6 +21,8 @@ Leave `solution-path` empty when the working directory contains exactly one solu
 
 ## Coverage
 Coverage is collected with `--collect:"XPlat Code Coverage"`, which requires a `PackageReference` to `coverlet.collector` in every test project. A test project without it runs green and produces no report; the workflow treats that as a failure when `enforce-coverage` is true rather than reporting zero, because the two have different fixes.
+
+`promotion-coverage-threshold` is the threshold uat and main enforce. Line coverage that passes `coverage-threshold` but is below it gets a warning, never a failure, so a branch that gates lower learns about the higher bar before its promotion fails. `0`, the default, turns it off.
 
 `dotnet test` writes one report per test project into its own GUID-named directory. The workflow merges all of them with ReportGenerator into:
 

@@ -14,7 +14,9 @@ coverage enforcement or rewriting the gate — and the first of those is what te
 - Source: `.github/actions/coverage-gate/action.yml`
 - Required inputs: `report-path`
 - Optional inputs: `format` (`istanbul-summary` | `cobertura` | `lcov` | `jacoco`), `threshold`,
-  `enforce`, `working-directory`
+  `promotion-threshold`, `enforce`, `working-directory`
+- `promotion-threshold` warns, never fails: coverage that meets `threshold` but is below it gets a
+  warning saying uat and main require more. `0`, the default, turns it off.
 - Outputs: `coverage`
 
 ## Formats
