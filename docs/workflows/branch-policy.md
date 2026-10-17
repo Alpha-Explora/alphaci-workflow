@@ -7,15 +7,14 @@ the SonarCloud gate blocks.
 - Source: `.github/workflows/branch-policy.yml`
 - Trigger: `workflow_call`
 - Used by: not called by the generator or any template. Generated pipelines
-  compute the same outputs in an inline `branch-policy` job, with different
-  coverage rules (see Notes).
+  compute the same outputs in an inline `branch-policy` job.
 
 ## Inputs
 
 | Input | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `branch` | string | yes | | Branch to evaluate. |
-| `base-coverage-threshold` | number | no | `80` | Coverage threshold on branches other than `uat` and `main`. |
+| `base-coverage-threshold` | number | no | `80` | Coverage threshold on every branch (`dev`, `uat` and `main` alike). |
 
 ## Secrets
 
@@ -28,7 +27,7 @@ they are only visible when the caller uses `secrets: inherit`.
 | Output | Description |
 | --- | --- |
 | `branch` | The `branch` input. |
-| `coverage-threshold` | `base-coverage-threshold` on other branches; base + 10, capped at 95, on `uat` and `main`. |
+| `coverage-threshold` | `base-coverage-threshold`, on every branch. |
 | `fail-on-warning` | `true` on `uat` and `main`, else `false`. |
 | `sonar-enabled` | `true` when all three Sonar secrets are non-empty. |
 | `sonar-gate-wait` | `true` on `uat` and `main`, else `false`. |
@@ -57,6 +56,7 @@ jobs:
 
 ## Notes
 
-- The generator's inline policy uses the project's coverage threshold on every
-  branch and does not add 10 on `uat` and `main`. The two are not
-  interchangeable.
+- One coverage threshold on every branch, as the generator's inline policy
+  uses: a commit that passed `dev` cannot fail the same bar on `uat` or
+  `main`. Those two stay strict otherwise: lint warnings are fatal and the
+  SonarCloud gate blocks.
