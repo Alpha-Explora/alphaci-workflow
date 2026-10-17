@@ -17,7 +17,7 @@ on:
         required: false
         type: number
         default: 80
-        description: "Coverage floor on non-promoted branches"
+        description: "Coverage floor on every branch (dev, uat and main alike)"
     outputs:
       branch:
         value: ${{ jobs.resolve.outputs.branch }}
@@ -50,15 +50,15 @@ jobs:
           BASE_COVERAGE: ${{ inputs.base-coverage-threshold }}
           SONAR_CONFIGURED: ${{ secrets.SONAR_TOKEN != '' && secrets.SONAR_ORGANIZATION != '' && secrets.SONAR_PROJECT_KEY != '' }}
         run: |
-          # Promoted branches (uat, main) raise the bar: +10 coverage capped at
-          # 95, lint warnings become fatal, and the Sonar gate blocks.
+          # One coverage threshold on every branch, so a commit that passes dev
+          # cannot fail the same bar on uat or main. Promoted branches (uat,
+          # main) stay strict otherwise: lint warnings become fatal and the
+          # Sonar gate blocks.
+          COVERAGE_THRESHOLD="$BASE_COVERAGE"
           if [ "$BRANCH" = "uat" ] || [ "$BRANCH" = "main" ]; then
-            COVERAGE_THRESHOLD=$((BASE_COVERAGE + 10))
-            if [ "$COVERAGE_THRESHOLD" -gt 95 ]; then COVERAGE_THRESHOLD=95; fi
             FAIL_ON_WARNING=true
             SONAR_GATE_WAIT=true
           else
-            COVERAGE_THRESHOLD="$BASE_COVERAGE"
             FAIL_ON_WARNING=false
             SONAR_GATE_WAIT=false
           fi
