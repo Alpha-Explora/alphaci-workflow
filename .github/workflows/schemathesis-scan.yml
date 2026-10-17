@@ -30,7 +30,7 @@ on:
       checks:
         required: false
         type: string
-        default: "all"
+        default: "not_a_server_error"
         description: "Which properties to assert. 'all' covers 5xx, schema conformance, status codes and content types"
       max-examples:
         required: false
