@@ -67,6 +67,11 @@ on:
         type: string
         default: ""
         description: "Optional git ref/SHA to checkout, used by workflow_run chains"
+      dotnet-version:
+        required: false
+        type: string
+        default: "10.0.x"
+        description: ".NET SDK used to build the OpenAPI document of a .NET project"
     outputs:
       contract-result:
         description: "Contract test pass/fail"
@@ -101,6 +106,92 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}
+
+      # The .NET scaffold writes its OpenAPI document during `dotnet build` and
+      # gitignores it, and the running service deliberately does not serve it.
+      # A fresh checkout therefore holds no schema until it is built here.
+      # Skipped when the caller names the schema, when one is already committed,
+      # or when there is no .NET project to build.
+      - name: Detect .NET Schema Build
+        id: dotnet
+        env:
+          WORKDIR: ${{ inputs.working-directory }}
+          SCHEMA_PATH: ${{ inputs.schema-path }}
+          SCHEMA_URL_PATH: ${{ inputs.schema-url-path }}
+        run: |
+          set -euo pipefail
+
+          root="${WORKDIR%/}"
+          root="${root#./}"
+          root="${root:-.}"
+
+          if [ -n "${SCHEMA_PATH}${SCHEMA_URL_PATH}" ]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "The caller names the schema; nothing to build."
+            exit 0
+          fi
+
+          committed="$(find "${root}" -path '*/obj/*' -prune -o -path '*/bin/*' -prune -o -name '*.json' -print 2>/dev/null \
+            | xargs -r grep -l '"openapi"' 2>/dev/null | head -n 1 || true)"
+          if [ -n "${committed}" ]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "A schema is already in the repository (${committed}); nothing to build."
+            exit 0
+          fi
+
+          # A solution builds every project in one pass; without one, the
+          # directory's single project is the target, as `dotnet build` decides.
+          target="$(find "${root}" -maxdepth 1 \( -name '*.sln' -o -name '*.slnx' \) -print | head -n 1 || true)"
+          if [ -z "${target}" ] && ! find "${root}" -name '*.csproj' -print -quit | grep -q .; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "No .NET project under ${root}; nothing to build."
+            exit 0
+          fi
+
+          echo "build=true" >> "$GITHUB_OUTPUT"
+          echo "target=${target}" >> "$GITHUB_OUTPUT"
+          echo "Building ${target:-the project under ${root}} to produce its OpenAPI document."
+
+      # The same SDK the quality jobs (dotnet-test, dotnet-analyze) build with,
+      # so the document comes from the toolchain that already passed there. A
+      # repository's global.json still applies to `dotnet build`; the scaffold
+      # pins its SDK with rollForward latestMajor, which accepts this one.
+      - name: Setup .NET ${{ inputs.dotnet-version }}
+        if: steps.dotnet.outputs.build == 'true'
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Cache NuGet Packages
+        if: steps.dotnet.outputs.build == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.fsproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Build OpenAPI Document
+        if: steps.dotnet.outputs.build == 'true'
+        env:
+          WORKDIR: ${{ inputs.working-directory }}
+          TARGET: ${{ steps.dotnet.outputs.target }}
+        run: |
+          set -euo pipefail
+
+          root="${WORKDIR%/}"
+          root="${root#./}"
+          cd "${root:-.}"
+
+          target=()
+          if [ -n "${TARGET}" ]; then
+            target+=("${TARGET##*/}")
+          fi
+
+          if ! dotnet build "${target[@]}" --configuration Release --nologo; then
+            echo "::error::The project did not build, so it produced no OpenAPI document. The API contract was not tested."
+            exit 1
+          fi
 
       # A missing schema is reported, never skipped. Schemathesis generates its
       # cases FROM the schema, so without one there is nothing to test — and a
