@@ -1,57 +1,102 @@
 # sonarcloud-dotnet-scan.yml
 
-## Role
-Quality gate.
+Runs SonarCloud analysis for C# with SonarScanner for .NET (`begin`, `dotnet
+build`, `end`), then reads back the quality gate, measures and top issues of
+that analysis. The generic `sonar-scanner` CLI in `sonarcloud-scan.yml` cannot
+analyse C#.
 
-## Purpose
-Runs SonarQube Cloud analysis for C# using SonarScanner for .NET.
+- Source: `.github/workflows/sonarcloud-dotnet-scan.yml`
+- Trigger: `workflow_call`
+- Used by: generated `10-alphaci-quality.yml` (.NET stack, job `sonar`, only when the `SONAR_*` secrets are set)
 
-## Public Contract
-- Source workflow: `.github/workflows/sonarcloud-dotnet-scan.yml`
-- Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `configuration`, `sources-path`, `tests-path`, `coverage-report-path`, `coverage-artifact-name`, `quality-gate-wait`, `checkout-ref`
-- Secrets: `SONAR_TOKEN`, `SONAR_PROJECT_KEY`, `SONAR_ORGANIZATION`
-- Outputs: `status`, `blocked-by`, `gate-status`, `failed-conditions`, `measures`, `issues`
+## Inputs
 
-## Why this exists separately from sonarcloud-scan.yml
-SonarQube Cloud analyses C#, but only through SonarScanner for .NET. The generic
-`sonar-scanner` CLI that `sonarcloud-scan.yml` runs does not support C# or VB.NET
-at all.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Directory holding the solution. |
+| `system-name` | string | yes | | Name used in logs. |
+| `dotnet-version` | string | no | `10.0.x` | .NET SDK version. |
+| `solution-path` | string | no | `""` | Solution or project, relative to `working-directory`. Empty lets the SDK discover it. |
+| `configuration` | string | no | `Release` | Build configuration. |
+| `sources-path` | string | no | `src` | Value for `sonar.sources`. |
+| `tests-path` | string | no | `tests` | Value for `sonar.tests`. Must differ from `sources-path`. |
+| `coverage-report-path` | string | no | `coverage/coverage.cobertura.xml` | Cobertura report. Only used to warn that coverage is present in a format the scanner cannot import. |
+| `generic-coverage-report-path` | string | no | `coverage/SonarQube.xml` | Coverage in SonarQube generic format. This is the file imported (`sonar.coverageReportPaths`). |
+| `coverage-artifact-name` | string | no | `""` | Artifact to download into `<working-directory>/coverage`. Empty skips the download. |
+| `coverage-exclusions` | string | no | `tests/**` | Value for `sonar.coverage.exclusions`. |
+| `quality-gate-wait` | boolean | no | `false` | Pass `sonar.qualitygate.wait=true` so a failed gate fails the job. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
 
-The difference is when analysis happens. The CLI reads files that already exist.
-SonarScanner for .NET wraps the build — `begin`, then `dotnet build`, then `end` —
-so Roslyn analyzers emit their findings as the compiler runs and the scanner
-collects them. That is why this workflow builds the solution again rather than
-reusing an earlier build.
+## Secrets
 
-## sources and tests must be disjoint
-Sonar refuses to index a file as both a source and a test, and fails the whole
-scan rather than choosing. The workflow rejects identical values up front so the
-failure names the cause instead of surfacing as "can't be indexed twice" from
-the scanner.
+| Secret | Required | Description |
+| --- | --- | --- |
+| `SONAR_TOKEN` | no | SonarCloud token. |
+| `SONAR_ORGANIZATION` | no | SonarCloud organization key. |
+| `SONAR_PROJECT_KEY` | no | SonarCloud project key. |
 
-A .NET repository keeps tests in their own directory, so `sources-path: src` and
-`tests-path: tests`. The Node value of `src,tests` overlaps and must not be
-copied across.
+All three are declared optional, but the job fails when any of them is empty.
+Callers that may not have them should skip the job instead.
 
-## Coverage
-Reads the merged Cobertura report `dotnet-test.yml` produces. Coverage is
-optional: a repository whose tests produced no report still gets code analysis,
-with a warning, rather than no analysis at all.
+## Outputs
 
-## Java
-The scanner is a .NET global tool but the analysis engine runs on Java, which
-some SDK images do not ship. The workflow installs a JRE for that reason.
+| Output | Description |
+| --- | --- |
+| `status` | Outcome of the analysis step (`success` or `failure`). |
+| `blocked-by` | `automatic-analysis` when SonarCloud rejected the run because Automatic Analysis is on. Empty otherwise. |
+| `gate-status` | Quality gate of this analysis: `OK`, `ERROR`, or `UNKNOWN`. |
+| `failed-conditions` | JSON array of `{metric,status,actual,threshold}` for conditions in `ERROR` or `WARN`. |
+| `measures` | JSON object with `bugs`, `vulnerabilities`, `code_smells`, `security_hotspots`, `coverage`, `duplicated_lines_density`. |
+| `issues` | JSON array of the most severe open issues on new code (rule, severity, type, message, file, line), at most 20. |
 
-## Automatic Analysis has to be off, per project
-SonarCloud refuses to run a CI analysis on a project that also has Automatic Analysis enabled, and says so only as `Post-processing failed. Exit code: 1` with the reason forty lines up the log. This workflow pulls that reason out and names the fix.
+## Permissions
 
-It is documented behaviour rather than a defect: *"Automatic analysis is not intended to be used in conjunction with CI-based analysis. If you enable automatic analysis, you must ensure that you do not have any CI-based analyses configured. If you do then these CI-based analyses will fail and cause a failure in your build process."*
+Workflow: `contents: read`. The caller job needs nothing more.
 
-It bites **every new project**, not once per organisation. Automatic analysis is on by default for new projects, and the organisation-level switch that would turn it off for all of them is an Enterprise-plan feature — on any lower plan it must be turned off per project, at *the project → Administration → Analysis Method → unselect "Enabled for this project"*. There is no supported Web API for it.
+## Jobs
 
-CI-based analysis is the one to keep. Automatic analysis states plainly that *"code coverage information is not supported"*, and a pipeline whose quality gate is coverage has given up the thing it exists to measure the moment coverage stops arriving.
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `sonarcloud-dotnet` | always | Full-depth checkout, set up .NET and Java 21, download coverage, check the secrets, run the scanner around `dotnet build`, then collect findings from the SonarCloud Web API. |
 
-## Findings are read for this analysis
-`Collect Findings` reads the quality gate of the analysis this run produced. SonarCloud processes the report after the scanner exits, so the project's gate read straight away is the previous analysis: a run whose scanner printed `QUALITY GATE STATUS: FAILED` used to be reported as `OK`.
+## Example
 
-The scanner leaves its compute-engine task in `.sonarqube/out/.sonar/report-task.txt`. The step polls `api/ce/task` for that task (up to about three minutes), then asks `api/qualitygates/project_status?analysisId=...`. If the task does not finish in time it falls back to a lookup scoped to the branch or pull request named in the report's `dashboardUrl`, and never to the bare project key. With no report-task.txt there is no analysis to read: `gate-status` is `UNKNOWN` and `failed-conditions`, `measures` and `issues` are empty.
+```yaml
+jobs:
+  sonar:
+    needs: [branch-policy, dotnet-tests]
+    if: ${{ needs.branch-policy.outputs.sonar-enabled == 'true' }}
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/sonarcloud-dotnet-scan.yml@v1
+    with:
+      system-name: orders-api
+      sources-path: src
+      tests-path: tests
+      coverage-artifact-name: orders-api-coverage
+      quality-gate-wait: true
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+```
+
+## Notes
+
+- Coverage comes from `SonarQube.xml`, which `dotnet-test.yml` writes next to
+  the Cobertura report. SonarScanner for .NET has no Cobertura importer. With
+  no generic report the analysis runs without coverage and warns.
+- A `sonar-project.properties` in the checkout is deleted before the scan,
+  with a warning. SonarScanner for .NET refuses to run with one; every value
+  is passed on the command line.
+- Identical `sources-path` and `tests-path` fail the job before the scan.
+- SonarCloud rejects a CI analysis on a project that has Automatic Analysis
+  enabled. The job then sets `blocked-by=automatic-analysis` and names the
+  fix: in SonarCloud, the project, Administration, Analysis Method, unselect
+  "Enabled for this project". New projects have it on by default.
+- `Collect Findings` never fails the job. It reads the compute-engine task
+  from `.sonarqube/out/.sonar/report-task.txt`, waits up to about three
+  minutes for it, and reads the gate by analysis id. If the task does not
+  finish it falls back to the branch or pull request from the report's
+  dashboard URL. With no task file the gate is `UNKNOWN` and the other
+  outputs are empty.
+- The generated pipeline sets `quality-gate-wait` from `branch-policy`:
+  `true` on `uat` and `main`, `false` elsewhere.

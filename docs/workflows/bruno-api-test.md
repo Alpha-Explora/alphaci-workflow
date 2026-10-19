@@ -1,47 +1,86 @@
 # bruno-api-test.yml
 
-## Role
-Primitive check.
+Runs a Bruno collection against a deployed API and reports requests,
+assertions and failures. It waits for the deployment's health path first. A
+run that executed no assertions is a failure.
 
-## Purpose
-Runs a Bruno collection against a **deployed** API and reports the requests, assertions and failures, so a release is verified by exercising the running service rather than by re-reading its source.
+- Source: `.github/workflows/bruno-api-test.yml`
+- Trigger: `workflow_call`
+- Used by: generated `30-alphaci-verify.yml` (.NET stack, when a deployment exists): the whole collection on `uat`, `folder: smoke` on `main`
 
-## Public Contract
-- Source workflow: `.github/workflows/bruno-api-test.yml`
-- Inputs: `working-directory`, `system-name`, `base-url`, `collection-path`, `folder`, `min-assertions`, `bruno-version`, `node-version`, `health-path`, `health-timeout-seconds`, `fail-on-failure`, `checkout-ref`
-- Secrets: `API_USERNAME`, `API_PASSWORD`, `API_TOKEN` — all optional
-- Outputs: `api-test-result`, `total-requests`, `failed-requests`, `total-assertions`
+## Inputs
 
-## Usage
-This is the only check in the set that needs something running. It belongs after a deploy job, never beside the source-reading gates: with no service at `base-url` there is nothing to test, and the result would describe the deployment rather than the code.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Directory holding the collection, relative to the repository root. |
+| `system-name` | string | yes | | Name used in artifact names and logs. |
+| `base-url` | string | yes | | Root URL of the deployed API. The collection reads it as `{{BASE_URL}}`. |
+| `collection-path` | string | no | `tests/api` | Collection root (the directory holding `bruno.json`), under `working-directory`. |
+| `folder` | string | no | `""` | Subfolder to run instead of the whole collection. |
+| `min-assertions` | number | no | `1` | Fewest assertions plus tests that must execute. |
+| `bruno-version` | string | no | `4.1.0` | `@usebruno/cli` version. |
+| `node-version` | string | no | `22.x` | Node version used to run the Bruno CLI. |
+| `health-path` | string | no | `/health` | Path polled until it answers `200` before any request runs. |
+| `health-timeout-seconds` | number | no | `120` | How long to wait for the health path. |
+| `fail-on-failure` | boolean | no | `true` | Fail the job when the suite fails. `false` reports only. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
 
-`folder` runs part of a collection instead of all of it. That is what separates the two tiers: the QA environment runs the whole suite, including the requests that create, update and delete; production runs the read-only subset. A CRUD suite pointed at production is not a test, it is a write.
+## Secrets
 
-`fail-on-failure` is what a branch policy moves, the same way `fail-on-warning` moves for the static gates.
+| Secret | Required | Description |
+| --- | --- | --- |
+| `API_USERNAME` | no | Passed as `{{API_USERNAME}}`. |
+| `API_PASSWORD` | no | Passed as `{{API_PASSWORD}}`. |
+| `API_TOKEN` | no | Passed as `{{API_TOKEN}}`. |
 
-## Why a passing exit code is not enough
-`bru` reports `PASS` and exits `0` for a collection that executed requests and asserted nothing. Observed directly, one request with no `assert` block:
+## Outputs
 
+| Output | Description |
+| --- | --- |
+| `api-test-result` | Outcome of the verdict step (`success` or `failure`). |
+| `total-requests` | Requests executed. |
+| `failed-requests` | Failed plus errored requests. `0` when clean. |
+| `total-assertions` | Assertions plus tests executed. `0` means the suite proved nothing. |
+
+## Permissions
+
+Workflow: `contents: read`. The caller job needs nothing more.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `bruno-api-test` | always | Locate the collection, install the Bruno CLI, poll the health path, run `bru run` with `--env-var` values and a JSON reporter, judge `results.json`, upload it. |
+
+## Example
+
+```yaml
+jobs:
+  api-tests:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/bruno-api-test.yml@v1
+    with:
+      system-name: orders-api
+      base-url: ${{ vars.RENDER_HEALTHCHECK_URL_UAT }}
+      collection-path: tests/api
+    secrets:
+      API_TOKEN: ${{ secrets.API_TOKEN }}
 ```
-Status ✓ PASS | Requests 1 (1 Passed) | Tests 0/0 | Assertions 0/0
-exit 0
-```
 
-So a suite whose assertions were deleted, a folder filter that matched only unasserted requests, or a collection someone stubbed out mid-refactor all report green while proving nothing. This is the same shape as an architecture test asserting over an empty type set: the check ran, found nothing to object to, and said so.
+## Notes
 
-A pass therefore has to clear three bars, not one:
-
-1. `bru` exited clean,
-2. no request failed, and
-3. the run actually executed at least `min-assertions` assertions or tests.
-
-`min-assertions` defaults to `1`, which only catches a suite that asserts nothing at all. Raise it per project once the collection has a known size — it is a floor, and a floor set to the real number turns "someone deleted half the suite" into a failure too.
-
-## A missing collection is a failure, not a skip
-If `bruno.json` is absent, or the collection holds no `.bru` files, the job fails and says the API was not tested. Skipping would be worse than useless: a skipped check reads as "nothing to worry about" on a dashboard, and here it would mean the service shipped unverified.
-
-## Waiting before testing
-A deploy job returns when the platform accepts the release, not when the container serves traffic. Requests fired into that window fail with connection errors that look exactly like API defects. So `health-path` is polled until it answers `200`, and a deployment that never answers fails with that as the stated reason rather than as a wall of failed requests.
-
-## Credentials never enter the repository
-`base-url` and the three optional secrets are passed with `--env-var` at run time. Bruno environment files are committed, so anything written into one is committed with it; nothing here writes a credential to disk. The collection reads them as `{{BASE_URL}}`, `{{API_USERNAME}}`, `{{API_PASSWORD}}` and `{{API_TOKEN}}`.
+- A pass needs all of: at least one request ran, at least `min-assertions`
+  assertions or tests executed, no request or assertion failed, and `bru`
+  exited `0`. `bru` itself reports a request with no assertions as passed.
+- These fail the job whatever `fail-on-failure` says: no `bruno.json` at the
+  collection root, no `.bru` files, a `folder` that does not exist, or a
+  health path that never answers `200`.
+- With `fail-on-failure: false` the verdict step reports the error and exits
+  `0`, so `api-test-result` is `success`.
+- If `base-url` ends with `health-path`, that suffix is removed. The generated
+  pipeline passes the `RENDER_HEALTHCHECK_URL_UAT` or
+  `RENDER_HEALTHCHECK_URL_MAIN` repository variable, which is a health URL.
+- `main` runs only the read-only `smoke` folder, so production gets no
+  create, update or delete requests.
+- Credentials are passed with `--env-var` at run time and are never written
+  to a file. Empty secrets are not passed.
+- Artifact: `bruno-results-<system-name>` (`results.json`, 14 days).

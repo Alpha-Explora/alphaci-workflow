@@ -1,27 +1,65 @@
 # dotnet-sbom.yml
 
-## Role
-Primitive check.
+Exports a CycloneDX software bill of materials (JSON) for the resolved NuGet
+graph and keeps it as an artifact. It records; it does not judge the
+dependencies.
 
-## Purpose
-Exports a CycloneDX software bill of materials for the resolved NuGet graph and keeps it as a release record.
+- Source: `.github/workflows/dotnet-sbom.yml`
+- Trigger: `workflow_call`
+- Used by: generated `10-alphaci-quality.yml` (.NET stack, job `sbom`)
 
-## Public Contract
-- Source workflow: `.github/workflows/dotnet-sbom.yml`
-- Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `require-sbom`, `tool-version`, `retention-days`, `checkout-ref`
-- Secrets: none
-- Outputs: `sbom-result`, `component-count`
+## Inputs
 
-## Usage
-Call it in parallel with the other quality checks. Use `checkout-ref` in `workflow_run` chains.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Directory holding the solution or projects. |
+| `system-name` | string | yes | | Name used in artifact names and logs. |
+| `dotnet-version` | string | no | `10.0.x` | .NET SDK version. |
+| `solution-path` | string | no | `""` | Solution or project, relative to `working-directory`. Empty uses the first `*.sln` or `*.slnx`, then the first `*.csproj` outside `bin/` and `obj/`. |
+| `require-sbom` | boolean | no | `true` | Fail when no SBOM, or an SBOM with zero components, is produced. `false` warns only. |
+| `tool-version` | string | no | `5.4.0` | CycloneDX dotnet tool version. |
+| `retention-days` | number | no | `90` | How long to keep the SBOM artifact. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
 
-`require-sbom` is what a branch policy moves: report-only on the working branch, required on the promoted ones. `retention-days` defaults to 90 rather than the usual 7 — this artifact is the evidence record for a release, and it is wanted long after the run that produced it has stopped being interesting.
+## Secrets
 
-## This one judges nothing
-Every other check in the stage has a pass condition. An SBOM does not: it is a record, not a verdict. What can go wrong is producing no record at all, and on a promoted branch that is a governance failure — a release whose contents nobody can enumerate afterwards, which is precisely what an SBOM exists to prevent.
+None.
 
-## An empty SBOM is worse than none
-A bill of materials listing zero components is treated as a failure on promoted branches. It looks like evidence and asserts that the build had no dependencies, which is untrue — so it is more misleading than a missing file, which at least announces itself.
+## Outputs
 
-## Restore decides the contents
-The SBOM describes the resolved graph, so `dotnet restore` runs first. Exported before restore it would describe the declared references rather than the versions actually shipped, which are the ones that matter to whoever reads it after a CVE lands.
+| Output | Description |
+| --- | --- |
+| `sbom-result` | Outcome of the export step (`success` or `failure`). |
+| `component-count` | Components in the SBOM. `0` when none was produced. |
+
+## Permissions
+
+Workflow: `contents: read`. The caller job needs nothing more.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `dotnet-sbom` | always | Restore, run `dotnet CycloneDX <target> --output sbom --json`, count components, upload `sbom/bom.json`. |
+
+## Example
+
+```yaml
+jobs:
+  sbom:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-sbom.yml@v1
+    with:
+      system-name: orders-api
+      require-sbom: true
+```
+
+## Notes
+
+- Restore runs first, so the SBOM lists resolved versions, not declared ones.
+- CycloneDX is always given a solution or project file. Given a directory it
+  reports zero packages.
+- With `require-sbom: true` the job fails when no target is found, the tool
+  fails, `bom.json` is missing, or it lists zero components.
+- The generated pipeline sets `require-sbom` from `branch-policy`: `true` on
+  `uat` and `main`, `false` elsewhere.
+- Artifact: `sbom-<system-name>`, kept for `retention-days`.

@@ -1,7 +1,7 @@
 # Starter React Project
 
-This is the MVP starter template for new React projects created by the
-CI/CD-as-a-Service platform.
+Minimal React starter. The scripts are small Node scripts with no framework
+dependencies.
 
 ## Scripts
 

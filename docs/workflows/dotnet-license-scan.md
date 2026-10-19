@@ -1,29 +1,72 @@
 # dotnet-license-scan.yml
 
-## Role
-Primitive check.
+Inventories the licences of the resolved NuGet graph with `nuget-license`,
+including transitive packages, and fails when a package uses a forbidden
+licence. Test projects are excluded.
 
-## Purpose
-Inventories the licences of the resolved NuGet graph and fails when one is on the forbidden list.
+- Source: `.github/workflows/dotnet-license-scan.yml`
+- Trigger: `workflow_call`
+- Used by: generated `10-alphaci-quality.yml` (.NET stack, job `licenses`)
 
-## Public Contract
-- Source workflow: `.github/workflows/dotnet-license-scan.yml`
-- Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `forbidden-licenses`, `fail-on-forbidden`, `tool-version`, `checkout-ref`
-- Secrets: none
-- Outputs: `license-result`, `forbidden-count`
+## Inputs
 
-## Usage
-Call it in parallel with the other quality checks. Use `checkout-ref` in `workflow_run` chains.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Directory holding the solution. |
+| `system-name` | string | yes | | Name used in artifact names and logs. |
+| `dotnet-version` | string | no | `10.0.x` | .NET SDK version. |
+| `solution-path` | string | no | `""` | Solution or project, relative to `working-directory`. Empty uses the first `*.sln` in `working-directory`. |
+| `forbidden-licenses` | string | no | `GPL-2.0,GPL-3.0,AGPL-3.0,SSPL-1.0` | Comma-separated SPDX ids that fail the scan. Matched case-insensitively. |
+| `fail-on-forbidden` | boolean | no | `true` | Fail when a forbidden licence is found. `false` reports only. |
+| `tool-version` | string | no | `4.0.16` | `nuget-license` version. |
+| `exclude-projects` | string | no | `*.Tests.csproj;*.Test.csproj;*.IntegrationTests.csproj;*.Spec.csproj;*.Specs.csproj` | Project file patterns excluded from the scan, matched case-insensitively against the project path. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
 
-`fail-on-forbidden` is what a branch policy moves: report-only on the working branch, fatal on the promoted ones. The inventory artifact is uploaded either way, because the licence record is wanted even when nothing is wrong.
+## Secrets
 
-`forbidden-licenses` defaults to the strong copyleft terms — `GPL-2.0`, `GPL-3.0`, `AGPL-3.0`, `SSPL-1.0` — whose obligations a hosted service usually cannot meet. It is an input rather than a constant because the answer is a legal decision per organisation, not a technical one.
+None.
 
-## The policy is here, not in the tool
-`dotnet-project-licenses` reports what the licences ARE. Which of them are acceptable is the platform's decision, so the matching lives in this workflow: it is reviewable in a diff, and it can differ per branch. The tool produces data; the workflow judges it — the same split `dotnet-audit.yml` uses for severities.
+## Outputs
 
-## Transitive is the point
-`--include-transitive` is not an optimisation. A forbidden licence is almost never a direct `PackageReference`; it arrives three levels down, which is exactly why reading the csproj never finds it.
+| Output | Description |
+| --- | --- |
+| `license-result` | Outcome of the policy step (`success` or `failure`). |
+| `forbidden-count` | Packages under a forbidden licence. `0` when clean. |
+| `forbidden-items` | JSON array of `{package,version,license}`, at most 20. |
+| `unknown-count` | Packages that report no licence. Warned about, not counted as forbidden. |
 
-## Unknown is not the same as forbidden
-A package that reports no licence is counted and warned about separately, never folded into the forbidden count. "We could not tell" is a different problem from "this one is disallowed", and mixing them buries the real hits in noise. An empty inventory file is treated as a failed scan rather than a clean one.
+## Permissions
+
+Workflow: `contents: read`. The caller job needs nothing more.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `dotnet-license-scan` | always | Restore, run `nuget-license --include-transitive` into `licenses/licenses.json`, apply the forbidden list with `jq`, upload the inventory. |
+
+## Example
+
+```yaml
+jobs:
+  licenses:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-license-scan.yml@v1
+    with:
+      system-name: orders-api
+      fail-on-forbidden: true
+```
+
+## Notes
+
+- The job fails, whatever `fail-on-forbidden` says, when no solution is found,
+  when the tool writes no readable JSON, or when the inventory is empty. An
+  empty inventory usually means `exclude-projects` matched the shipping
+  project.
+- Patterns in `exclude-projects` are matched against the project path, so
+  each should end in `.csproj`.
+- The tool's exit code is not used as the verdict; the policy step decides
+  from the inventory.
+- The generated pipeline keeps the default forbidden list and sets
+  `fail-on-forbidden` from `branch-policy`: `true` on `uat` and `main`,
+  `false` elsewhere.
+- Artifact: `licenses-<system-name>` (30 days), uploaded on every run.

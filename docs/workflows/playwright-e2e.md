@@ -1,18 +1,105 @@
-# Playwright E2E
+# playwright-e2e.yml
 
-Runs the reusable browser-test workflow for web services. Callers provide the
-service directory, install command, test command, and browser settings.
+Runs a repository's Playwright suite against a deployed site, one job per browser. It can stream per-test progress to AlphaCI, compare screenshots against baselines stored in AlphaCI, and reports test counts and per-test details as outputs.
+
+- Source: `.github/workflows/playwright-e2e.yml`
+- Trigger: `workflow_call`
+- Used by:
+  - `30-alphaci-verify.yml`: the UI test job for `uat` and `main`, when the stack has browser tests and the UI target is deployed. It passes `run-only-on-branch: '*'`, `visual-baselines: true`, `alphaci-api-url`, `visual-branch`, `ensure-test-deps`, `VERCEL_AUTOMATION_BYPASS_SECRET` (from `VERCEL_FRONTEND_AUTOMATION_BYPASS_SECRET`) and `ALPHACI_TOKEN`.
+  - [reusable-web-uat.yml](reusable-web-uat.md), which the `service-react.yml` and `service-nextjs.yml` workflows call.
+
+## Inputs
+
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Project directory. All steps run here. |
+| `system-name` | string | yes | | Name used in job titles and artifact names. |
+| `node-version` | string | no | `24` | Node.js version. |
+| `package-manager` | string | no | `auto` | Declared. Not read by any step. |
+| `install-command` | string | no | `npm ci` | Install command. With the default and no lockfile, the workflow runs `npm install` instead (see Notes). |
+| `test-command` | string | no | `npm run test:e2e` | Test command. `{browser}` is replaced with the matrix browser. |
+| `e2e-tests-directory` | string | no | `tests/e2e` | Folder that must exist. The job fails if it does not. |
+| `e2e-base-url` | string | no | `""` | Exported to the test command as `E2E_BASE_URL`. |
+| `upload-artifacts` | boolean | no | `true` | Upload the tests folder, `test-results/` and `playwright-report/`. |
+| `run-only-on-branch` | string | no | `test` | Comma-separated branches allowed to run, compared with `github.ref_name` (or the PR base). Empty or `*` always runs. |
+| `browser-list` | string | no | `["chromium"]` | JSON array or CSV of `chromium`, `firefox`, `webkit`. Other names are dropped. |
+| `parallel-mode` | string | no | `matrix` | Exported as `PLAYWRIGHT_PARALLEL_MODE`. The browser matrix runs either way. |
+| `max-parallel` | number | no | `3` | Matrix `max-parallel`. |
+| `fail-fast` | boolean | no | `false` | Matrix `fail-fast`. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
+| `json-report` | string | no | `test-results/alphaci-e2e.json` | Where the Playwright JSON reporter writes, relative to `working-directory`. Set through `PLAYWRIGHT_JSON_OUTPUT_NAME`. |
+| `ensure-test-deps` | string | no | `""` | Space-separated `name@version` specs installed with `npm install --no-save` when not already resolvable. Other shapes are ignored. |
+| `visual-baselines` | boolean | no | `false` | Turn on visual baselines. Needs `alphaci-api-url` and `ALPHACI_TOKEN`. |
+| `alphaci-api-url` | string | no | `""` | AlphaCI origin (`http://` or `https://`, no path). Used by visual baselines and live progress. |
+| `visual-branch` | string | no | `""` | Branch the baselines and progress events belong to. Falls back to the PR base, then `github.ref_name`. |
+| `visual-snapshot-dir` | string | no | `tests/e2e/__visual__` | Relative directory where baselines are written and screenshots read. No `..`. |
+
+## Secrets
+
+| Secret | Required | Description |
+| --- | --- | --- |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | no | Vercel Protection Bypass for Automation key. Exposed to the test command under the same name. |
+| `ALPHACI_TOKEN` | no | Bearer token for visual baselines and live progress. Without it both are off. |
+
+## Outputs
+
+| Output | Description |
+| --- | --- |
+| `e2e-result` | `success`, `failure`, `cancelled`, or `skipped` when the branch rule did not match. |
+| `tests-total` | Tests run, across every browser. |
+| `tests-passed` | Tests that passed. Flaky tests count as passed. |
+| `tests-failed` | Tests that failed. |
+| `tests-failures` | JSON array of `{name, message}` for failed tests, at most 20. |
+| `tests-cases` | JSON array of tests with description annotation, notes, top-level steps, duration, retries and error. Failures first, at most 50. |
+| `tests-passes` | JSON array of full names of passed tests (suite path and title joined with ` > `), at most 300. |
+
+The count and detail outputs are empty when no Playwright JSON report was written.
+
+## Permissions
+
+Workflow: `contents: read`. No extra permissions are needed from the caller.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `prepare` | Always | Decides whether the branch rule matches and builds the browser list. |
+| `playwright-e2e` | `prepare` says run | Matrix over browsers. Checks out, sets up Node, installs dependencies, checks the tests folder, installs Playwright browsers, fetches visual baselines, runs the tests with live progress, reports visual results, scrubs the bypass secret, uploads the JSON report (always) and the human report (when `upload-artifacts`). Timeout 25 minutes. |
+| `finalize` | Always | Downloads the JSON reports of every browser, computes the counts and details, and sets `e2e-result`. |
+
+## Example
+
+```yaml
+jobs:
+  ui-tests-uat:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/playwright-e2e.yml@v1
+    with:
+      working-directory: .
+      system-name: my-web
+      e2e-base-url: https://uat-my-web.vercel.app
+      e2e-tests-directory: tests/e2e
+      browser-list: '["chromium"]'
+      run-only-on-branch: '*'
+      checkout-ref: ${{ needs.pipeline-context.outputs.sha }}
+      visual-baselines: true
+      alphaci-api-url: https://alphaci.example.com
+      visual-branch: uat
+    secrets:
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_FRONTEND_AUTOMATION_BYPASS_SECRET }}
+      ALPHACI_TOKEN: ${{ secrets.ALPHACI_TOKEN }}
+```
+
+## Branch rule
+
+The rule compares against `github.ref_name`, or `github.base_ref` on a pull request. In a `workflow_run` chain `github.ref_name` is the default branch, so callers in such chains should gate with their own `if:` and pass `run-only-on-branch: '*'`. When the rule does not match, the matrix is skipped and `e2e-result` is `skipped`.
+
+## Missing lockfile
+
+The npm cache is on only when a `package-lock.json` exists. With the default `install-command` and no lockfile or shrinkwrap, the workflow warns and runs `npm install --no-audit --no-fund --before=<24 hours ago>`. Commit a lockfile for reproducible runs.
 
 ## Protected previews
 
-A Vercel preview sits behind Deployment Protection: a browser that is not
-signed in to the Vercel team is redirected to Vercel's sign-in, so a suite
-pointed at a uat preview never reaches the app.
-
-Callers may pass the optional secret `VERCEL_AUTOMATION_BYPASS_SECRET` (a
-project's Protection Bypass for Automation secret). The workflow exposes it to
-the test command as the environment variable of the same name, and the
-project's Playwright config sends it on every request:
+A Vercel preview behind Deployment Protection redirects a browser that is not signed in to Vercel. Pass `VERCEL_AUTOMATION_BYPASS_SECRET` and have the project's Playwright config send it on every request:
 
 ```ts
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
@@ -32,61 +119,17 @@ export default defineConfig({
 });
 ```
 
-When the secret is not passed the variable is empty and nothing is sent, so an
-unprotected host (production, Render) behaves exactly as before.
+When the secret is not passed the variable is empty and nothing is sent.
 
-Because the header is sent on every request, Playwright records it in its
-traces and copies it, with the rest of the config, into the JSON report.
-GitHub masks secrets in logs but not inside artifacts, and a public
-repository's artifacts can be downloaded by anyone signed in to GitHub. Before
-anything is uploaded, the step "Remove the Vercel bypass secret from reports"
-replaces the secret with `***` in every file under `test-results/`,
-`playwright-report/`, the JSON report and the tests folder, including inside
-trace zips and the HTML report's embedded data. It then checks again: a file
-that still holds the secret is deleted rather than uploaded, and if the scrub
-itself fails, the reports are not uploaded at all. Test results still reach
-ALPHACI, which never reads the headers.
-
-## Missing lockfile
-
-A project with no `package-lock.json` no longer fails at setup. The npm
-dependency cache is switched on only when a lockfile exists, and the install
-falls back to `npm install` with a warning. Commit a lockfile for reproducible
-runs.
-
-## Reported results
-
-Besides `e2e-result`, the workflow reports `tests-total`, `tests-passed`,
-`tests-failed`, `tests-failures` (JSON array of `{name,message}`, capped at 20)
-and `tests-passes`: a JSON array of the full names of the passed tests (suite
-path and title joined with ` > `, flaky specs included, skipped specs and
-repeats from other browsers excluded), capped at 300. All five are empty when
-the suite wrote no Playwright JSON report.
+Playwright records request headers in traces and copies the config into the JSON report, and GitHub does not mask secrets inside artifacts. Before anything is uploaded, the step "Remove the Vercel bypass secret from reports" replaces the secret with `***` in every file under `test-results/`, `playwright-report/`, the JSON report and the tests folder, including inside trace zips and the HTML report's embedded data. A file that still holds the secret afterwards is deleted. If the scrub itself fails, `test-results/`, `playwright-report/` and the JSON report are deleted and not uploaded.
 
 ## Live test progress
 
-While Playwright runs, each browser leg streams one event per test to ALPHACI so
-QA Studio can show tests as they finish. There is no input to set: it is on when
-`alphaci-api-url` is a `http(s)://` origin **and** the secret `ALPHACI_TOKEN` is
-present (the same two the visual steps need, without `visual-baselines`). With
-either missing, nothing is added and the run is exactly what it was before.
+Each browser leg streams one event per test to AlphaCI. There is no input for it: it is on when `alphaci-api-url` is an `http(s)://` origin and `ALPHACI_TOKEN` is set.
 
-The workflow writes a small dependency-free reporter to
-`$RUNNER_TEMP/alphaci-live-reporter.cjs` (plain Node 18+, `fetch`) and the
-settings, including the token, to a private file in `$RUNNER_TEMP`, so the token
-is not in the environment of the processes the tests start. The reporter is
-added with the `--reporter` flag as `list,html,json,<reporter>`: that flag
-replaces the reporters a project's config lists, so the ones the workflow relies
-on (`list` console output, `html` for `playwright-report/`, and `json`, which
-feeds `tests-passes` and the other results through `json-report`) are named
-again. It is only added when the test command is a `playwright test` run (direct,
-or through an `npm run` / `npm test` script) that sets no `--reporter` of its own;
-anything else runs untouched with a notice. A project that relied on another
-config reporter (for example `junit`) should pass its own `--reporter` list,
-which turns live progress off for that run.
+The workflow writes a dependency-free reporter to `$RUNNER_TEMP/alphaci-live-reporter.cjs` and its settings, including the token, to a private file in `$RUNNER_TEMP`, so the token is not in the environment of the test processes. The reporter is added with `--reporter=list,html,json,<reporter>`, which replaces the reporters in the project's config. It is added only when the test command runs `playwright test` directly or through an `npm run` / `npm test` script, and neither sets `--reporter`. Otherwise the command runs unchanged with a notice. A project that needs another reporter (for example `junit`) should pass its own `--reporter` list, which turns live progress off.
 
-`POST {alphaci-api-url}/api/v1/ci/playwright-progress`, `Authorization: Bearer
-<ALPHACI_TOKEN>`, JSON body (nothing else is sent):
+`POST {alphaci-api-url}/api/v1/ci/playwright-progress` with `Authorization: Bearer <ALPHACI_TOKEN>`:
 
 ```json
 { "repoFullName": "owner/repo", "branch": "<visual-branch, else PR base, else ref name>",
@@ -104,40 +147,15 @@ which turns live progress off for that run.
   ] }
 ```
 
-(The `>` in `id` and `title` is the `U+203A` separator Playwright prints.) Events
-are buffered and sent every ~2 seconds, at most 200 per request, in order, and
-once more when the run ends. A test that retries sends a `test_started` and a
-`test_finished` per attempt, with `retry` counting up. With a browser matrix each
-leg sends its own `run_started`/`run_finished` under the same `runId`; `project`
-tells the legs apart. Resending is safe: the server is idempotent.
+The `>` in `id` and `title` is the `U+203A` separator Playwright prints. Events are sent every 2 seconds, at most 200 per request, in order, and once more when the run ends. A retried test sends a `test_started` and `test_finished` per attempt. Each browser leg sends its own `run_started` and `run_finished` under the same `runId`; `project` tells them apart.
 
-It is strictly best effort. Each request times out after 5 seconds and is
-retried twice on a network error, timeout, 5xx or 429 (other 4xx are not
-retried); a batch that still fails is dropped with a single `::warning::` per
-run. The reporter never throws, never changes the exit code, and the only wait it
-adds is one final flush bounded at 10 seconds.
+Delivery is best effort. Each request times out after 5 seconds and is retried twice on a network error, timeout, 5xx or 429. A batch that still fails is dropped with one warning per run. The reporter never throws or changes the exit code. The final flush is bounded at 10 seconds.
 
-## Visual baselines (opt-in)
+## Visual baselines
 
-With `visual-baselines: true`, `alphaci-api-url` and the secret `ALPHACI_TOKEN`,
-each browser leg:
+With `visual-baselines: true`, `alphaci-api-url` and `ALPHACI_TOKEN`, each browser leg:
 
-1. Downloads the stored baselines for `repoFullName` and `visual-branch` into
-   `visual-snapshot-dir` (default `tests/e2e/__visual__`), and passes
-   `--update-snapshots=missing` to the test command (Playwright 1.50 or newer)
-   so a screenshot without a baseline is captured rather than failing.
-2. After the tests, even when they failed, classifies every `*.png` in that
-   directory: `changed` when Playwright wrote a `<name>-diff.png` under
-   `test-results/`, `new` when it was not among the downloaded baselines, else
-   `passed`. It posts the summary and uploads the images for `changed` and `new`.
+1. Downloads the stored baselines for the repository and branch (`GET /api/v1/ci/visual-baselines`, at most 200) into `visual-snapshot-dir`. With Playwright 1.50 or newer it adds `--update-snapshots=missing` to the test command, so a screenshot with no baseline is captured instead of failing.
+2. After the tests, even when they failed, classifies every `*.png` in that directory: `changed` when Playwright wrote a `<name>-diff.png` under `test-results/`, `new` when it was not among the downloaded baselines, else `passed`. It posts the summary to `/api/v1/ci/visual-summary` and uploads `changed` and `new` images to `/api/v1/ci/visual-results/file`.
 
-Every call is fail-soft: an unreachable API only produces a warning, and the
-test verdict stays Playwright's. At most 60 snapshots are reported, and an image
-over 3 MB is not uploaded.
-
-| Input | Default | Meaning |
-| --- | --- | --- |
-| `visual-baselines` | `false` | Turns the feature on |
-| `alphaci-api-url` | `""` | ALPHACI API origin |
-| `visual-branch` | `""` | Pipeline branch (falls back to the PR base, then the ref name) |
-| `visual-snapshot-dir` | `tests/e2e/__visual__` | Baseline and screenshot directory |
+Every call is fail-soft: an unreachable API only produces a warning and the verdict stays Playwright's. At most 60 snapshots are reported (changed and new first), and an image over 3 MB is not uploaded.

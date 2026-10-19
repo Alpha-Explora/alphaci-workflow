@@ -1,23 +1,63 @@
 # dotnet-analyze.yml
 
-## Role
-Primitive check.
+Builds a .NET solution with the .NET analyzers enabled and, when asked,
+treats compiler and analyzer warnings as errors. .NET has no separate type
+check, so this job fills the slot `typecheck` fills for Node projects.
 
-## Purpose
-Builds the solution with .NET analyzers enabled and, on strict branches, refuses to ignore warnings.
+- Source: `.github/workflows/dotnet-analyze.yml`
+- Trigger: `workflow_call`
+- Used by: generated `10-alphaci-quality.yml` (.NET stack, job `typecheck`); customer template `dotnet-service-pipeline` (job `analyze`)
 
-## Public Contract
-- Source workflow: `.github/workflows/dotnet-analyze.yml`
-- Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `configuration`, `treat-warnings-as-errors`, `analysis-level`, `checkout-ref`
-- Secrets: none
-- Outputs: `analyze-result`
+## Inputs
 
-## Usage
-This occupies the slot `typecheck` fills for Node projects. .NET has no separate type-check step because the compiler is the type checker, so this job is a build that treats what the build says as the result.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Directory holding the solution or projects. |
+| `system-name` | string | yes | | Name used in logs. |
+| `dotnet-version` | string | no | `10.0.x` | .NET SDK version. |
+| `solution-path` | string | no | `""` | Solution or project, relative to `working-directory`. Empty lets the SDK discover it. |
+| `configuration` | string | no | `Release` | Build configuration. |
+| `treat-warnings-as-errors` | boolean | no | `true` | Fail the build on compiler and analyzer warnings. |
+| `analysis-level` | string | no | `latest` | Value for `AnalysisLevel` (for example `latest`, `latest-recommended`, `none`). |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
 
-`--no-incremental` is passed so analyzers run over every file rather than only what changed, which is what makes the outcome reproducible across runs.
+## Secrets
 
-## Relationship to dotnet-audit.yml
-NuGet Audit reports vulnerable packages as build warnings `NU1901`-`NU1904`. Under `-warnaserror` those become build errors, which would fail this job for any advisory at any severity and make `dotnet-audit.yml`'s `fail-on-severity` policy unreachable.
+None.
 
-They are therefore excluded here with `-warnnotaserror`. Dependency vulnerabilities are `dotnet-audit.yml`'s decision; this job owns compiler and analyzer diagnostics. One tool, one job.
+## Outputs
+
+| Output | Description |
+| --- | --- |
+| `analyze-result` | Outcome of the build step (`success` or `failure`). |
+
+## Permissions
+
+Workflow: `contents: read`. The caller job needs nothing more.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `dotnet-analyze` | always | Restore, then `dotnet build --no-restore --no-incremental -p:EnableNETAnalyzers=true -p:AnalysisLevel=<level>`, adding `-warnaserror` when strict. |
+
+## Example
+
+```yaml
+jobs:
+  typecheck:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-analyze.yml@v1
+    with:
+      system-name: orders-api
+      treat-warnings-as-errors: true
+```
+
+## Notes
+
+- `--no-incremental` makes the analyzers run over every file, so the result
+  does not depend on what an earlier build cached.
+- NuGet Audit warnings `NU1901`-`NU1904` are kept as warnings
+  (`-warnnotaserror`). Vulnerable packages are judged by `dotnet-audit.yml`,
+  not here.
+- The generated pipeline sets `treat-warnings-as-errors` from `branch-policy`:
+  `true` on `uat` and `main`, `false` elsewhere. Errors fail either way.

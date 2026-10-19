@@ -1,15 +1,37 @@
-# Publish internal-v1 Tag Contract
+# publish-internal-v1-tag.yml
 
-Moves the internal `internal-v1` ref to the latest commit on the internal integration branch.
+Moves the floating `internal-v1` tag to the latest commit on the `refactor-internal` branch. An AlphaCI deployment that sets `CENTRAL_WORKFLOW_REF=internal-v1` generates pipelines pinned to this tag, so it can move independently of `v1`. The tag moves only after Workflow Validation passes on that commit.
 
-The internal AlphaCI deployment sets `CENTRAL_WORKFLOW_REF=internal-v1` so its generated pipelines track
-a tag that moves independently of the customer-facing `v1` line. Two branches, two lines:
+- Source: `.github/workflows/publish-internal-v1-tag.yml`
+- Trigger: `push` to `refactor-internal`, `workflow_dispatch`
+- Used by: Repository maintenance
 
-- `main` → `v1` (sold product; see `publish-v1-tag.md`)
-- internal integration branch → `internal-v1` (this workflow)
+## Inputs
 
-Gated on Workflow Validation for the same reason as the `v1` line: the internal branch is not a
-`pull_request` target either, so without the gate the tag would move to an unvalidated commit.
+None.
 
-The internal branch name is carried over from the previous central repository and must exist here before
-this workflow can fire.
+## Secrets
+
+None. The job pushes the tag with the default `GITHUB_TOKEN`.
+
+## Outputs
+
+None.
+
+## Permissions
+
+Workflow: `contents: write`.
+
+Concurrency group `publish-internal-v1-tag` with `cancel-in-progress: true`, so the newest run wins.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `validate` | Always | Calls `./.github/workflows/workflow-validation.yml`. |
+| `retag` | `validate` succeeded | Checks out with full history, runs `git tag -f internal-v1 $GITHUB_SHA` and force-pushes `refs/tags/internal-v1`. |
+
+## Notes
+
+- The `refactor-internal` branch and the `internal-v1` tag do not exist in this repository today, so the push trigger never fires. A `workflow_dispatch` run would create `internal-v1` on the ref it was started from.
+- If validation fails, the tag is not moved.

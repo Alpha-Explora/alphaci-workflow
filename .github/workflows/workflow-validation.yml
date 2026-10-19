@@ -758,7 +758,9 @@ jobs:
           set -euo pipefail
 
           failed=0
-          # Emitted by staged-workflow.builder.ts and the provider fragments.
+          # Referenced by staged-workflow.builder.ts, the provider fragments, or
+          # the customer templates (validate-subscription.yml and
+          # gcp-cloud-run-deploy.yml are only referenced by templates).
           required=(
             validate-subscription.yml
             backend-tests.yml
@@ -861,11 +863,5 @@ jobs:
             echo "::error::Reference to a retired organisation. The central workflow repository is Alpha-Explora/alphaci-workflow and the platform API is api.alphaci.com.ph."
             exit 1
           fi
-
-          # Deliberately not matched yet: the template-repo references in
-          # docs/template-*.md. Those describe the retired long-pipeline caller
-          # architecture, so repointing the organisation would leave them accurate
-          # about the owner and wrong about the workflows. They need deleting or
-          # rewriting, which is a decision rather than a rename.
 
           echo "No retired organisation references found."
