@@ -35,6 +35,18 @@ export default defineConfig({
 When the secret is not passed the variable is empty and nothing is sent, so an
 unprotected host (production, Render) behaves exactly as before.
 
+Because the header is sent on every request, Playwright records it in its
+traces and copies it, with the rest of the config, into the JSON report.
+GitHub masks secrets in logs but not inside artifacts, and a public
+repository's artifacts can be downloaded by anyone signed in to GitHub. Before
+anything is uploaded, the step "Remove the Vercel bypass secret from reports"
+replaces the secret with `***` in every file under `test-results/`,
+`playwright-report/`, the JSON report and the tests folder, including inside
+trace zips and the HTML report's embedded data. It then checks again: a file
+that still holds the secret is deleted rather than uploaded, and if the scrub
+itself fails, the reports are not uploaded at all. Test results still reach
+ALPHACI, which never reads the headers.
+
 ## Missing lockfile
 
 A project with no `package-lock.json` no longer fails at setup. The npm
