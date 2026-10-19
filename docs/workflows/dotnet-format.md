@@ -1,22 +1,60 @@
 # dotnet-format.yml
 
-## Role
-Primitive check.
+Checks C# formatting and style with `dotnet format --verify-no-changes`. It
+reports and never rewrites files. This is the .NET counterpart of
+`lint-check.yml`.
 
-## Purpose
-Verifies C# formatting and style rules with `dotnet format`, without rewriting anything.
+- Source: `.github/workflows/dotnet-format.yml`
+- Trigger: `workflow_call`
+- Used by: generated `10-alphaci-quality.yml` (.NET stack, job `lint`); customer template `dotnet-service-pipeline` (job `lint`)
 
-## Public Contract
-- Source workflow: `.github/workflows/dotnet-format.yml`
-- Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `fail-on-warning`, `checkout-ref`
-- Secrets: none
-- Outputs: `format-result`
+## Inputs
 
-## Usage
-This is the .NET counterpart of `lint-check.yml`. Call it in parallel with tests and analysis. Use `checkout-ref` in `workflow_run` chains.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Directory holding the solution or projects. |
+| `system-name` | string | yes | | Name used in logs. |
+| `dotnet-version` | string | no | `10.0.x` | .NET SDK version. |
+| `solution-path` | string | no | `""` | Solution or project, relative to `working-directory`. Empty lets the SDK discover it. |
+| `fail-on-warning` | boolean | no | `true` | `true` checks at severity `warn`; `false` checks at `error`. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
 
-`fail-on-warning` selects the reported severity: `true` runs at `warn`, `false` at `error`. The relaxed setting still fails on error-level violations, so a branch policy that turns it off is loosening the gate rather than removing it.
+## Secrets
 
-Rules come from the repository's own `.editorconfig`. A repository without one is checked against the SDK defaults, which is weaker than it looks; commit an `.editorconfig` to make the standard explicit.
+None.
 
-`--verify-no-changes` exits non-zero when anything would change, so the exit code is the result and nothing parses output to decide.
+## Outputs
+
+| Output | Description |
+| --- | --- |
+| `format-result` | Outcome of the format check step (`success` or `failure`). |
+
+## Permissions
+
+Workflow: `contents: read`. The caller job needs nothing more.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `dotnet-format` | always | Restore, then `dotnet format --verify-no-changes --severity <warn\|error> --no-restore`. |
+
+## Example
+
+```yaml
+jobs:
+  lint:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-format.yml@v1
+    with:
+      system-name: orders-api
+      fail-on-warning: true
+```
+
+## Notes
+
+- The exit code of `dotnet format` is the result.
+- `fail-on-warning: false` still fails on error-level violations. The generated
+  pipeline sets it from `branch-policy`: `true` on `uat` and `main`, `false`
+  elsewhere.
+- Rules come from the repository's `.editorconfig`. Without one, the SDK
+  defaults apply.

@@ -1,24 +1,15 @@
-# Templates
+# templates
 
-This folder contains reusable starter templates used by customer repositories.
+Nothing in AlphaCI reads this folder. The AlphaCI backend generates pipelines itself and takes
+customer templates from `workflow-templates/customer/`.
 
-## Replit Nix Template
+| File | What it is | State |
+| --- | --- | --- |
+| `be-pipeline-caller.yml`, `fe-pipeline-caller.yml`, `mobile-pipeline-caller.yml`, `mobile-kotlin-caller.yml` | Hand-copied caller workflows. | Broken: they call `master-pipeline-*.yml` workflows that do not exist in this repository. Do not use them. |
+| `playwright-e2e-template.ts` | Example Playwright script. | Not used by any workflow. |
+| `k6-smoke-template.ts` | Example k6 smoke script. | Not used by any workflow. |
+| `replit.nix` | Replit runtime definition. | Not used by any workflow. |
 
-File: `replit.nix`
-
-Purpose:
-
-- Standardize Replit runtime dependencies across repositories.
-- Keep runtime selection explicit and easy to customize.
-
-Usage:
-
-1. Copy `templates/replit.nix` into your repository root as `replit.nix`.
-2. Set `runtime` to your baseline runtime package.
-3. Add optional tools in `extraDeps` when needed.
-4. Keep the selected runtime aligned with your Docker/CI defaults unless intentional.
-
-Example customizations:
-
-- Node 20: set `runtime = pkgs.nodejs_20;`
-- Node 22 + OpenSSL: keep `runtime = pkgs.nodejs_22;` and add `pkgs.openssl` to `extraDeps`.
+For a current caller, use the generator output described in
+[generated-project-contract.md](../docs/generated-project-contract.md) or a template from
+`workflow-templates/customer/`.

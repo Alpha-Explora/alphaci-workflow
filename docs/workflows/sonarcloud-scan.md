@@ -1,32 +1,94 @@
 # sonarcloud-scan.yml
 
-## Role
-Primitive check.
+Runs a SonarCloud analysis of a JavaScript or TypeScript project with
+`SonarSource/sonarqube-scan-action`, optionally waits for the quality gate, and
+publishes the gate result, measures and top issues as outputs.
 
-## Purpose
-Runs SonarCloud static analysis and the quality gate for frontend, backend, and mobile repositories.
+- Source: `.github/workflows/sonarcloud-scan.yml`
+- Trigger: `workflow_call`
+- Used by: generated `10-alphaci-quality.yml` for Node stacks (job `sonar`).
+  .NET stacks use `sonarcloud-dotnet-scan.yml` instead.
 
-## Public Contract
-- Source workflow: `.github/workflows/sonarcloud-scan.yml`
-- Inputs: `working-directory`, `system-name`, `sources-path`, `tests-path`, `sources-exclusions`, `coverage-report-path`, `coverage-artifact-name`, `quality-gate-wait`, `checkout-ref`
-- Secrets: `SONAR_TOKEN`, `SONAR_PROJECT_KEY`, `SONAR_ORGANIZATION` (all required)
-- Outputs: `quality-gate-status`, `blocked-by`, `gate-status`, `failed-conditions`, `measures`, `issues`
+## Inputs
 
-## Usage
-Called by generated quality-stage pipelines after the unit-test job, so the coverage artifact named by
-`coverage-artifact-name` is available to download. The generator gates this job on
-`branch-policy.sonar-enabled`, which is true only when all three secrets are present, so repositories
-without SonarCloud keep passing. `quality-gate-wait` is advisory on pull-request refs and blocking on
-direct `uat` and `main` runs.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `system-name` | string | yes | | Name used in logs. |
+| `working-directory` | string | no | `.` | Project directory, used as the scanner base directory. |
+| `sources-path` | string | no | `src` | `sonar.sources`, relative to `working-directory`. |
+| `tests-path` | string | no | `tests` | `sonar.tests`, relative to `working-directory`. |
+| `sources-exclusions` | string | no | `""` | `sonar.exclusions`, comma-separated. |
+| `coverage-report-path` | string | no | `coverage/lcov.info` | `sonar.javascript.lcov.reportPaths`, relative to `working-directory`. |
+| `coverage-artifact-name` | string | no | `""` | Artifact to download into `<working-directory>/coverage` before the scan. Empty skips the download. |
+| `quality-gate-wait` | boolean | no | `true` | `sonar.qualitygate.wait`. When true, a failed gate fails the scan step. |
+| `checkout-ref` | string | no | `""` | Ref to check out. Empty uses the event's ref. |
 
-Coverage is consumed as lcov (`coverage/lcov.info` by default), not as Istanbul's JSON summary.
+## Secrets
 
-## Automatic Analysis has to be off, per project
-SonarCloud refuses to run a CI analysis on a project that also has Automatic Analysis enabled. It is on by default for new projects, so this bites every new project rather than once per organisation. The scanner reports it only as `ERROR You are running CI analysis while Automatic Analysis is enabled` and exits non-zero, and `sonarqube-scan-action` does not expose its log to later steps.
+| Secret | Required | Description |
+| --- | --- | --- |
+| `SONAR_TOKEN` | yes | SonarCloud token with access to the project. |
+| `SONAR_ORGANIZATION` | yes | SonarCloud organization key. |
+| `SONAR_PROJECT_KEY` | yes | SonarCloud project key. |
 
-When the scan fails before it reaches SonarCloud (no `.scannerwork/report-task.txt`), the `Diagnose Scan Failure` step runs the same scanner once more with its output captured (about fifteen seconds, capped at 120, quality-gate-wait forced off) and looks for that message. If found it sets `blocked-by=automatic-analysis` and prints an `::error::` naming the fix: SonarCloud -> the project -> Administration -> Analysis Method -> turn off Automatic Analysis. The job still fails. The re-run only classifies the failure; it never changes the verdict.
+## Outputs
 
-`blocked-by` is empty in every other case. It mirrors the output of `sonarcloud-dotnet-scan.yml` so a caller can wire both stacks the same way.
+| Output | Description |
+| --- | --- |
+| `quality-gate-status` | `success` or `failure` for the job. |
+| `blocked-by` | `automatic-analysis` when the scan was refused because the project has Automatic Analysis on; otherwise empty. |
+| `gate-status` | Quality gate of this run's analysis: `OK`, `ERROR`, or `UNKNOWN` when it could not be read. |
+| `failed-conditions` | JSON array of failed or warning gate conditions with actual value and threshold. |
+| `measures` | JSON object of bugs, vulnerabilities, code smells, hotspots, coverage and duplication. |
+| `issues` | JSON array of the most severe open issues on new code (rule, severity, message, file, line), at most 20. |
 
-## Findings never come from another analysis
-`gate-status`, `failed-conditions`, `measures` and `issues` are read for the analysis this run produced (the compute-engine task in `report-task.txt`). A scan that failed before SonarCloud accepted it has no task, so `gate-status` is `UNKNOWN` and the other three are empty. The project's current gate is not read in that case: it belongs to an earlier analysis or to Automatic Analysis of unrelated files, and reporting it blames the code for a run that never analysed it.
+## Permissions
+
+Workflow: `contents: read`. The caller needs nothing more.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `sonarcloud-scan` | always | Downloads coverage, checks the token can see the project, runs the scan, diagnoses a failed scan, collects findings, and sets the final status. |
+
+## Example
+
+```yaml
+jobs:
+  sonar:
+    needs: [frontend-tests]
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/sonarcloud-scan.yml@v1
+    with:
+      system-name: web
+      sources-path: src
+      tests-path: src,tests
+      coverage-report-path: coverage/lcov.info
+      coverage-artifact-name: web-coverage
+      quality-gate-wait: true
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+```
+
+## Notes
+
+- The generated pipeline runs this job only when all three Sonar secrets are
+  set, and passes `quality-gate-wait: true` on `uat` and `main` and `false` on
+  other branches.
+- Coverage is read as lcov, not as an Istanbul JSON summary. The generated
+  pipeline downloads the `<service>-coverage` artifact written by
+  `backend-tests.yml` or `frontend-tests.yml`.
+- The preflight step fails the job when a secret is empty or the token cannot
+  see `SONAR_ORGANIZATION` / `SONAR_PROJECT_KEY`.
+- SonarCloud refuses a CI analysis while Automatic Analysis is on for the
+  project, which is the default for new projects. When the scan fails before
+  reaching SonarCloud, `Diagnose Scan Failure` re-runs the scanner once (at most
+  120 seconds, gate wait off) to look for that message, sets
+  `blocked-by=automatic-analysis` and prints the fix: SonarCloud > project >
+  Administration > Analysis Method > turn off Automatic Analysis. The job still
+  fails.
+- Findings are read for the analysis this run produced. If the scan never
+  reached SonarCloud, `gate-status` is `UNKNOWN` and the other finding outputs
+  are empty; the project's older gate is not reported.

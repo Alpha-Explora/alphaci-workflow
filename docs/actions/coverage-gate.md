@@ -1,23 +1,27 @@
 # coverage-gate
 
-Composite action. Reads a line-coverage percentage from a report and enforces a threshold.
-
-## Why it exists
-
-Every coverage gate in this repository used to inline a parse of Istanbul's
-`coverage/coverage-summary.json`. That is the output of one JavaScript tool, so the gate was one only
-JavaScript could pass. Adding a stack whose runner emits anything else meant either shipping it without
-coverage enforcement or rewriting the gate — and the first of those is what tends to happen.
-
-## Contract
+Composite action. Reads a line-coverage percentage from a report and enforces a threshold. It
+supports several report formats, so stacks other than JavaScript get the same gate.
 
 - Source: `.github/actions/coverage-gate/action.yml`
-- Required inputs: `report-path`
-- Optional inputs: `format` (`istanbul-summary` | `cobertura` | `lcov` | `jacoco`), `threshold`,
-  `promotion-threshold`, `enforce`, `working-directory`
-- `promotion-threshold` warns, never fails: coverage that meets `threshold` but is below it gets a
-  warning saying uat and main require more. `0`, the default, turns it off.
-- Outputs: `coverage`
+- Used by: `backend-tests.yml`, `dotnet-test.yml`, `sonarcloud-dotnet-scan.yml`
+
+## Inputs
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `report-path` | yes | | Coverage report, relative to `working-directory`. |
+| `format` | no | `istanbul-summary` | `istanbul-summary`, `cobertura`, `lcov` or `jacoco`. |
+| `threshold` | no | `80` | Minimum line coverage percentage. |
+| `enforce` | no | `true` | Fail when coverage is below `threshold` or the report is missing. |
+| `promotion-threshold` | no | `0` | Threshold uat and main require. Coverage that meets `threshold` but not this gets a warning, never a failure. `0` turns it off. |
+| `working-directory` | no | `.` | Directory the report path is relative to. |
+
+## Outputs
+
+| Output | Description |
+| --- | --- |
+| `coverage` | Line coverage percentage, or `unknown` when the report is missing and `enforce` is `false`. |
 
 ## Formats
 

@@ -1,35 +1,87 @@
 # dotnet-test.yml
 
-## Role
-Primitive check.
+Restores, builds and tests a .NET solution, merges the per-project coverage
+reports into one, and enforces a line-coverage threshold. It also reports test
+counts and the names of failed tests.
 
-## Purpose
-Restores, builds, and tests a .NET solution, then merges the per-project coverage reports into one and enforces a line-coverage threshold.
+- Source: `.github/workflows/dotnet-test.yml`
+- Trigger: `workflow_call`
+- Used by: generated `10-alphaci-quality.yml` (.NET stack, job `dotnet-tests`); customer template `dotnet-service-pipeline` (job `unit-tests`)
 
-## Public Contract
-- Source workflow: `.github/workflows/dotnet-test.yml`
-- Inputs: `working-directory`, `system-name`, `dotnet-version`, `solution-path`, `configuration`, `test-arguments`, `coverage-threshold`, `promotion-coverage-threshold`, `enforce-coverage`, `reportgenerator-version`, `upload-artifact`, `checkout-ref`
-- Secrets: none
-- Outputs: `unit-test-result`, `coverage-percent`
+## Inputs
 
-## Usage
-Call directly from consumer workflows, in parallel with lint and security scans, the same way `backend-tests.yml` is called for Node services. Use `checkout-ref` in `workflow_run` chains.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Directory holding the solution or test projects. |
+| `system-name` | string | yes | | Name used in artifact names and logs. |
+| `dotnet-version` | string | no | `10.0.x` | .NET SDK version. |
+| `solution-path` | string | no | `""` | Solution or project, relative to `working-directory`. Empty lets the SDK discover it. |
+| `configuration` | string | no | `Release` | Build configuration. |
+| `test-arguments` | string | no | `""` | Extra arguments for `dotnet test`, split on whitespace (for example `--filter Category!=Integration`). |
+| `coverage-threshold` | number | no | `80` | Minimum line coverage percentage. |
+| `promotion-coverage-threshold` | number | no | `0` | Higher bar that warns, never fails, when coverage is below it. `0` turns it off. |
+| `enforce-coverage` | boolean | no | `true` | Fail when coverage is below the threshold or no report was produced. |
+| `reportgenerator-version` | string | no | `5.*` | ReportGenerator global tool version used to merge coverage. |
+| `upload-artifact` | boolean | no | `true` | Upload the merged coverage directory. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
 
-`dotnet-version` defaults to `10.0.x`, the active LTS. .NET 8 and .NET 9 both leave support in November 2026, so pin to one of those only for a repository that cannot move yet.
+## Secrets
 
-Leave `solution-path` empty when the working directory contains exactly one solution or project; the SDK discovers it. Set it for a repository holding several.
+None.
 
-## Coverage
-Coverage is collected with `--collect:"XPlat Code Coverage"`, which requires a `PackageReference` to `coverlet.collector` in every test project. A test project without it runs green and produces no report; the workflow treats that as a failure when `enforce-coverage` is true rather than reporting zero, because the two have different fixes.
+## Outputs
 
-`promotion-coverage-threshold` is the threshold uat and main enforce. Line coverage that passes `coverage-threshold` but is below it gets a warning, never a failure, so a branch that gates lower learns about the higher bar before its promotion fails. `0`, the default, turns it off.
+| Output | Description |
+| --- | --- |
+| `unit-test-result` | Outcome of the `dotnet test` step (`success` or `failure`). |
+| `coverage-percent` | Line coverage percentage from the coverage gate. |
+| `tests-total` | Tests executed. `0` when no TRX report was produced. |
+| `tests-passed` | Tests that passed. |
+| `tests-failed` | Tests that failed. |
+| `tests-failures` | JSON array of `{name,message}` for failed tests, at most 20. |
 
-`dotnet test` writes one report per test project into its own GUID-named directory. The workflow merges all of them with ReportGenerator into:
+## Permissions
 
-- `coverage/coverage.cobertura.xml` — read by the `coverage-gate` action with `format: cobertura`
-- `coverage/lcov.info` — the path `sonarcloud-scan.yml` expects
+Workflow: `contents: read`. The caller job needs nothing more.
 
-Merging rather than reading the first report is deliberate: a solution with separate unit and integration test projects would otherwise be graded on whichever one the filesystem happened to list first.
+## Jobs
 
-## Known limitation
-`sonarcloud-scan.yml` runs the generic SonarScanner CLI. That scanner does not analyse C#, which requires the SonarScanner for .NET (`dotnet sonarscanner begin/end`) wrapped around the build. The lcov report this workflow produces is therefore usable for coverage reporting but does not by itself give a .NET project SonarCloud code analysis. A `sonarcloud-dotnet-scan.yml` is the separate piece of work that closes it.
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `dotnet-unit-tests` | always | Restore, `dotnet build`, `dotnet test --no-build` with the TRX logger and `XPlat Code Coverage`, summarise the TRX files, merge coverage with ReportGenerator, run the `coverage-gate` action, upload artifacts. |
+
+## Example
+
+```yaml
+jobs:
+  dotnet-tests:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/dotnet-test.yml@v1
+    with:
+      working-directory: .
+      system-name: orders-api
+      dotnet-version: 10.0.x
+      coverage-threshold: 80
+      checkout-ref: ${{ github.event.workflow_run.head_sha }}
+```
+
+## Notes
+
+- Coverage needs a `PackageReference` to `coverlet.collector` in every test
+  project. When tests pass but no Cobertura report exists, the job fails if
+  `enforce-coverage` is `true` and warns otherwise. When the tests themselves
+  failed, the merge step does not add a coverage error.
+- ReportGenerator merges every `TestResults/<guid>/coverage.cobertura.xml` and
+  excludes `**/obj/**` (source-generated code). It writes three files under
+  `coverage/` from the same merge:
+  - `coverage.cobertura.xml`, read by the `coverage-gate` action;
+  - `lcov.info`;
+  - `SonarQube.xml`, the generic format `sonarcloud-dotnet-scan.yml` imports.
+- Artifacts: `<system-name>-coverage` (the `coverage/` directory, 14 days) and
+  `<system-name>-unit-test-results` (TRX files, 7 days). The generated quality
+  stage passes `<service>-coverage` to `sonarcloud-dotnet-scan.yml` as
+  `coverage-artifact-name`.
+- The generated pipeline takes `coverage-threshold` and
+  `promotion-coverage-threshold` from its inline `branch-policy` job and sets
+  `enforce-coverage: true`.
+- A missing report and a below-threshold percentage fail with different
+  messages, because they need different fixes.

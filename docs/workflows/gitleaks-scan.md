@@ -1,31 +1,67 @@
 # gitleaks-scan.yml
 
-## Role
-Primitive check.
+Scans for committed secrets with the Gitleaks release binary and reports the
+rule, file and line of each finding. Secret values are never printed or
+uploaded. The check is language-agnostic.
 
-## Purpose
-Scans for committed secrets with Gitleaks and reports the rule and location of each finding.
+- Source: `.github/workflows/gitleaks-scan.yml`
+- Trigger: `workflow_call`
+- Used by: generated `10-alphaci-quality.yml` (.NET stack, job `secrets`)
 
-## Public Contract
-- Source workflow: `.github/workflows/gitleaks-scan.yml`
-- Inputs: `working-directory`, `system-name`, `gitleaks-version`, `fail-on-findings`, `scan-history`, `checkout-ref`
-- Secrets: none
-- Outputs: `secrets-result`, `findings-count`
+## Inputs
 
-## Usage
-Language-agnostic, so it is the same job for every stack — a secret in a `.cs` file and a secret in a `.ts` file are the same problem. Call it in parallel with the other quality checks. Use `checkout-ref` in `workflow_run` chains.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | no | `.` | Directory to scan. |
+| `system-name` | string | yes | | Name used in artifact names and logs. |
+| `gitleaks-version` | string | no | `8.30.0` | Gitleaks release to install. |
+| `fail-on-findings` | boolean | no | `true` | Fail when a secret is found. `false` reports only. |
+| `scan-history` | boolean | no | `false` | Scan every commit instead of the working tree. Checks out full history. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
 
-`fail-on-findings` is what a branch policy moves: report-only on the working branch, fatal on the promoted ones. It loosens the gate rather than removing it — a finding is still reported, and the artifact is still uploaded.
+## Secrets
 
-`scan-history` scans every commit instead of the working tree. Off by default because it is slow on a large repository and because it surfaces secrets that were removed long ago. That is not noise — a deleted secret is still a leaked secret until it is rotated — but it is a backlog to work through rather than a gate to put in front of today's push.
+None.
 
-## Why the release binary rather than gitleaks-action
-`gitleaks-action` requires a paid `GITLEAKS_LICENSE` for organisation-owned repositories. The scanner itself is free; only that wrapper is not. The pinned release binary keeps a scan reproducible and costs nothing.
+## Outputs
 
-## Two failure modes that must stay distinct
-Gitleaks exits non-zero when it finds a secret, which is the same signal as the scanner failing to run. Conflated, a broken scan reads as a clean repository — the most dangerous possible misreport for a security gate.
+| Output | Description |
+| --- | --- |
+| `secrets-result` | Outcome of the scan step (`success` or `failure`). |
+| `findings-count` | Secrets found. `0` when clean. |
+| `findings-items` | JSON array of `{rule,file,line}`, at most 20. Never the secret value. |
 
-So the workflow passes `--exit-code 0` and decides for itself: the scanner's own exit status and a missing report are both treated as a **failed scan**, never as a clean one, regardless of `fail-on-findings`.
+## Permissions
 
-## The secret values are never printed
-`--redact` is always on, and the log prints only the rule id and `file:line`. A scan that echoes what it found has leaked the secret a second time, into a place more people can read. The uploaded artifact is redacted for the same reason.
+Workflow: `contents: read`. The caller job needs nothing more.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `gitleaks-scan` | always | Check out (depth 1, or full history with `scan-history`), install Gitleaks from its GitHub release, run `gitleaks detect --redact --exit-code 0`, evaluate the JSON report, upload it when there are findings. |
+
+## Example
+
+```yaml
+jobs:
+  secrets:
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/gitleaks-scan.yml@v1
+    with:
+      system-name: orders-api
+      fail-on-findings: true
+```
+
+## Notes
+
+- The workflow uses the release binary, not `gitleaks-action`, which needs a
+  paid licence for organisation repositories.
+- `--exit-code 0` keeps "secret found" and "scanner broke" apart. A non-zero
+  scanner exit or a missing report fails the job, whatever
+  `fail-on-findings` says.
+- Without `scan-history` the scan uses `--no-git` on the working tree.
+- The generated pipeline scans the working tree only and sets
+  `fail-on-findings` from `branch-policy`: `true` on `uat` and `main`,
+  `false` elsewhere.
+- Artifact: `gitleaks-report-<system-name>` (7 days, redacted), only when
+  findings are not `0`.

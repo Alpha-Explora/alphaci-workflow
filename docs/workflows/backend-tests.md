@@ -1,83 +1,84 @@
-# backend-tests.yml Contract
+# backend-tests.yml
 
-This Markdown file is documentation only. GitHub Actions does not execute this file.
+Runs a Node.js backend's unit tests with coverage and, when asked, a separate
+integration-test job against throwaway Postgres and Redis containers. Coverage
+is read and enforced by the `coverage-gate` composite action.
 
-The executable reusable workflow is:
-
-```text
-central-workflow/.github/workflows/backend-tests.yml
-```
-
-## Role
-Primitive reusable workflow.
-
-## Purpose
-Runs backend unit tests and optional integration tests with coverage.
-
-## Public Contract
-- Source workflow: `.github/workflows/backend-tests.yml`
+- Source: `.github/workflows/backend-tests.yml`
 - Trigger: `workflow_call`
-- Required inputs: `system-name`
-- Optional inputs: `working-directory`, `backend-stack`, `node-version`, `test-command`, `integration-test-command`, `coverage-threshold`, `promotion-coverage-threshold`, `coverage-report-path`, `coverage-format`, `enforce-coverage`, `run-parallel`, `upload-artifact`, `checkout-ref`
-- Secrets: none
-- Outputs: `unit-test-result`, `integration-test-result`, `coverage-percent`
+- Used by: generated `10-alphaci-quality.yml` for the `nestjs` and `nodejs`
+  stacks (job `backend-tests`); customer templates `be-nestjs` and `be-nodejs`.
 
-## Usage
-Call this from a real GitHub Actions workflow in a consumer repository, such as `.github/workflows/backend-ci.yml`.
+## Inputs
+
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `system-name` | string | yes | | Name used in artifact names and logs. |
+| `working-directory` | string | no | `.` | Project directory. |
+| `backend-stack` | string | no | `nestjs` | `nestjs` or `nodejs`. Only printed in the log. |
+| `node-version` | number | no | `24` | Node.js version. |
+| `test-command` | string | no | `npm run test:cov` | Unit test command. |
+| `integration-test-command` | string | no | `""` | Integration test command. Empty skips the integration job. |
+| `coverage-threshold` | number | no | `80` | Minimum line coverage, in percent. |
+| `promotion-coverage-threshold` | number | no | `0` | Threshold uat and main enforce. Coverage that passes `coverage-threshold` but not this one gets a warning only. `0` turns it off. |
+| `coverage-report-path` | string | no | `coverage/coverage-summary.json` | Coverage report, relative to `working-directory`. |
+| `coverage-format` | string | no | `istanbul-summary` | `istanbul-summary`, `cobertura`, `lcov` or `jacoco`. |
+| `enforce-coverage` | boolean | no | `true` | Fail when coverage is missing or below `coverage-threshold`. |
+| `run-parallel` | boolean | no | `true` | Append `--maxWorkers=50%` (true) or `--runInBand` (false) to the test command. |
+| `upload-artifact` | boolean | no | `true` | Upload the `coverage/` folder as an artifact. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
+
+## Secrets
+
+None.
+
+## Outputs
+
+| Output | Description |
+| --- | --- |
+| `unit-test-result` | Outcome of the unit test step (`success` or `failure`). |
+| `integration-test-result` | Outcome of the integration test step. Empty when the job was skipped. |
+| `coverage-percent` | Line coverage percent, or `unknown` when the report is missing and enforcement is off. |
+
+## Permissions
+
+Workflow: `contents: read`. The caller needs nothing more.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `backend-unit-tests` | always | Installs dependencies, runs `test-command` with `NODE_ENV=test`, runs the coverage gate, uploads artifacts. |
+| `backend-integration-tests` | `integration-test-command` is not empty | Starts `postgres:16` and `redis:7` services and runs `integration-test-command` with `DATABASE_URL` and `REDIS_URL` set. |
+
+## Example
 
 ```yaml
-name: Backend CI
-
-on:
-  push:
-    branches: [test, uat, prod]
-  pull_request:
-    branches: [test, uat, prod]
-  workflow_dispatch:
-
 jobs:
-  unit-tests:
+  backend-tests:
     uses: Alpha-Explora/alphaci-workflow/.github/workflows/backend-tests.yml@v1
     with:
+      system-name: api
       working-directory: .
-      system-name: backend
       backend-stack: nestjs
       node-version: 24
-      test-command: npm test
-      run-parallel: false
-```
-
-Ordering belongs in the caller workflow with `needs`. For example, a Docker build should wait for backend tests like this:
-
-```yaml
-jobs:
-  unit-tests:
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/backend-tests.yml@v1
-    with:
-      system-name: backend
-
-  docker:
-    needs: [unit-tests]
-    uses: Alpha-Explora/alphaci-workflow/.github/workflows/docker-build.yml@v1
-    with:
-      working-directory: .
-      image-name: backend
+      test-command: npm test -- --coverage --coverageReporters=json-summary --coverageReporters=lcov
+      coverage-threshold: 80
 ```
 
 ## Notes
-- This workflow is safe to run standalone.
-- It does not call lint, security, Docker, deploy, or promotion internally.
-- If `integration-test-command` is empty, integration tests are skipped.
-- If `enforce-coverage` is `true`, missing or below-threshold coverage fails the workflow.
-- If `enforce-coverage` is `false`, missing coverage is reported as `unknown` and does not fail the workflow by itself.
-- `promotion-coverage-threshold` is the threshold uat and main enforce. Coverage that passes `coverage-threshold` but is below it gets a warning, never a failure. `0`, the default, turns it off.
-- Use `checkout-ref` when a `workflow_run` chain must test the original triggering commit instead of the default branch commit.
-- Coverage is read by the `coverage-gate` composite action, which understands
-  `istanbul-summary`, `cobertura`, `lcov` and `jacoco`. The default is
-  `istanbul-summary`, so JavaScript callers need change nothing. Set
-  `coverage-format` and `coverage-report-path` together when a runner emits
-  something else — Coverlet emits Cobertura, for instance.
-- A missing report and a below-threshold percentage fail with different
-  messages. The first means the test command is not emitting the format this
-  gate expects, which is usually a reporter that was never configured; the
-  second means the code is under-tested. They need different fixes.
+
+- Install uses `npm ci --ignore-scripts` when a lockfile exists. Without one it
+  warns and runs `npm install --ignore-scripts` pinned to packages published at
+  least one day ago. The npm cache is enabled only when a lockfile exists.
+- `run-parallel` is ignored when `test-command` already contains `--runInBand`
+  or `--maxWorkers`.
+- The coverage gate reads line coverage only. A missing report and a
+  below-threshold value fail with different messages: the first means the test
+  command does not emit the expected format, the second means the code is
+  under-tested.
+- Artifacts: `<system-name>-coverage` (the `coverage/` folder, 14 days, when
+  `upload-artifact` is true), `<system-name>-unit-test-results` and
+  `<system-name>-integration-test-results` (7 days). The generated SonarCloud
+  job downloads `<system-name>-coverage` to read `coverage/lcov.info`.
+- Integration test database: `postgresql://test:test@localhost:5432/testdb`.

@@ -1,47 +1,48 @@
-# Granular Workflow Templates
+# Workflow Templates
 
-These templates are the customer-facing entrypoints for new repositories.
+`workflow-templates/customer/` holds the caller templates the AlphaCI backend serves. Each
+template is a pair: `<id>.yml` and `<id>.properties.json` (name, description, icon, categories,
+file patterns). The backend lists every complete pair. See
+[docs/catalog-schema.md](../docs/catalog-schema.md#customer-templates) for how it reads them.
 
-The central repository is organized into three logical areas:
+## How the backend uses them
 
-- `workflow-templates/customer/` contains caller templates and their catalog metadata for generated customer repositories.
-- `workflow-templates/product/` is reserved for AlphaCI product-specific caller templates.
-- `workflow-templates/legacy/` contains retired provider-specific examples kept only for historical migration reference.
+- **New projects:** the backend picks the template named by the stack's `serviceTemplate` in
+  `catalog/stacks.json` and uses only its metadata. The pipeline files themselves come from the
+  staged generator ([generated-project-contract.md](../docs/generated-project-contract.md)).
+- **Existing repositories and the catalog generate API:** the backend renders the template YAML,
+  fills in the `workflow_dispatch` defaults, and commits it to the customer repository through a
+  pull request.
 
-GitHub Actions runtime workflows remain flat under `.github/workflows/`; GitHub does not load reusable workflows from subdirectories.
+## Templates
 
-- Copy the closest `*.yml` file into `.github/workflows/` in the consumer repo.
-- Keep ordering in the copied workflow with `needs`.
-- Call central reusable workflows directly from `Alpha-Explora/alphaci-workflow/.github/workflows/*.yml@v1`.
-- Every template starts with `validate-access`, then deploys successful pushes from `test`, `uat`, and `main` through `gcp-cloud-run-deploy.yml` using repository variables and Workload Identity Federation.
-- Every `validate-access` job passes `validation-api-url` from `env.CI_VALIDATE_URL` so generated workflows can target the deployed backend or MVP tunnel.
-- Do not use old long-pipeline caller files for new granular workflows.
-- Keep runtime and action versions current. Default Node.js to the current Active LTS release, and update reusable workflow action pins when new stable major versions are released.
+| Template | Picked for | Calls |
+| --- | --- | --- |
+| `nextjs-service-pipeline` | Next.js stack | `validate-subscription`, `discover-service`, `service-nextjs` |
+| `react-service-pipeline` | React stack | `validate-subscription`, `discover-service`, `service-react` |
+| `nest-service-pipeline` | NestJS stack | `validate-subscription`, `discover-service`, `service-nestjs` |
+| `nodejs-service-pipeline` | Node.js stack | `validate-subscription`, `discover-service`, `service-node` |
+| `dotnet-service-pipeline` | .NET stack | `validate-subscription`, `dotnet-test`, `dotnet-format`, `dotnet-analyze`, `dotnet-audit`, `docker-build`, `gcp-cloud-run-deploy` |
+| `react-native-service-pipeline` | Catalog only | `validate-subscription`, `discover-service`, `service-react-native` |
+| `expo-service-pipeline` | Catalog only | `validate-subscription`, `discover-service`, `service-expo` |
+| `be-nestjs`, `be-nodejs` | Catalog only | `validate-subscription`, `lint-check`, `backend-tests`, `security-scan`, `docker-build`, `gcp-cloud-run-deploy` |
+| `fe-nextjs`, `fe-react` | Catalog only | `validate-subscription`, `lint-check`, `frontend-tests`, `security-scan`, `gcp-cloud-run-deploy` |
+| `standalone-lint` | Catalog only | `validate-subscription`, `lint-check` |
+| `promotion`, `quality-gate`, `trivy-scan` | Catalog only | Self-contained `workflow_call` workflows to copy into a repository. |
 
-Each workflow template has a paired `*.properties.json` file for catalog metadata.
+"Catalog only" means no stack in `catalog/stacks.json` points at the template; it is reachable
+through the catalog list and generate API.
 
-The platform catalog should choose templates through a composed model:
+## Rules
 
-```text
-repoShape -> projectTypeId -> workflowRecipeId -> options
-```
+- Pin every central reference to `Alpha-Explora/alphaci-workflow/...@v1`.
+- Make `validate-access` the first job, calling `validate-subscription.yml@v1` with
+  `validation-api-url` and the `CI_TOKEN` secret.
+- Order jobs with `needs`.
+- Default Node.js to the active LTS (24).
+- Add a `.properties.json` for every new `.yml`.
 
-Workflow templates are renderable recipe targets, not one-off files for every
-possible option combination. Project types and workflow recipes should declare
-which options they support, and the backend should remove or configure optional
-jobs while keeping `validate-access` first.
-
-## GCP Deployment Variables
-
-Generated repositories must receive these repository variables before deploy-gcp can run:
-
-- `ALPHACI_GCP_PROJECT_ID`
-- `ALPHACI_GCP_REGION`
-- `ALPHACI_GCP_WORKLOAD_IDENTITY_PROVIDER`
-- `ALPHACI_GCP_DEPLOYER_SERVICE_ACCOUNT`
-- `ALPHACI_ARTIFACT_REGISTRY_REPOSITORY`
-- `ALPHACI_CLOUD_RUN_SERVICE`
-- `ALPHACI_RUNTIME_SERVICE_ACCOUNT`
-- `ALPHACI_IMAGE_NAME`
-
-Do not add GOOGLE_APPLICATION_CREDENTIALS, service account JSON, VERCEL_TOKEN, or RENDER_API_KEY to generated deployment workflows.
+`workflow-validation.yml` enforces these (jobs `validate-granular-templates`,
+`validate-catalog-and-starters`, `smoke-test-template-shapes`, `validate-runtime-policy`).
+The secrets and variables the templates read are listed in
+[customer-secret-setup.md](../docs/customer-secret-setup.md#customer-templates-existing-repository-setup).

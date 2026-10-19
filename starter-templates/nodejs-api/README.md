@@ -1,10 +1,11 @@
 # Starter Node.js API
 
-This is the MVP starter template for new Node.js API projects created by the
-CI/CD-as-a-Service platform.
+Minimal Node.js API starter. The scripts are small Node scripts with no
+framework dependencies.
 
 ## Scripts
 
 - `npm run lint`
 - `npm test`
+- `npm run test:cov`: runs the tests and writes a placeholder `coverage/coverage-summary.json`
 - `npm run build`

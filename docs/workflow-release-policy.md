@@ -1,29 +1,34 @@
 # Workflow Release Policy
 
-Generated customer repositories must use stable release refs from `Alpha-Explora/alphaci-workflow`. Do not generate customer workflows that point to `@main`.
+Customer pipelines call the workflows in this repository by tag, never by branch.
 
-## Stable Refs
+## Refs
 
-- `v1` is the stable major release for generated customer repositories.
-- Patch tags such as `v1.0.1` may be used for exact, immutable customer upgrades.
-- Minor tags such as `v1.1` may add backwards-compatible workflow inputs, defaults, checks, and documentation.
-- Breaking workflow input, output, secret, branch, or permission changes require `v2`.
+| Ref | Moves when | Who uses it |
+| --- | --- | --- |
+| `v1` | Every push to `main` that passes Workflow Validation ([publish-v1-tag.yml](workflows/publish-v1-tag.md)). | Default for every generated pipeline and every customer template. |
+| `internal-v1` | Every push to `refactor-internal` that passes Workflow Validation ([publish-internal-v1-tag.yml](workflows/publish-internal-v1-tag.md)). | An AlphaCI deployment that sets `CENTRAL_WORKFLOW_REF=internal-v1`. |
 
-## Development Refs
+`v1` is a floating tag. It is force-moved, so a merge to `main` reaches every customer on their
+next run. There are no patch or minor tags.
 
-Internal development can use branch refs while validating changes inside this repository. Customer-facing templates, generated examples, and SaaS renderer output must pin to a stable tag.
+The AlphaCI backend picks the ref from `CENTRAL_WORKFLOW_REF` (default `v1`) and the repository
+from `CENTRAL_WORKFLOW_REPO` (default `Alpha-Explora/alphaci-workflow`). A project can override
+the ref; the dropdown lists the tags that exist in this repository.
 
-## Compatibility Rules
+## Compatibility rules
 
-- Existing inputs in a stable major version must keep their names and compatible types.
-- New inputs must have safe defaults.
-- Required secrets and variables must be documented before a release tag is published.
-- Generated customer workflows must keep using thin caller workflows that invoke central reusable workflows.
+Because `v1` moves under live customers, every merge to `main` must be backward compatible:
 
-## Release Checklist
+- Keep existing input, output and secret names, and keep their types compatible.
+- Give new inputs safe defaults. Add new secrets as `required: false`.
+- Do not remove or rename a workflow that the generator or a customer template calls.
+- Do not tighten permissions a caller must grant without changing the generator first.
+- A breaking change needs a new major tag (`v2`), a generator change to emit it, and a catalog
+  update (`catalog/workflow-refs.json` `currentStable`).
 
-1. Run workflow validation for changed templates and reusable workflows.
-2. Confirm generated examples reference `@v1` or a specific stable release tag.
-3. Update `catalog/workflow-refs.json` if a new stable major is introduced.
-4. Update `docs/catalog-schema.md` when catalog fields change.
-5. Publish the release tag after validation passes.
+## Before merging to `main`
+
+1. Workflow Validation passes on the pull request.
+2. The contract doc in `docs/workflows/` matches the changed `.yml`.
+3. If the change affects generated pipelines, the backend's generator tests pass against it.

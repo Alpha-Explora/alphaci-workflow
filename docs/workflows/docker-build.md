@@ -1,34 +1,92 @@
 # docker-build.yml
 
-## Role
-Build.
+Builds a Docker image with Buildx, pushes it to GitHub Container Registry
+(`ghcr.io/<owner>/<image-name>`), and scans it with Trivy for fixable HIGH and
+CRITICAL vulnerabilities.
 
-## Purpose
-Builds Docker images, optionally pushes them, and optionally scans them.
+- Source: `.github/workflows/docker-build.yml`
+- Trigger: `workflow_call`
+- Used by: generated `20-alphaci-package.yml` (image job per slot in
+  environment pipelines, and the Render branch pipeline); customer templates
+  `be-nestjs`, `be-nodejs` and `dotnet-service-pipeline`; `mobile-gradle.yml`.
 
-## Public Contract
-- Source workflow: `.github/workflows/docker-build.yml`
-- Inputs: `working-directory`, `image-name`, `dockerfile-path`, `push-image`, `scan-vulnerabilities`, `fail-on-vulnerabilities`, `build-args`, `generate-sbom`, `generate-provenance`, `release-tag`, `checkout-ref`, `pipeline-branch`
-- Secrets: none
-- Outputs: `image-tag`, `image-digest`, `image-ref`, `scan-result`, `image-repo`
+## Inputs
 
-`image-ref` is the canonical immutable `image-repo@sha256:<digest>` value when the image was pushed.
-It is empty for local-only builds. Managed container deployment callers should pass this exact value
-through release and promotion so each environment reuses the same image bytes.
+| Input | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `working-directory` | string | yes | | Build context directory. |
+| `image-name` | string | yes | | Image name under `ghcr.io/<owner>/`. Lower-cased. |
+| `dockerfile-path` | string | no | `Dockerfile` | Dockerfile path, relative to `working-directory`. |
+| `push-image` | boolean | no | `true` | Push to GHCR. When false the image is loaded locally. |
+| `scan-vulnerabilities` | boolean | no | `true` | Run the Trivy scan. |
+| `fail-on-vulnerabilities` | boolean | no | `true` | Fail when Trivy finds fixable HIGH or CRITICAL vulnerabilities. |
+| `build-args` | string | no | `""` | Build arguments, `key=value`, one per line. |
+| `generate-sbom` | boolean | no | `true` | Attach an SBOM attestation (only when pushing). |
+| `generate-provenance` | boolean | no | `true` | Attach a provenance attestation (only when pushing). |
+| `release-tag` | string | no | `""` | Extra tag to add. |
+| `checkout-ref` | string | no | `""` | Ref or SHA to check out. Empty uses `github.sha`. |
+| `pipeline-branch` | string | no | `""` | Branch the image belongs to (`dev`, `uat`, `main`). Changes the tag policy; see Notes. |
 
-## Usage
-Call after tests, lint, and security with `needs`. Only set `push-image: true` on trusted branches. Use
-`checkout-ref` in `workflow_run` chains.
+## Secrets
 
-Pass `pipeline-branch` in a `workflow_run` chain as well. Without it the image is tagged from the git
-context, which in such a chain is the default branch: a uat build is then tagged `main` and `latest`,
-and the `sha-` tag names the default branch's head rather than the commit that was built. With it, the
-image is tagged with that branch and `sha-<built commit>`, and no `latest` is written. Callers that omit
-it keep the previous tags.
+None. The workflow logs in to GHCR with the caller's `GITHUB_TOKEN`.
 
-A failure to write the build cache no longer fails the job: the image has already been pushed by then,
-and a cache that cannot be saved only costs time on the next run.
+## Outputs
 
-The vulnerability scan fails the job on fixable HIGH or CRITICAL findings. Uploading its SARIF file to
-code scanning is best effort: a private repository without Advanced Security refuses it, and the file
-is always kept as the `<image-name>-security-scan` artifact.
+| Output | Description |
+| --- | --- |
+| `image-tag` | All tags applied, newline-separated. |
+| `image-digest` | Image digest. |
+| `image-ref` | `ghcr.io/<owner>/<image>@sha256:<digest>`. Empty when the image was not pushed. |
+| `image-repo` | `ghcr.io/<owner>/<image>`, without tag or digest. |
+| `scan-result` | Outcome of the Trivy step that ran (`success` or `failure`), empty when no scan ran. |
+
+## Permissions
+
+Workflow: `contents: read`. Job `docker-build`: `contents: read`,
+`packages: write`. Job `vulnerability-scan`: `contents: read`,
+`packages: read`, `security-events: write`. The calling job must grant
+`contents: read`, `packages: write` and `security-events: write`, or the call
+fails at startup.
+
+## Jobs
+
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `docker-build` | always | Builds and tags the image, pushes it when `push-image` is true, resolves `image-ref`. When not pushing and `scan-vulnerabilities` is true, scans the local image with Trivy. |
+| `vulnerability-scan` | `scan-vulnerabilities` and `push-image` are true | Scans the pushed image by digest with Trivy, writes SARIF, uploads it to code scanning (best effort) and as an artifact. |
+
+## Example
+
+```yaml
+jobs:
+  image:
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    uses: Alpha-Explora/alphaci-workflow/.github/workflows/docker-build.yml@v1
+    with:
+      working-directory: .
+      image-name: ${{ github.event.repository.name }}-backend
+      push-image: true
+      checkout-ref: ${{ github.event.workflow_run.head_sha }}
+      pipeline-branch: uat
+```
+
+## Notes
+
+- Tag policy with `pipeline-branch` set: `<pipeline-branch>` and
+  `sha-<built commit>` (the commit is `checkout-ref` when it is a full SHA,
+  otherwise `github.sha`). No `latest` is written. Use this in `workflow_run`
+  chains, where the git context is the default branch.
+- Tag policy without `pipeline-branch`: `sha-<github.sha>`, the branch or PR
+  ref, a semver tag on version tags, and `latest` on the default branch.
+- `release-tag`, when set, is added in both cases.
+- Pass `image-ref` on to release and deploy jobs so every environment runs the
+  same image bytes.
+- A build cache that cannot be saved does not fail the job.
+- Trivy scans with `ignore-unfixed: true`. Uploading SARIF to code scanning is
+  allowed to fail (a private repository without Advanced Security refuses it);
+  the file is always kept as the `<image-name>-security-scan` artifact
+  (30 days).

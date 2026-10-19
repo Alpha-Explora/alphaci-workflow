@@ -1,10 +1,11 @@
 # Starter NestJS Project
 
-This is the MVP starter template for new NestJS-style API projects created by
-the CI/CD-as-a-Service platform.
+Minimal NestJS-style API starter. The scripts are small Node scripts with no
+framework dependencies.
 
 ## Scripts
 
 - `npm run lint`
 - `npm test`
+- `npm run test:cov`: runs the tests and writes a placeholder `coverage/coverage-summary.json`
 - `npm run build`
