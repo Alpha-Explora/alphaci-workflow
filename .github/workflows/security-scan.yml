@@ -93,7 +93,7 @@ jobs:
             npm ci --ignore-scripts
           else
             echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-            npm install --no-audit --no-fund --ignore-scripts
+            npm install --no-audit --no-fund --ignore-scripts --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
           fi
 
       - name: Run npm audit
@@ -210,7 +210,7 @@ jobs:
             npm ci --ignore-scripts
           else
             echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-            npm install --no-audit --no-fund --ignore-scripts
+            npm install --no-audit --no-fund --ignore-scripts --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
           fi
 
       - name: Check Licenses

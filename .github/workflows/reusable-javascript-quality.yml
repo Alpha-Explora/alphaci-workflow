@@ -243,7 +243,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
@@ -352,7 +352,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
@@ -466,7 +466,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
@@ -556,7 +556,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
@@ -646,7 +646,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
@@ -736,7 +736,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
@@ -826,7 +826,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
@@ -959,7 +959,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
@@ -1088,7 +1088,7 @@ jobs:
               npm ci
             else
               echo "::warning::No package-lock.json, so dependencies were resolved with npm install and this run is not reproducible. Commit a lockfile."
-              npm install --no-audit --no-fund
+              npm install --no-audit --no-fund --before="$(node -p 'new Date(Date.now() - 864e5).toISOString()')"
             fi
           fi
 
