@@ -1016,6 +1016,111 @@ jobs:
             esac
           done < "${WORK}/snapshots.tsv"
 
+      # The bypass secret is sent as a request header, and Playwright writes
+      # request headers into its traces and copies the config (headers and
+      # all) into the JSON report. GitHub masks secrets in logs, never inside
+      # artifact files, and a public repository's artifacts can be downloaded
+      # by anyone signed in to GitHub. So every file about to be uploaded is
+      # scrubbed first: plain files, trace zips and the HTML report's embedded
+      # zip. Fail-safe: if anything cannot be scrubbed, the reports are
+      # deleted instead of uploaded. Nothing here prints the secret.
+      - name: Remove the Vercel bypass secret from reports
+        if: ${{ always() }}
+        env:
+          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          JSON_REPORT: ${{ inputs.json-report }}
+          TESTS_DIR: ${{ inputs.e2e-tests-directory }}
+        run: |
+          if [ -z "${BYPASS_SECRET}" ]; then
+            echo "No bypass secret in use; nothing to scrub."
+            exit 0
+          fi
+          if ! python3 - test-results playwright-report "${JSON_REPORT}" "${TESTS_DIR}" <<'SCRUB_EOF'
+          import base64, io, os, re, sys, zipfile
+
+          SECRET = os.environ["BYPASS_SECRET"].encode()
+          MASK = b"***"
+          EMBEDDED = re.compile(rb"(data:application/zip;base64,)([A-Za-z0-9+/=]+)")
+          counts = {"files": 0, "values": 0}
+
+          def is_zip(body):
+              return body[:4] == b"PK\x03\x04"
+
+          def scrub_zip(body):
+              source = zipfile.ZipFile(io.BytesIO(body))
+              out = io.BytesIO()
+              found = 0
+              with zipfile.ZipFile(out, "w") as target:
+                  for info in source.infolist():
+                      entry, n = scrub(source.read(info))
+                      found += n
+                      target.writestr(info, entry)
+              return (out.getvalue() if found else body), found
+
+          def scrub(body):
+              if is_zip(body):
+                  return scrub_zip(body)
+              found = body.count(SECRET)
+              if found:
+                  body = body.replace(SECRET, MASK)
+              if b"data:application/zip;base64," in body:
+                  inner = [0]
+                  def embedded(match):
+                      new, n = scrub_zip(base64.b64decode(match.group(2)))
+                      inner[0] += n
+                      return match.group(1) + base64.b64encode(new) if n else match.group(0)
+                  body = EMBEDDED.sub(embedded, body)
+                  found += inner[0]
+              return body, found
+
+          def contains(body):
+              if is_zip(body):
+                  source = zipfile.ZipFile(io.BytesIO(body))
+                  return any(contains(source.read(info)) for info in source.infolist())
+              if SECRET in body:
+                  return True
+              return any(contains(base64.b64decode(m.group(2))) for m in EMBEDDED.finditer(body))
+
+          def files(roots):
+              for root in roots:
+                  if os.path.isfile(root):
+                      yield root
+                  elif os.path.isdir(root):
+                      for folder, _, names in os.walk(root):
+                          for name in names:
+                              yield os.path.join(folder, name)
+
+          paths = sorted(set(files(sys.argv[1:])))
+          for path in paths:
+              if os.path.islink(path):
+                  continue
+              with open(path, "rb") as handle:
+                  body = handle.read()
+              new, found = scrub(body)
+              if found:
+                  with open(path, "wb") as handle:
+                      handle.write(new)
+                  counts["files"] += 1
+                  counts["values"] += found
+
+          leftover = 0
+          for path in paths:
+              if os.path.islink(path):
+                  continue
+              with open(path, "rb") as handle:
+                  if contains(handle.read()):
+                      os.remove(path)
+                      leftover += 1
+          print(f"Bypass secret removed from {counts['files']} file(s) ({counts['values']} occurrence(s)).")
+          if leftover:
+              print(f"::warning::{leftover} file(s) still held the bypass secret and were deleted, not uploaded.")
+          SCRUB_EOF
+          then
+            echo "::warning::The reports could not be scrubbed of the Vercel bypass secret, so they are not uploaded."
+            rm -rf test-results playwright-report
+            rm -f -- "${JSON_REPORT}"
+          fi
+
       # Carried as an artifact because a matrix job's `outputs` are overwritten
       # by whichever leg finishes last — a three-browser run would otherwise
       # report one browser's counts as though they were the whole suite.
